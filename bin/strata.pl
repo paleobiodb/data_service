@@ -25,6 +25,7 @@ use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use YAML;
 use Encode qw(encode_utf8 decode_utf8);
 use Term::ReadLine;
+use Scalar::Util qw(weaken);
 
 use utf8;
 
@@ -105,7 +106,7 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			pebble => 1, pebbles => 1, pebbly => 1, phonolite => 1, phonolites => 1,
 			phosphatic => 1, phosphorite => 3, phosphorites => 3,
 			platy => 1, porcelain => 1, pyrite => 1, pyrites => 1,
-			quarry => 1, quarries => 1, quartzite => 1, quartzites => 1, 'q-sand' => 1,
+			quarry => 1, quarries => 1, quartzite => 3, quartzites => 3, 'q-sand' => 1,
 			radiolaridic => 1, radiolarite => 1, radiolarites => 1, rag => 1, rags => 1,
 			range => 1, red => 1, reef => 1, reefs => 1, sand => 1, sands => 1,
 			sandstone => 1, sandstones => 1, ss => 1, 'ss.' => 1, sandstein => 1, 
@@ -120,36 +121,57 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			tonschiefer => 1, 
 			tuff => 1, tuffs => 1, tuffaceous => 1, unit => 1, units => 1, volcanic => 1,
 			variegated => 1, volcanics => 1, volcaniclastic => 1, volcaniclastics => 1,
-			waterstone => 1, waterstones => 1, yellow => 1, zone => 1,
-			arcilla => 2, arcillas => 2, 
-			arena => 2, arenas => 2, 
+			waterstone => 1, waterstones => 1, yellow => 1, zone => 3,
+			arcilla => 2, arcillas => 2, arcillolitas => 2,
+			areia => 2, areias => 2, arena => 2, arenas => 2,
 			arenal => 2, arenales => 2, arenisca => 2, areniscas => 2,
-			arenaria => 2, arenarie => 2, 
+			arenaria => 2, arenarie => 2,
+			argila => 2, argilas => 2,
 			argile => 2, argiles => 2, argileux => 2, argille => 2, argilles => 2,
 			assise => 2, assises => 2,
-			banco => 2, bancos => 2, barre => 2, blanc => 2, blancs => 2, 
-			bleu => 2, bleues => 2,
+			banc => 2, banco => 2, bancos => 2, barre => 2, blanc => 2, blancs => 2, 
+			bleu => 2, bleues => 2, brèche => 2, brèches => 2, breche => 2, breches => 2,
+			brecha => 2, brechas => 2,
 			calcaire => 2, calcaires => 2, calcàries => 2,
-			calcare => 2, calcares => 2, calcari => 2, calcaris => 2, 
-			caillasse => 2, caillasses => 2, congeria => 2, couche => 2, couches => 2,
+			calcare => 2, calcares => 2, calcari => 2, calcaris => 2,
+			caillasse => 2, caillasses => 2, chailles => 2,
+			caliza => 2, calizas => 2, calschiste => 2, calschistes => 2,
+			camada => 2, camadas => 2, congeria => 2,
+			conglomerat => 2, conglomérat => 2, conglomerats => 2, conglomérats => 2, 
+			couche => 2, couches => 2,
 			craie => 2, craies => 2,
-			dolomie => 2, dolomies => 2, et => 2,
-			faisceau => 2, faisceaux => 2, falun => 2, faluns => 2,
-		        gres => 2, 'grès' => 2, grigi => 2, gris => 2, jaune => 2, jaunes => 2,
-			lité => 2, lités => 2, lite => 2, lites => 2, 
+			dalle => 2, dalles => 2,
+			dolomie => 2, dolomies => 2,
+			dolomía => 2, dolomías => 2, dolomia => 2, dolomias => 2,
+			estrato => 2, estratos => 2,
+			et => 2,
+			faisceau => 2, faisceaux => 2,
+			facie => 2, facies => 2, faisceau => 2, faisceaux => 2, falun => 2, faluns => 2,
+			glauconie => 2, glauconies => 2,
+		        gres => 2, 'grès' => 2, grigi => 2, gris => 2,
+			horizon => 2, horizons => 2,
+			jaune => 2, jaunes => 2,
+			lité => 2, lités => 2, lite => 2, lites => 2, lodolita => 2, lodolitas => 2,
+			lumachelle => 2, lumacell => 2, lumachel => 2, lumachella => 2, lumachello => 2,
+			marga => 2, margas => 2,
 			marin => 2, marins => 2, marne => 2, marnes => 2,
 			'marno-calcaire' => 2, 'marno-calcaires' => 2, 'marno-crayeux' => 2,
 			melière => 2, melières => 2, meliere => 2, melieres => 2,
 			meulière => 2, meulières => 2, meuliere => 2, meulieres => 2,
-			noire => 2, noires => 2, 
-			niveau => 2, niveaux => 2,
+			molasse => 2, molasses => 2,
+			noire => 2, noires => 2,
+			nivel => 2, niveles => 2, niveau => 2, niveaux => 2,
 			pierre => 2, pierres => 2, 'pierre-meliere' => 2, 'pierre-melière' => 2,
-			pizarra => 2, pizarras => 2, 
+			pizarra => 2, pizarras => 2,
+			poudingue => 2, poudingues => 2,
+			quebrada => 2, quebradas => 2,
 			rouge => 2, rouges => 2,
 			sable => 2, sables => 2, sableuse => 2, sableuses => 2,
-			schiste => 2, schistes => 2, schicht => 1, schichten => 1, 
+			schiste => 2, schistes => 2, schicht => 1, schichten => 1,
+			scisto => 2, scisti => 2,
 			spathique => 2, spathiques => 2,
-			terre => 2, terres => 2, tuffeau => 2, tuffeaux => 2, tufs => 2, 
+			terrain => 2, terre => 2, terres => 2,
+			tufeau => 2, tuffeau => 2, tuffeaux => 2, tufs => 2,
 			vert => 2, verts => 2, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
@@ -161,14 +183,17 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   division => 1, divisions => 1, local => 1, level => 1, levels => 1,
 		   layer => 1, layers => 1, part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
-		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, 
+		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, serie => 2, 
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
 		   schicht => 1, unit => 1, units => 1, subunit => 1, subunits => 1,
 		   unknown => 1, unnamed => 1, indeterminate => 1,
 		   zone => 1, zones => 1,
+		   member => 1, miembre => 2,
+		   formation => 1, formación => 2, formacion => 2,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
 		   capa => 2, capas => 2, 
 		   grosse => 2, grosses => 2, grossier => 2, grossiers => 2,
+		   le => 2, les => 2,
 		   moyen => 2, moyens => 2, 
 		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2, 
 		   inférieur => 2, supérieur => 2, inferieur => 2, superieur => 2,		   
@@ -206,13 +231,13 @@ our (%no_bracket_code) = ( 'Australian Capital Territory' => 'ACT', 'New South W
 			   'Queensland' => 'QLD', 'Tasmania' => 'TAS', 'Victoria' => 'VIC',
 			   'Antarctica' => 'ATA' );
 
-our (%is_table_name) = ( all => 1,
+our (%is_table_name) = ( all => 1, views => 1,
 			 strat_names => 1, strat_name_attrs => 1, strat_name_refs => 1,
 			 strat_names_view => 1,
 			 strat_concepts => 1, strat_concept_ccs => 1, strat_concepts_view => 1,
 			 strat_opinions => 1, strat_opinion_refs => 1, strat_opinions_view => 1,
 			 strat_ms_names => 1, strat_ms_matches => 1, strat_ms_matches_view => 1,
-			 collection_strat_names => 1 );
+			 collection_strat_names => 1, collection_strat_names_view => 1 );
 
 # Check the command arguments, and execute the specified function.
 
@@ -223,7 +248,7 @@ if ( $ARGV[0] eq 'generate' )
     if ( $ARGV[0] eq 'concepts' )
     {
 	shift @ARGV;
-	&GenerateConcepts(@ARGV);
+	&ImportPBDB(@ARGV);
     }
     
     else
@@ -248,6 +273,21 @@ elsif ( $ARGV[0] eq 'import' || $ARGV[0] eq 'match' )
 	else
 	{
 	    &MatchMacrostrat();
+	}
+    }
+    
+    elsif ( $ARGV[0] eq 'pbdb' )
+    {
+	shift @ARGV;
+	
+	if ( $cmd eq 'import' )
+	{
+	    &ImportPBDB();
+	}
+	
+	else
+	{
+	    die "Bad command 'match pbdb'\n";
 	}
     }
     
@@ -297,7 +337,7 @@ exit;
 
 
 
-# GenerateConcepts ( )
+# ImportPBDB ( )
 #
 # Extract stratigraphic names and concepts from the COLLECTION_STRATA table. This table
 # contains exactly what was typed in by the database contributors, minus
@@ -314,7 +354,7 @@ our $raw_occs = 0;
 our $parent_matches = 0;
 our $child_matches = 0;
 
-sub GenerateConcepts {
+sub ImportPBDB {
 
     # Clear the hashes we will be using.
     
@@ -511,7 +551,15 @@ sub GenerateConcepts {
 	    $raw_name =~ s/[[:cntrl:]\0177]//g;
 	}
 	
-	# Remove all double quotation marks.
+	# Remove enclosing double quotation marks, and record " as the modifier.
+	
+	if ( $raw_name =~ qr{ ^ " (.*?) " $ }xs )
+	{
+	    $raw_name = $1;
+	    $nr->{modifier} = '"';
+	}
+	
+	# Remove all other double quotation marks.
 	
 	$raw_name =~ s/"//g;
 	
@@ -523,7 +571,8 @@ sub GenerateConcepts {
 	    $raw_name = "$1 or $2";
 	}
 	
-	# Remove any parenthesized expressions with question marks.
+	# Remove any parenthesized expressions with question marks, and record ? as the
+	# modifier unless there is already a " modifier.
 	
 	while ( $raw_name =~ qr{ (.*?) \s* [(] [^)]* [?] [^)]* [)] \s* (.*) }xs )
 	{
@@ -536,9 +585,12 @@ sub GenerateConcepts {
 	    {
 		$raw_name = ($1 ne '' ? $1 : $2);
 	    }
+	    
+	    $nr->{modifier} ||= '?';
 	}
 	
-	# Remove all other question marks.
+	# Remove all other question marks, and record ? as the modifier unless there is
+	# already a " modifier.
 	
 	while ( $raw_name =~ qr{ (.*) \s* [?] \s* (.*) }xs )
 	{
@@ -551,6 +603,8 @@ sub GenerateConcepts {
 	    {
 		$raw_name = ($1 ne '' ? $1 : $2);
 	    }
+	    
+	    $nr->{modifier} ||= '?';
 	}
 	
 	# Now split the name into individual components. In some cases, processing will
@@ -696,12 +750,13 @@ sub GenerateConcepts {
 	    
 	    next unless $c =~ /\b\p{Lu}\p{M}*\p{L}\p{M}*\p{L}\p{M}*/;
 	    
-	    # Remove any mention of cyclothem.
+	    # # Remove any mention of cyclothem.
 	    
-	    if ( $c =~ qr{ (.*?) \s+ (?: [vix]+[a-z]? \s+ )? cyclothem }xs )
-	    {
-		$c = $1;
-	    }
+	    # if ( $c =~ qr{ (.*?) \s+ ((?: [vix]+[a-z]? \s+ )? cyclothem) }xs )
+	    # {
+	    # 	$c = $1;
+	    # 	$nr->{suffix} = $2;
+	    # }
 	    
 	    # If the component starts with a digit, remove that.
 	    
@@ -711,10 +766,13 @@ sub GenerateConcepts {
 	    }
 	    
 	    # If the initial word is 'lower|middle|upper' in all lower-case followed by
-	    # a name starting with upper-case, remove the adjective. If the remainder is
-	    # the same as the enclosing formation or group, skip this name entirely.
+	    # a name starting with upper-case, move the adjective to 'begin'. If the
+	    # remainder is the same as the enclosing formation or group, skip this name
+	    # entirely.
 	    
-	    if ( $c =~ / ^ (lower|middle|upper|base \s of) \s+ ( \p{Lu}.* ) /xs )
+	    if ( $c =~ / ^ ( lower | middle | upper | (?: base | top) \s of (?: \s the)? |
+			     (?:[Uu]pper | [Mm]iddle | [Ll]ower ) \s part \s of (?: \s the )?)
+			 \s+ ( \p{Lu}.* ) /xs )
 	    {
 		if ( $nr->{formation} && $2 eq $nr->{formation} ||
 		     $nr->{grp}  && $2 eq $nr->{grp} )
@@ -724,6 +782,7 @@ sub GenerateConcepts {
 		
 		else
 		{
+		    $nr->{prefix} = $1;
 		    $c = $2;
 		}
 	    }
@@ -743,20 +802,48 @@ sub GenerateConcepts {
 		
 		elsif ( IsKnownStratum($2, $nr) )
 		{
+		    $nr->{prefix} = $1;
 		    $c = $2;
 		}
 	    }
 	    
-	    # Otherwise, if the component begins with one or more all-lowercase words,
-	    # remove them.
+	    # Otherwise, check to see if the component begins with one or more
+	    # all-lowercase words. If so, and if this prefix contains either 'below' or
+	    # 'above', then ignore this name entirely becaused the named stratum is not
+	    # actually associated with these collections. This will cause the name to be
+	    # treated as informal. If the prefix is not a preposition such as 'de' and
+	    # its first word is not a rock type word, then move it to the 'prefix'
+	    # attribute of the name context. It will be stored as such in the
+	    # COLLECTION_STRAT_NAMES table.
 	    
-	    elsif ( $c =~ / ^ ( \p{Ll}+ \s+ )+ (.+) /xs )
+	    elsif ( $c =~ / ^ ( \p{Ll}+ (?: \s+ \p{Ll}+ )* )+ \s+ (.+) /xs )
 	    {
-		next if $1 eq 'below' || $1 eq 'above';
-		$c = $is_preposition{$1} ? "$1$2" : $2;
+		my $prefix = $1;
+		my $rest = $2;
+		
+		if ( $prefix =~ / \b above \b | \b below \b /xs )
+		{
+		    next;
+		}
+		
+		elsif ( $prefix =~ / ^ (\w+) / )
+		{
+		    unless ( $is_rock_type{$1} || $is_preposition{$prefix} )
+		    {
+			if ( $nr->{prefix} )
+			{
+			    $nr->{prefix} .= " $prefix";
+			    $c = $rest;
+			}
+			
+			else
+			{
+			    $nr->{prefix} = $prefix;
+			    $c = $rest;
+			}
+		    }
+		}
 	    }
-	    
-	    # If the component ends in one or more 
 	    
 	    # Put the component into fold-case so that we can do case-insensitive
 	    # comparisons.
@@ -781,6 +868,13 @@ sub GenerateConcepts {
 		{
 		    next;
 		}
+	    }
+	    
+	    # If the name begins with 'Formación', 'Miembre', or 'Member', remove it.
+
+	    if ( $c =~ qr{ ^ (?: formaci[oó]n | miembr[eo] | member ) \s (.*) }xsi )
+	    {
+		$c = $1;
 	    }
 	    
 	    # Increment the component count for the name record.
@@ -1211,7 +1305,8 @@ sub GenerateConcepts {
     # characters instead of one at a time. The last call to InsertConcepts adds any
     # remaining rows after the last block.
     
-    say "Generating the STRAT_CONCEPTS (`$TABLE{STRAT_CONCEPTS}`) and strat_concept_ccs tables...";
+    say "Generating the STRAT_CONCEPTS (`$TABLE{STRAT_CONCEPTS}`) and STRAT_CONCEPT_CCS " .
+	"(`$TABLE{STRAT_CONCEPT_CCS}`) tables...";
     
     my $concept_values = '';
     my $cc_values = '';
@@ -1235,6 +1330,8 @@ sub GenerateConcepts {
 	my $qlngmax = $pbdb->quote($cr->{lng_max});
 	my $qposmin = $pbdb->quote($cr->{pos_lng_min});
 	my $qnegmax = $pbdb->quote($cr->{neg_lng_max});
+	
+	$new_concepts++;
 	
 	$concept_values .= ', ' if $concept_values;
 	$concept_values .= "($qstratc, $qname, $qlith1, $qlith2, $qncolls, $qnoccs, " .
@@ -1270,8 +1367,9 @@ sub GenerateConcepts {
     # between each name and its set of reference_no values is stored in the STRATN_REFS
     # table.
     
-    say "Generating the STRAT_NAMES ($TABLE{STRAT_NAMES}) and " .
-	"STRAT_NATTRS ($TABLE{STRAT_NATTRS}) tables...";
+    say "Generating the STRAT_NAMES (`$TABLE{STRAT_NAMES}`), " .
+	"STRAT_NATTRS (`$TABLE{STRAT_NATTRS}`), and " .
+	"COLLECTION_STRAT_NAMES (`$TABLE{COLLECTION_STRAT_NAMES}`) tables...";
 
     my $name_values = '';
     my $name_attr_values = '';
@@ -1299,7 +1397,7 @@ sub GenerateConcepts {
 	    my $qname = $pbdb->quote($name);
 	    my $qrank = $pbdb->quote($rank);
 	    my $qcc = $pbdb->quote($nr->{cc});
-	    my $qsearch = $pbdb->quote(ExtractSearchName($name));
+	    my $qsearch = $pbdb->quote(ExtractSearchName($name, $nr->{cc}));
 	    my $qlith1 = $pbdb->quote(join ',', keys $nr->{lithology1}->%*);
 	    my $qlith2 = $pbdb->quote(join ',', keys $nr->{lithology2}->%*);
 	    my $doi = $pbdb->quote(join ',', keys $nr->{doi}->%*);
@@ -1325,8 +1423,8 @@ sub GenerateConcepts {
 	    }
 	    
 	    $name_values .= ', ' if $name_values;
-	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qrefno, $qauth, $qenter, " .
-		"$qcreated, $qcreated)";
+	    $name_values .= "($qstratn, $qname, $qrank, $qcc, $qsearch, $qrefno, " .
+		"$qauth, $qenter, $qcreated, $qcreated)";
 	    
 	    $name_attr_values .= ', ' if $name_attr_values;
 	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qncolls, $qnoccs, " .
@@ -1343,8 +1441,11 @@ sub GenerateConcepts {
 	    foreach my $collection_no ( sort { $a <=> $b } keys $nr->{collection_no}->%* )
 	    {
 		my $qcollno = $pbdb->quote($collection_no);
+		my $qmod = $pbdb->quote($nr->{collection_no}{$collection_no}{modifier});
+		my $qprefix = $pbdb->quote($nr->{collection_no}{$collection_no}{prefix});
+		my $qsuffix = $pbdb->quote($nr->{collection_no}{$collection_no}{suffix});
 		$name_coll_values .= ', ' if $name_coll_values;
-		$name_coll_values .= "($qcollno, $qstratn)";
+		$name_coll_values .= "($qcollno, $qstratn, $qmod, $qprefix, $qsuffix, $qrank)";
 	    }
 	    
 	    if ( length($name_coll_values) > $chunk_size )
@@ -1364,8 +1465,8 @@ sub GenerateConcepts {
     # Now run through the names again and add an opinion for every child-parent
     # relationship and every alias relationship.
     
-    say "Generating the STRAT_OPINIONS ($TABLE{STRAT_OPINIONS}) and " .
-	"STRAT_OREFS ($TABLE{STRAT_OREFS}) tables...";
+    say "Generating the STRAT_OPINIONS (`$TABLE{STRAT_OPINIONS}`) and " .
+	"STRAT_OREFS (`$TABLE{STRAT_OREFS}`) tables...";
     
     my $opinion_values = '';
     my $opinion_ref_values = '';
@@ -1589,8 +1690,17 @@ sub UpdateStratRaw {
     }
     
     # The 'collection_no' field is an aggregate set of collection numbers, as a hash.
+    # Each collection_no value is associated with this record, and will continue to be
+    # associated with it if this record is later consolidated with another. This allows
+    # the fields 'modifier', 'begin', and 'end' that were set by &processRawName to
+    # remain available so that their values can be used when rows are added to the
+    # COLLECTION_STRAT_NAMES table.
     
-    $record->{collection_no}{$_} = 1 foreach grep { $_ > 0 } split /,/, $source->{coll_nos};
+    foreach my $n ( grep { $_ > 0 } split /,/, $source->{coll_nos} )
+    {
+	$record->{collection_no}{$n} = $record;
+	weaken $record->{collection_no}{$n};
+    }
     
     # The 'lithology1', and 'lithology2' fields are the union of the
     # respective aggregate values, expressed as a hash.
@@ -1605,18 +1715,6 @@ sub UpdateStratRaw {
     
     return 1;
 }
-
-
-sub min_threshold {
-    my ($threshold, @args) = @_;
-    return min( grep { $_ > $threshold } @args );
-}
-
-
-sub max_threshold {
-    my ($threshold, @args) = @_;
-    return max( grep { $_ < $threshold } @args );
-}	
 
 
 # UpdateContainedIn ( contained_key, container_key, source )
@@ -1664,6 +1762,8 @@ sub ConsolidateNames {
 
     my ($remaining, $other) = @_;
     
+    # Consolidate the position, time, and number attributes.
+    
     $remaining->{lat_min} = $other->{lat_min}
 	if ! defined $remaining->{lat_min} || $other->{lat_min} < $remaining->{lat_min};
     $remaining->{lat_max} = $other->{lat_max}
@@ -1689,7 +1789,10 @@ sub ConsolidateNames {
     
     $remaining->{n_colls} += $other->{n_colls};
     $remaining->{n_occs} += $other->{n_occs};
-
+    
+    # If the $other record was created earlier, use its authorizer_no, enterer_no,
+    # reference_no, and created date for the combined record.
+    
     if ( $other->{created} && $remaining->{created} && $other->{created} lt $remaining->{created} )
     {
 	$remaining->{created} = $other->{created};
@@ -1702,10 +1805,20 @@ sub ConsolidateNames {
 	}
     }
     
+    # Each collection_no value should continue to refer to its original name-context
+    # record, so that the fields 'modifiers', 'begin', and 'end' are still available
+    # with the original values assigned by the &processRawName routine. These values
+    # will be used to generate rows in the COLLECTION_STRAT_NAMES table.
+    
     if ( $other->{collection_no} )
     {
-	$remaining->{collection_no}{$_} = 1 foreach keys $other->{collection_no}->%*;
+	foreach my $n ( keys $other->{collection_no}->%* )
+	{
+	    $remaining->{collection_no}{$n} = $other->{collection_no}{$n};
+	}
     }
+    
+    # The lithology1, lithology2, and doi values are simply consolidated.
     
     if ( $other->{lithology1} )
     {
@@ -1721,6 +1834,10 @@ sub ConsolidateNames {
     {
 	$remaining->{doi}{$_} = 1 foreach keys $other->{doi}->%*;
     }
+    
+    # Keep track of which record(s) this one was consolidated with. If this record
+    # listed more tha one name (i.e. as "xxx and yyy") then it may be consolidated with
+    # more than one other record.
     
     $other->{consolidated_with} ||= [ ];
     push $other->{consolidated_with}->@*, $remaining->{rkey};
@@ -1860,7 +1977,7 @@ sub ParseHyphenated {
 	    my $lastword = $2;
 	    
 	    if ( $is_rock_type{fc $lastword} &&
-		 ( IsKnownStratum($left, $nr) || IsKnownStratum($name, $nr) ) )
+		 ( IsKnownStratum($left, $nr) && IsKnownStratum($name, $nr) ) )
 	    {
 		return ("$left $lastword", "$name $lastword");
 	    }
@@ -2033,18 +2150,43 @@ sub ParseParentheses {
 }	
 
 
-# ExtractSearchName ( name )
-#
+# ExtractSearchName ( name, country_code )
+# 
 # Parse a name into one of two patterns: "search_name auxiliary_term(s)" or
 # "auxiliary_term(s) preposition search_name". Return the search name.
 
 sub ExtractSearchName {
 
-    my ($raw_name) = @_;
+    my ($raw_name, $cc) = @_;
     
-    if ( $raw_name =~ qr{ ^ (.*? \S\s .*?) ( des\s | de\s | du\s | d'\s? ) (\S.*) }xsi )
+    if ( $cc eq 'US' || $cc eq 'CA' )
     {
-	return $3;
+	return $raw_name;
+    }
+    
+    elsif ( $raw_name =~ qr{ ^ Estratos (?: \s del )? \s (.*) }xsi )
+    {
+	return $1;
+    }
+    
+    elsif ( $raw_name =~ qr{ ^ (.*? \S) \s (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xsi )
+    {
+	my $c = $2;
+
+	if ( $c =~ qr{ ^ [\p{Ll}\s]+ \s (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xs )
+	{
+	    return $1;
+	}
+	
+	else
+	{
+	    return $c;
+	}
+    }
+    
+    elsif ( $raw_name =~ qr{ ^ (.*? \S\s .*?) [aáà] \s (\S.*) }xsi )
+    {
+	return $2;
     }
     
     else
@@ -2103,8 +2245,8 @@ sub NamesAreCompatible {
 	if ( defined $alt_nr->{early_age} && $alt_nr->{early_age} ne '' &&
 	     defined $alt_nr->{late_age} && $alt_nr->{late_age} ne '' )
 	{
-	    if ( $nr->{early_age} > $alt_nr->{late_age} &&
-		 $nr->{late_age} < $alt_nr->{early_age} )
+	    if ( $nr->{early_age} >= $alt_nr->{late_age} &&
+		 $nr->{late_age} <= $alt_nr->{early_age} )
 	    {
 		$ages_overlap = 1;
 		$similarities++;
@@ -2901,8 +3043,6 @@ sub ContextsAreCompatible {
 
     my ($context1, $context2) = @_;
     
-    if ( ! defined $context1->{early_age} ) { return 1; }
-
     unless ( $context1->{cc} && $context2->{cc} && $context1->{cc} eq $context2->{cc} )
     {
 	if ( $context2->{lat_min} > $context1->{lat_max} + 10 ) { return undef; }
@@ -2910,6 +3050,8 @@ sub ContextsAreCompatible {
 	if ( $context2->{lng_min} > $context1->{lng_max} + 10 ) { return undef; }
 	if ( $context2->{lng_max} < $context1->{lng_min} - 10 ) { return undef; }
     }
+    
+    if ( ! defined $context1->{early_age} ) { return 1; }
     
     if ( $context2->{early_age} < $context1->{late_age} - 5 ) { return undef; }
     if ( $context2->{late_age} > $context1->{early_age} + 5 ) { return undef; }
@@ -2961,27 +3103,58 @@ sub SetBBoxField {
     
     DBCommand($pbdb, <<~END_SQL);
 	UPDATE strat_name_attrs
-	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(lng_min,lat_min),
-							Point(lng_max, lat_min),
-							Point(lng_max, lat_max),
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(lng_min, lat_min),
 							Point(lng_min, lat_max),
+							Point(lng_max, lat_max),
+							Point(lng_max, lat_min),
 							Point(lng_min, lat_min)))))
 	WHERE not(lng_min < -$lng_bound and lng_max > $lng_bound);
 	END_SQL
     
     DBCommand($pbdb, <<~END_SQL);
 	UPDATE strat_name_attrs
-	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(pos_lng_min, lat_min),
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(180, lat_max),
 							Point(180, lat_min),
-							Point(180, lat_max),
-							Point(pos_lng_min, lat_max),
-							Point(pos_lng_min, lat_min)),
-					     Linestring(Point(180, lat_min),
-							Point(neg_lng_max, lat_min),
-							Point(neg_lng_max, lat_max),
-							Point(180, lat_max),
-							Point(180, lat_min)))))
+							Point(coalesce(pos_lng_min, lng_max), lat_min),
+							Point(coalesce(pos_lng_min, lng_max), lat_max),
+							Point(180, lat_max)),
+					     Linestring(Point(-180, lat_min),
+							Point(-180, lat_max),
+							Point(coalesce(neg_lng_max, lng_min), lat_max),
+							Point(coalesce(neg_lng_max, lng_min), lat_min),
+							Point(-180, lat_min)))))
 	WHERE lng_min < -$lng_bound and lng_max > $lng_bound;
+	END_SQL
+}
+
+
+sub SetMSBBoxField {
+
+    say "Setting the bbox field...";
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE strat_ms_names
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(lng_min, lat_min),
+							Point(lng_min, lat_max),
+							Point(lng_max, lat_max),
+							Point(lng_max, lat_min),
+							Point(lng_min, lat_min)))))
+	WHERE lat_min is not null and not(lng_min < -$lng_bound and lng_max > $lng_bound);
+	END_SQL
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE strat_ms_names
+	SET bbox = PolyFromWKB(AsWKB(Polygon(Linestring(Point(180, lat_max),
+							Point(180, lat_min),
+							Point(coalesce(pos_lng_min, lng_max), lat_min),
+							Point(coalesce(pos_lng_min, lng_max), lat_max),
+							Point(180, lat_max)),
+					     Linestring(Point(-180, lat_min),
+							Point(-180, lat_max),
+							Point(coalesce(neg_lng_max, lng_min), lat_max),
+							Point(coalesce(neg_lng_max, lng_min), lat_min),
+							Point(-180, lat_min)))))
+	WHERE lat_min is not null and lng_min < -$lng_bound and lng_max > $lng_bound;
 	END_SQL
 }
 
@@ -3291,13 +3464,13 @@ sub ImportMacrostrat {
 	#     $uniq{$import_key} = 1;
 	# }
 	
-	# Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
-	# bed names. The exclusion code is 'R' for rank.
+	# # Exclude names whose rank is 'bed', because the PBDB doesn't consistently store
+	# # bed names. The exclusion code is 'R' for rank.
 	
-	if ( $row->{rank} eq 'Bed' )
-	{
-	    $row->{exclude} = $row->{exclude} ? "$row->{exclude}R" : 'R';
-	}
+	# if ( $row->{rank} eq 'Bed' )
+	# {
+	#     $row->{exclude} = $row->{exclude} ? "$row->{exclude}R" : 'R';
+	# }
 	
 	# Exclude names with no location information. If we don't know where in the
 	# world the name applies to, we cannot match it. The exclusion code is 'L' for
@@ -3370,6 +3543,8 @@ sub ImportMacrostrat {
     
     InsertMSNames($pbdb, $strat_ms_values) if $strat_ms_values;
     
+    SetMSBBoxField();
+    
     say "Imported $imported_names names.";
     say "Wrote $wrote_rows rows.";
     say "Of these, $good_names were eligible for matching.";
@@ -3440,15 +3615,18 @@ sub MatchMacrostrat {
     
     say "  Read $msnames names.";
     
-    say "Reading from table `$TABLE{STRAT_NAMES}`...";
+    say "Reading from tables `$TABLE{STRAT_NAMES}` and `$TABLE{STRAT_NATTRS}`...";
     
     my $pbdb_names = DBHashQuery($pbdb, <<~END_SQL);
 	SELECT * FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
 	END_SQL
     
+    say "Looking for matches...";
+    
     my $good_matches = 0;
     my $matched_names = 0;
-    my (@match_records, %checked);
+    my $updated_names = 0;
+    my (@match_records, @update_records, %checked);
 
   ROW:
     foreach my $pbnr ( $pbdb_names->@* )
@@ -3471,7 +3649,7 @@ sub MatchMacrostrat {
 	    push @candidates, $first_last{$flchars}->@* if $first_last{$flchars};
 	}
 	
-	my (%matches, %ms_ccs, %pb_ranks, %ms_concepts, %ms_scores, @good_matches);
+	my (%found, %ms_ccs, %ms_ranks, %ms_concepts, %ms_scores, @good_matches, @rank_mismatches);
 	
 	foreach my $msnr ( @candidates )
 	{
@@ -3483,42 +3661,91 @@ sub MatchMacrostrat {
 	    
 	    if ( $score )
 	    {
-		$matches{$msnr->{stratn_id}} = $msnr;
-		# $ms_concepts{$msnr->{stratc_id}} = 1;
-		# $ms_names{$msnr->{name}} = 1;
-		$pb_ranks{$rank_comparison{$msnr->{rank}}} = 1;
-		$ms_ccs{$msnr->{cc}} = 1;
-		# $ms_scores{$score} = 1;
 		$msnr->{score} = $score;
-	    }
-	}
-	
-	# If at least one of the Macrotrat names matches the rank of the PBDB name, and
-	# at least one matches the country code of the PBDB name, then accept all
-	# matches with that rank and country code. For this purpose, we use the
-	# %rank_comparison hash so that the Macrostrat ranks 'Subgp', 'Gp', and 'SGp'
-	# all match the PBDB rank 'Gp'.
-	
-	if ( $pb_ranks{$pbnr->{rank}} && $ms_ccs{$pbnr->{cc}} )
-	{
-	    foreach my $msnr ( values %matches )
-	    {
-		if ( $rank_comparison{$msnr->{rank}} eq $pbnr->{rank} &&
-		     $msnr->{cc} eq $pbnr->{cc} )
+		
+		unless ( $found{$msnr->{stratn_id}} )
 		{
-		    push @good_matches, $msnr;
+		    $found{$msnr->{stratn_id}} = 1;
+		    
+		    if ( $msnr->{rank} eq $pbnr->{rank} &&
+			 $msnr->{cc} eq $pbnr->{cc} )
+		    {
+			push @good_matches, $msnr;
+		    }
+		    
+		    elsif ( $msnr->{cc} eq $pbnr->{cc} )
+		    {
+			push @rank_mismatches, $msnr;
+		    }
 		}
 	    }
 	}
 	
-	foreach my $match ( @good_matches )
+	# If at least one of the Macrotrat names matches the country code and rank of
+	# the PBDB name, then accept all matches with that rank and country code.
+	
+	if ( @good_matches )
 	{
 	    my $qno = $pbdb->quote($stratn_no);
-	    my $qid = $pbdb->quote($match->{stratn_id});
-	    my $qsc = $pbdb->quote($match->{score});
 	    
-	    push @match_records, [$qno, $qid, $qsc];
-	    $matched_names++;
+	    foreach my $match ( @good_matches )
+	    {
+		my $qid = $pbdb->quote($match->{stratn_id});
+		my $qsc = $pbdb->quote($match->{score});
+		
+		push @match_records, [$qno, $qid, $qsc];
+		$matched_names++;
+	    }
+	}
+
+	# If we don't have any perfect matches but we do have at least one Macrostrat
+	# name which matches the country code of the PBDB name but not the rank, then
+	# choose the most prevalent rank among those matches. Accept all matches with
+	# that rank and country code, and update the PBDB name to have that rank.
+	
+	elsif ( @rank_mismatches )
+	{
+	    my (%rank_count, $selected_rank, $selected_count);
+	    
+	    # Select the rank that is most prevalent among these matches.
+	    
+	    foreach my $match ( @rank_mismatches )
+	    {
+		$rank_count{$match->{rank}}++;
+	    }
+	    
+	    foreach my $r ( keys %rank_count )
+	    {
+		if ( ! $selected_count || $rank_count{$r} > $selected_count )
+		{
+		    $selected_rank = $r;
+		    $selected_count = $rank_count{$r};
+		}
+	    }
+	    
+	    # Accept those matches.
+	    
+	    my $qno = $pbdb->quote($stratn_no);
+	    my $qra = $pbdb->quote($selected_rank);
+	    
+	    foreach my $match ( @rank_mismatches )
+	    {
+		if ( $match->{rank} eq $selected_rank )
+		{
+		    my $qid = $pbdb->quote($match->{stratn_id});
+		    my $qsc = $pbdb->quote($match->{score});
+		    
+		    push @match_records, [$qno, $qid, $qsc];
+		    $matched_names++;
+		}
+	    }
+	    
+	    # Create an update record which will cause the rank of the PBDB name to be
+	    # changed. Keep track of the original rank of the name for use in the update
+	    # process.
+	    
+	    push @update_records, [$qno, $qra, $pbnr->{rank}];
+	    $updated_names++;
 	}
 	
 	$pbnames++;
@@ -3526,16 +3753,17 @@ sub MatchMacrostrat {
 
     say "  Read $pbnames PBDB names.";
     say "  Matched $matched_names Macrostrat names.";
+    say "  Updating $updated_names PBDB name ranks.";
     
     return if $opt_check;
     
-    # Now truncate the table and regenerate it.
+    # Now truncate the STRAT_MS_MATCHES table and regenerate it.
 
-    say "Emptying tables: '$TABLE{STRAT_MS_MATCHES}'...";
+    say "Emptying tables: `$TABLE{STRAT_MS_MATCHES}`...";
     
     DBCommand($pbdb, "TRUNCATE `$TABLE{STRAT_MS_MATCHES}`");
     
-    say "Generating the STRAT_MS_MATCHES ($TABLE{STRAT_MS_MATCHES}) table...";
+    say "Generating the STRAT_MS_MATCHES (`$TABLE{STRAT_MS_MATCHES}`) table...";
 
     my $match_count = 0;
     my $match_values = '';
@@ -3554,8 +3782,319 @@ sub MatchMacrostrat {
     }
     
     InsertNameMatches($pbdb, $match_values) if $match_values;
-
+    
     say "Created $match_count match records";
+    
+    # Now update the rank of all PBDB names for which the matching Macrostrat name had a
+    # different rank. This will often involve consolidating multiple PBDB name records
+    # into one name record. Since the COLLECTION_STRAT_NAMES table has already been
+    # generated, it will have to be updated as well.
+    
+    say "Updating ranks and consolidating name records...";
+    
+    my $update_count = 0;
+    my $consolidate_count = 0;
+    
+    foreach my $r ( @update_records )
+    {
+	# Change the rank of the specified PBDB name to the specified value.
+	
+	DBCommand($pbdb, <<~END_SQL);
+	  UPDATE $TABLE{STRAT_NAMES} SET rank = $r->[1], modified = modified,
+	    updated = now(), updater_no = '1296'
+	  WHERE stratn_no = $r->[0]
+	  END_SQL
+	
+	# If there are other PBDB name records that now have the same name, rank, and
+	# country code, then consolidate them with this one.
+	
+	$consolidate_count += ConsolidateAfterRankChange($r->[0], $r->[2]);
+	
+	$update_count++;
+    }
+    
+    # If any name records were consolidated, then some of the `bbox` values will be
+    # inaccurate. It is easiest to just recompute all of them in that case.
+    
+    if ( $consolidate_count )
+    {
+	SetBBoxField();
+    }
+    
+    say "Updated $update_count name records";
+    say "Consolidated $consolidate_count name records";
+}
+
+
+# ConsolidateAfterRankChange ( stratn_no, orig_rank )
+# 
+# Consolidate the specified PBDB name record with any other PBDB name records that now
+# have the same name, rank, and country code. Note that the first argument to this
+# routine should have already been quoted, while the second should not.
+
+sub ConsolidateAfterRankChange {
+
+    my ($qstratn_no, $orig_rank) = @_;
+    
+    # Fetch the attributes of the specified name.
+    
+    my $result = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT * FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
+	WHERE stratn_no = $qstratn_no
+	END_SQL
+    
+    # Since we are fetching by primary key, there should be only one record. We refer to
+    # this below as the "remaining" record, since it will be the one remaining after the
+    # consolidation.
+    
+    die "Error: multiple name records by primary key\n" unless @$result == 1;
+    
+    # The select all name records with the same name, rank, and country code.
+    
+    my $remaining = $result->[0];
+    my $qname = $pbdb->quote($remaining->{name});
+    my $qrank = $pbdb->quote($remaining->{rank});
+    my $qcc = $pbdb->quote($remaining->{cc});
+    
+    my $rows = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT * FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
+	WHERE name = $qname and rank = $qrank and cc = $qcc
+	END_SQL
+    
+    my $consolidated_count = 0;
+    
+    # For each record other than the "remaining" one, check that its age bounds are
+    # compatible with the "remaining" one. The location check is irrelevant since we
+    # know they have the same country code. If they are compatible, then consolidate the
+    # other one with the remaining one.
+    
+    foreach my $r ( @$rows )
+    {
+	if ( $r->{stratn_no} ne $remaining->{stratn_no} && ContextsAreCompatible($remaining, $r) )
+	{
+	    ConsolidateNamesByUpdate($remaining, $r, $orig_rank);
+	    say "Consolidated $r->{stratn_no} ($r->{name}) with $remaining->{stratn_no} " .
+		"($remaining->{name})" if $opt_debug;
+	    $consolidated_count++;
+	}
+    }
+    
+    # Return the number of records that were consolidated.
+    
+    return $consolidated_count;
+}
+
+
+# ConsolidateNamesByUpdate ( remaining, other, orig_rank )
+#
+# Consolidate the PBDB name indicated by $other with the PBDB name indicated by
+# $remaining. This will involve updating the the STRAT_NAMES and STRAT_NATTRS tables,
+# and also the COLLECTION_STRAT_NAMES table. The record indicated by $other will be
+# deleted.
+#
+# The parameter $orig_rank gives the original rank of the $remaining name.
+
+sub ConsolidateNamesByUpdate {
+
+    my ($remaining, $other, $orig_rank) = @_;
+    
+    # Consolidate the position, time, and number attributes. This code should be the
+    # same as in the subroutine ConsolidateNames.
+    
+    $remaining->{lat_min} = $other->{lat_min}
+	if ! defined $remaining->{lat_min} || $other->{lat_min} < $remaining->{lat_min};
+    $remaining->{lat_max} = $other->{lat_max}
+	if ! defined $remaining->{lat_max} || $other->{lat_max} > $remaining->{lat_max};
+    $remaining->{lng_min} = $other->{lng_min}
+	if ! defined $remaining->{lng_min} || $other->{lng_min} < $remaining->{lng_min};
+    $remaining->{lng_max} = $other->{lng_max}
+	if ! defined $remaining->{lng_max} || $other->{lng_max} > $remaining->{lng_max};
+    
+    $remaining->{pos_lng_min} = $other->{pos_lng_min}
+	if ! defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} ||
+	defined $remaining->{pos_lng_min} && defined $other->{pos_lng_min} &&
+	$other->{pos_lng_min} < $remaining->{pos_lng_min};
+    $remaining->{neg_lng_max} = $other->{neg_lng_max}
+	if ! defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} ||
+	defined $remaining->{neg_lng_max} && defined $other->{neg_lng_max} &&
+	$other->{neg_lng_max} > $remaining->{neg_lng_max};
+    
+    $remaining->{early_age} = $other->{early_age}
+	if ! defined $remaining->{early_age} || $other->{early_age} > $remaining->{early_age};
+    $remaining->{late_age} = $other->{late_age}
+	if ! defined $remaining->{late_age} || $other->{late_age} < $remaining->{late_age};
+    
+    $remaining->{n_colls} += $other->{n_colls};
+    $remaining->{n_occs} += $other->{n_occs};
+    
+    # If the $other record was created earlier, use its authorizer_no, enterer_no,
+    # reference_no, and created date for the combined record. This should also be the
+    # same as in the subroutine Consolidatenames.
+    
+    if ( $other->{created} && $remaining->{created} && $other->{created} lt $remaining->{created} )
+    {
+	$remaining->{created} = $other->{created};
+	$remaining->{reference_no} = $other->{reference_no};
+	
+	if ( $other->{authorizer_no} && $other->{enterer_no} )
+	{
+	    $remaining->{authorizer_no} = $other->{authorizer_no};
+	    $remaining->{enterer_no} = $other->{enterer_no};
+	}
+    }
+    
+    # The lithology1, lithology2, and doi values are split, consolidated, and joined again.
+    
+    my %accumulator;
+    
+    foreach my $field ( qw(lithology1 lithology2 doi) )
+    {
+	if ( $other->{$field} )
+	{
+	    $accumulator{$field}{$_} = 1 foreach split /,/, $remaining->{$field};
+	    $accumulator{$field}{$_} = 1 foreach split /,/, $other->{$field};
+	    $remaining->{$field} = join ',', keys $accumulator{$field}->%*;
+	}
+    }
+    
+    # Prepare to update the appropriate database rows. The variable $qgone holds the row
+    # identifier of the record that will be deleted.
+    
+    my $qstratn = $pbdb->quote($remaining->{stratn_no});
+    my $qgone = $pbdb->quote($other->{stratn_no});
+    my $qlith1 = $pbdb->quote($remaining->{lithology1});
+    my $qlith2 = $pbdb->quote($remaining->{lithology2});
+    my $doi = $pbdb->quote($remaining->{doi});
+    my $qncolls = $pbdb->quote($remaining->{n_colls} || 0);
+    my $qnoccs = $pbdb->quote($remaining->{n_occs} || 0);
+    my $qearly = $pbdb->quote($remaining->{early_age} || '');
+    my $qlate = $pbdb->quote($remaining->{late_age} || '');
+    my $qlatmin = $pbdb->quote($remaining->{lat_min});
+    my $qlatmax = $pbdb->quote($remaining->{lat_max});
+    my $qlngmin = $pbdb->quote($remaining->{lng_min});
+    my $qlngmax = $pbdb->quote($remaining->{lng_max});
+    my $qposmin = $pbdb->quote($remaining->{pos_lng_min});
+    my $qnegmax = $pbdb->quote($remaining->{neg_lng_max});
+    my $qrefno = $pbdb->quote($remaining->{reference_no} || 0);
+    my $qauth = $pbdb->quote($remaining->{authorizer_no} || 1262);
+    my $qenter = $pbdb->quote($remaining->{enterer_no} || 1262);
+    my $qcreated = $pbdb->quote($remaining->{created});
+    
+    unless ( $remaining->{pos_lng_min} && $remaining->{neg_lng_max} )
+    {
+	$qposmin = 'NULL';
+	$qnegmax = 'NULL';
+    }
+    
+    # Update the "remaining" row in each of the STRAT_NAMES and STRAT_NATTRS tables.
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE $TABLE{STRAT_NAMES}
+	SET reference_no = $qrefno, authorizer_no = $qauth, enterer_no = $qenter,
+	    created = $qcreated, modified = modified
+	WHERE stratn_no = $qstratn
+	END_SQL
+    
+    DBCommand($pbdb, <<~END_SQL);
+	UPDATE $TABLE{STRAT_NATTRS}
+	SET lithology1 = $qlith1, lithology2 = $qlith2, doi = $doi,
+	    n_colls = $qncolls, n_occs = $qnoccs, early_age = $qearly, late_age = $qlate,
+	    lat_min = $qlatmin, lat_max = $qlatmax, lng_min = $qlngmin, lng_max = $qlngmax,
+	    pos_lng_min = $qposmin, neg_lng_max = $qnegmax
+	WHERE stratn_no = $qstratn
+	END_SQL
+    
+    # Now attempt to update the COLLECTION_STRAT_NAMES table to substitute the
+    # "remaining" name identifier wherever the "other" name identifier occurs. If the
+    # UPDATE statement fails with the error 'Duplicate entry in key "PRIMARY"', this
+    # means that at least one collection has a suite of stratigraphic names that is
+    # problematic and must be fixed. Typically, the same name was used at two different
+    # ranks, i.e. the formation and member were specified as the same name. After fixing
+    # that collection we loop back and try again, because more than one collection may
+    # be problematic.
+    
+    my $done = 0;
+    my $last = 0;
+    
+    while ( ! $done )
+    {
+	# If the UPDATE statement completes without error, we are done.
+	
+	eval {
+	    DBCommand($pbdb, <<~END_SQL);
+		UPDATE $TABLE{COLLECTION_STRAT_NAMES}
+		SET stratn_no = $qstratn
+		WHERE stratn_no = $qgone
+		END_SQL
+	    
+	    $done = 1;
+	};
+	
+	# If the error is "Duplicate entry", then we need to fix the collection specified
+	# by the first number in the flagged key.
+	
+	if ( $@ =~ /Duplicate entry '(\d+)/ )
+	{
+	    my $bad_coll = $1;
+	    
+	    # If we get the same error twice for the same collection, that means our fix
+	    # didn't work. In that case, re-throw the error so that this script terminates.
+	    
+	    die $@ if $bad_coll eq $last;
+	    $last = $bad_coll;
+	    
+	    # If the rank of the "remaining" name was raised either from "Fm" to "Gp" or
+	    # from "Mbr" to "Fm", then remove the "other" name from its association with
+	    # the collection and leave the "remaining" name there. The reason for this
+	    # is that the name that was originally lower-ranking is more likely to have
+	    # modifiers or prefixes such as "upper" or "lower" than the higher-ranking
+	    # name, and we want to preserve those attributes. We don't have to worry
+	    # about names raised to 'SubGp' or 'SGp' because there are no original names with
+	    # those ranks and thus no conflicts.
+	    
+	    my $qcoll = $pbdb->quote($bad_coll);
+	    my $qrank = $pbdb->quote($remaining->{rank});
+	    
+	    if ( $orig_rank eq 'Fm' && $remaining->{rank} eq 'Gp' ||
+		 $orig_rank eq 'Mbr' && $remaining->{rank} eq 'Fm' )
+	    {
+		DBCommand($pbdb, <<~END_SQL);
+		DELETE FROM $TABLE{COLLECTION_STRAT_NAMES}
+		WHERE collection_no = $qcoll and stratn_no = $qgone
+		END_SQL
+	    }
+	    
+	    # Otherwise, delete all entries which associate the bad collection with
+	    # other names at the same rank as the "remaining" one, including the
+	    # "remaining" name itself, leaving the "other" name. In this case, the
+	    # "remaining" name is being demoted and thus any modifier or prefix is more
+	    # likely to be on the "other" name.
+	    
+	    else
+	    {
+		DBCommand($pbdb, <<~END_SQL);
+		DELETE $TABLE{COLLECTION_STRAT_NAMES}
+		FROM $TABLE{COLLECTION_STRAT_NAMES} join $TABLE{STRAT_NAMES} using (stratn_no)
+		WHERE collection_no = $qcoll and rank = $qrank and stratn_no <> $qgone
+		END_SQL
+	    }
+	}
+	
+	# If we get any other error, re-throw it.
+	
+	elsif ( $@ )
+	{
+	    die $@;
+	}
+    }
+    
+    # Delete the "other" name record from both the STRAT_NAMES and STRAT_NATTRS tables.
+    
+    DBCommand($pbdb, <<~END_SQL);
+	DELETE $TABLE{STRAT_NAMES}, $TABLE{STRAT_NATTRS}
+	FROM $TABLE{STRAT_NAMES} join $TABLE{STRAT_NATTRS} using (stratn_no)
+	WHERE stratn_no = $qgone
+	END_SQL
 }
 
 
@@ -4085,7 +4624,7 @@ sub UpdateTables {
 	  `name` varchar(255) NOT NULL,
 	  `rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed') NOT NULL,
 	  `cc` varchar(2) NOT NULL DEFAULT '',
-	  `canonical` varchar(255) NOT NULL,
+	  `search` varchar(255) NOT NULL,
 	  `reference_no` int(10) unsigned NOT NULL DEFAULT '0',
 	  `authorizer_no` int(10) unsigned NOT NULL,
 	  `enterer_no` int(10) unsigned NOT NULL,
@@ -4094,7 +4633,8 @@ sub UpdateTables {
 	  `created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	  `modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	  `updated` timestamp NULL,
-	  KEY `name` (`name`,`rank`),
+	  KEY (`name`),
+	  KEY (`search`),
 	  KEY (`cc`),
 	  KEY (`reference_no`)
 	) ENGINE=InnoDB", 1);
@@ -4130,7 +4670,7 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $selected{strat_names_view} || $selected{all} )
+    if ( $selected{strat_names_view} || $selected{all} || $selected{views} )
     {
 	$activity = 1;
 	
@@ -4138,12 +4678,12 @@ sub UpdateTables {
 	    if $check =~ /\bstrat_names_view\b/;
 	
 	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `strat_names_view` AS
-	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `canonical`,
+	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `search`,
 	    `early_age`, `late_age`,
 	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
 	    `pos_lng_min`, `neg_lng_max`, `lithology1`, `lithology2`, `reference_no`, `doi`,
 	    `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
-	  FROM `strat_names` join `strat_name_attrs` using (`stratn_no`)
+	  FROM `strat_names` left join `strat_name_attrs` using (`stratn_no`)
 	  GROUP BY `stratn_no`", 1);
     }
     
@@ -4190,7 +4730,7 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $selected{strat_concepts_view} || $selected{all} )
+    if ( $selected{strat_concepts_view} || $selected{all} || $selected{views} )
     {
 	$activity = 1;
 	
@@ -4202,7 +4742,7 @@ sub UpdateTables {
 		`early_age`, `late_age`, `n_colls`, `n_occs`, 
 		`lat_min`, `lat_max`, `lng_min`, `lng_max`, `pos_lng_min`, `neg_lng_max`,
 		`lithology1`, `lithology2`
-	  FROM `strat_concepts` join `strat_concept_ccs` using (stratc_no)
+	  FROM `strat_concepts` left join `strat_concept_ccs` using (stratc_no)
 	  GROUP BY `stratc_no`", 1);
     }
     
@@ -4238,7 +4778,7 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $selected{strat_opinions_view} || $selected{all} )
+    if ( $selected{strat_opinions_view} || $selected{all} || $selected{views} )
     {
 	$activity = 1;
 	
@@ -4278,6 +4818,7 @@ sub UpdateTables {
 	  `lng_max` decimal(9,6) DEFAULT NULL,
 	  `pos_lng_min` decimal(9,6) DEFAULT NULL,
 	  `neg_lng_max` decimal(9,6) DEFAULT NULL,
+	  `bbox` geometry DEFAULT NULL,
 	  `ref_id` mediumint(8) unsigned NOT NULL default '0',
 	  PRIMARY KEY (`stratn_id`, `cc`),
 	  KEY (`name`, `rank`),
@@ -4301,7 +4842,7 @@ sub UpdateTables {
 	) ENGINE=InnoDB", 1);
     }
     
-    if ( $selected{strat_ms_matches_view} || $selected{all} )
+    if ( $selected{strat_ms_matches_view} || $selected{all} || $selected{views} )
     {
 	$activity = 1;
 	
@@ -4320,7 +4861,7 @@ sub UpdateTables {
 	    left join `strat_ms_names` as `ms` using (`stratn_id`)", 1);
     }
     
-    $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'collection_strat_names'");
+    $check = DBTextQuery($pbdb, "SHOW TABLES LIKE 'collection_strat_names%'");
     
     if ( $selected{collection_strat_names} || $selected{all} )
     {
@@ -4333,9 +4874,26 @@ sub UpdateTables {
 	DBCommand($pbdb, "CREATE TABLE IF NOT EXISTS `collection_strat_names` (
 	  `collection_no` int unsigned not null,
 	  `stratn_no` int unsigned not null,
+	  `modifier` enum('\"', '?'),
+	  `prefix` varchar(255),
+	  `suffix` varchar(255),
+	  `orig_rank` enum('SGp','Gp','SubGp','Fm','Mbr','Bed'),
 	  PRIMARY KEY (`collection_no`, `stratn_no`),
 	  KEY (`stratn_no`)
 	) ENGINE=InnoDB", 1);
+    }
+    
+    if ( $selected{collection_strat_names_view} || $selected{all} || $selected{views} )
+    {
+	$activity = 1;
+	
+	DBCommand($pbdb, "DROP VIEW IF EXISTS `collection_strat_names_view`", 1)
+	    if $check =~ /\bcollection_strat_names_view\b/;
+	
+	DBCommand($pbdb, "CREATE VIEW IF NOT EXISTS `collection_strat_names_view` AS
+	  SELECT `collection_no`, `stratn_no`, `modifier`, `prefix`, `suffix`, `orig_rank`,
+	    `name`, `rank`, `cc`
+	  FROM `collection_strat_names` left join `strat_names` using (stratn_no)", 1);
     }
     
     unless ( $activity )
@@ -4349,7 +4907,7 @@ sub InsertNames {
 
     my ($dbh, $name_values) = @_;
 
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, canonical, " .
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NAMES}` (stratn_no, name, rank, cc, search, " .
 	      "reference_no, authorizer_no, enterer_no, created, modified) VALUES " .
 	      $name_values);
 }
@@ -4381,7 +4939,8 @@ sub InsertConceptCCs {
 
     my ($dbh, $cc_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_CONCEPT_CCS}` (stratc_no, cc, country) VALUES " . $cc_values);
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_CONCEPT_CCS}` (stratc_no, cc, country) VALUES " .
+	      $cc_values);
 }
 	
 
@@ -4417,7 +4976,8 @@ sub InsertNameMatches {
 
     my ($dbh, $match_values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) VALUES $match_values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_MS_MATCHES}` (stratn_no, stratn_id, score) " .
+	      "VALUES $match_values");
 }
 
 
@@ -4425,7 +4985,8 @@ sub InsertCandidateMatches {
 
     my ($dbh, $values) = @_;
     
-    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_C_MATCHES}` (stratn_no, stratn_id, score) VALUES $values");
+    DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_C_MATCHES}` (stratn_no, stratn_id, score) " .
+	      "VALUES $values");
 }
 
 
@@ -4433,6 +4994,7 @@ sub InsertCollNames {
 
     my ($dbh, $name_values) = @_;
     
-    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{COLLECTION_STRAT_NAMES}` (collection_no, stratn_no) VALUES $name_values");
+    DBCommand($dbh, "INSERT IGNORE INTO `$TABLE{COLLECTION_STRAT_NAMES}` (collection_no, stratn_no, " .
+	      "modifier, prefix, suffix, orig_rank) VALUES $name_values");
 }
 
