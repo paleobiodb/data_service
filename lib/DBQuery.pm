@@ -300,7 +300,7 @@ sub DBCommand {
 
     if ( $say_it )
     {
-	say $command;
+	say "$command\n";
     }
     
     unless ( $CHECK_MODE )
@@ -314,7 +314,7 @@ sub DBCommand {
 	
 	if ( $@ )
 	{
-	    say STDERR $command unless $DEBUG_MODE;
+	    say STDERR "$command\n" unless $DEBUG_MODE || defined $say_it;
 	    croak "$@\n";
 	}
 	

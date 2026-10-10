@@ -172,7 +172,7 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			spathique => 2, spathiques => 2,
 			terrain => 2, terre => 2, terres => 2,
 			tufeau => 2, tuffeau => 2, tuffeaux => 2, tufs => 2,
-			vert => 2, verts => 2, );
+			veronese => 2, vert => 2, verts => 2, );
 
 our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, top => 1, bottom => 1,
 		   uppermost => 1, lowermost => 1, all => 1, and => 1,
@@ -183,7 +183,7 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   division => 1, divisions => 1, local => 1, level => 1, levels => 1,
 		   layer => 1, layers => 1, part => 1, parts => 1,
 		   sequence => 1, sequences => 1, subsequence => 1, subsequences => 1,
-		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, serie => 2, 
+		   section => 1, sections => 1, seam => 1, seams => 1, series => 1, serie => 2,
 		   suite => 1, suites => 1, subsuite => 1, subsuites => 1,
 		   schicht => 1, unit => 1, units => 1, subunit => 1, subunits => 1,
 		   unknown => 1, unnamed => 1, indeterminate => 1,
@@ -191,13 +191,17 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   member => 1, miembre => 2,
 		   formation => 1, formación => 2, formacion => 2,
 		   informal => 1, undifferentiated => 1, unnamed => 1, and => 1, sub => 1,
-		   capa => 2, capas => 2, 
+		   capa => 2, capas => 2,
 		   grosse => 2, grosses => 2, grossier => 2, grossiers => 2,
 		   le => 2, les => 2,
-		   moyen => 2, moyens => 2, 
-		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2, 
-		   inférieur => 2, supérieur => 2, inferieur => 2, superieur => 2,		   
+		   moyen => 2, moyens => 2,
+		   nivel => 2, niveles => 2, niveau => 2, niveaux => 2,
+		   inferior => 2, inférieur => 2, inferieur => 2, inférieure => 2, inferieure => 2,
+		   supérieur => 2, superior => 2, superieur => 2, superieure => 2,
 		   inférieurs => 2, supérieurs => 2, inferieurs => 2, superieurs => 2,
+		   miliaire => 2, miliaires => 2,
+		   obere => 1, oberer => 1, untere => 1, unterer => 1, mittlere => 1, mittlerer => 1,
+		   medio => 2, media => 2,
 		   moitié => 2, moitie => 2, les => 2, et => 2 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
@@ -766,25 +770,23 @@ sub ImportPBDB {
 	    }
 	    
 	    # If the initial word is 'lower|middle|upper' in all lower-case followed by
-	    # a name starting with upper-case, move the adjective to 'begin'. If the
+	    # a name starting with upper-case, move the adjective to 'prefix'. If the
 	    # remainder is the same as the enclosing formation or group, skip this name
 	    # entirely.
 	    
 	    if ( $c =~ / ^ ( lower | middle | upper | (?: base | top) \s of (?: \s the)? |
-			     (?:[Uu]pper | [Mm]iddle | [Ll]ower ) \s part \s of (?: \s the )?)
+			     (?: [Uu]pper | [Mm]iddle | [Ll]ower ) \s part \s of (?: \s the )? |
+			     obere[rn]? | mittler(?:er)? | unter(?:er)? )
 			 \s+ ( \p{Lu}.* ) /xs )
 	    {
-		if ( $nr->{formation} && $2 eq $nr->{formation} ||
-		     $nr->{grp}  && $2 eq $nr->{grp} )
-		{
-		    next;
-		}
+		# if ( $nr->{formation} && $2 eq $nr->{formation} ||
+		#      $nr->{grp}  && $2 eq $nr->{grp} )
+		# {
+		#     next;
+		# }
 		
-		else
-		{
-		    $nr->{prefix} = $1;
-		    $c = $2;
-		}
+		$nr->{prefix} = $1;
+		$c = $2;
 	    }
 	    
 	    # If the initial word is 'Lower|Middle|Upper', the situation is trickier.
@@ -792,18 +794,54 @@ sub ImportPBDB {
 	    # the first word only if this is a stratum we have already encountered or
 	    # one known to Macrostrat.
 	    
-	    elsif ( $c =~ / ^ (Lower|Middle|Upper) \s+ ( \p{Lu}.* ) /xs )
+	    elsif ( $c =~ / ^ (Lower|Middle|Upper|Unter(?:er)?|Mittler(?:er)?|Obere[rn]?)
+			    \s+ ( \p{Lu}.* ) /xs )
 	    {
-		if ( $nr->{formation} && $2 eq $nr->{formation} ||
-		     $nr->{grp}  && $2 eq $nr->{grp} )
+		# if ( $nr->{formation} && $2 eq $nr->{formation} ||
+		#      $nr->{grp}  && $2 eq $nr->{grp} )
+		# {
+		#     next;
+		# }
+		
+		if ( $pass == 1 )
 		{
-		    next;
+		    push @deferred, $rkey;
+		    return;
 		}
 		
 		elsif ( IsKnownStratum($2, $nr) )
 		{
 		    $nr->{prefix} = $1;
 		    $c = $2;
+		}
+	    }
+	    
+	    # If the final word is inferior|superior or any variant, in all lower case,
+	    # move the adjective to 'suffix'.
+	    
+	    elsif ( $c =~ / (.*) \s ( (?: [Mm]oitié \s )? (?: inf[eé]ri\w+ | sup[ée]ri\w+ ) ) $ /xs )
+	    {
+		$nr->{suffix} = $2;
+		$c = $1;
+	    }
+	    
+	    # If the final word is 'Inferior|Superior' or any variant, the situation is
+	    # tricky. Formal stratigraphic names do include those words. So we remove
+	    # the last word only if this is a stratum we have already encountered or
+	    # one known to Macrostrat.
+	    
+	    elsif ( $c =~ / (.*) \s ( Sup[ée]ri\w+ | Inf[ée]ri\w+ ) $ /xs )
+	    {
+		if ( $pass == 1 )
+		{
+		    push @deferred, $rkey;
+		    return;
+		}
+		
+		elsif ( IsKnownStratum($1, $nr) )
+		{
+		    $nr->{suffix} = $2;
+		    $c = $1;
 		}
 	    }
 	    
@@ -872,9 +910,9 @@ sub ImportPBDB {
 	    
 	    # If the name begins with 'Formación', 'Miembre', or 'Member', remove it.
 
-	    if ( $c =~ qr{ ^ (?: formaci[oó]n | miembr[eo] | member ) \s (.*) }xsi )
+	    if ( $fc =~ qr{ ^ (?: formaci[oó]n | miembr[eo] | member ) \s (.*) }xsi )
 	    {
-		$c = $1;
+		$fc = $1;
 	    }
 	    
 	    # Increment the component count for the name record.
@@ -975,6 +1013,72 @@ sub ImportPBDB {
 		# Also add it to the list of name components for $rkey.
 
 		push $name_components{$rkey}->@*, $alias_key;
+	    }
+	    
+	    # If the name is of the form "xxx de yyy" or "xxx d'yyy" or similar, extract
+	    # the second part as an alternate name for comparisons. But don't do this
+	    # for names from Canada and the United States, because those names are
+	    # always formatted with English grammar regardless of their original
+	    # language. The idea here is that "Dolomie de Fiennes" and "Fiennes" should
+	    # be placed into the same stratigraphic concept since those two names do in
+	    # fact refer to the same stratum.
+	    
+	    unless ( $nr->{cc} eq 'US' || $nr->{cc} eq 'CA' )
+	    {
+		my $alternate;
+		
+		if ( $c =~ qr{ ^ estratos (?: \s+ del )? \s+ (.*) }xsi )
+		{
+		    $alternate = fc $1;
+		}
+		
+		elsif ( $c =~ qr{ ^ (.*? \S) \s+ (?: del\s | des\s | de\s | du\s | do\s | d'\s? )
+				  (\S.*) }xsi )
+		{
+		    my $temp = $2;
+		    
+		    if ( $temp =~ qr{ ^ [\p{Ll}\s]+ \s+ (?: del\s | des\s | de\s | du\s | do\s | d'\s? )
+				      (\S.*) }xs )
+		    {
+			$alternate = fc $1;
+		    }
+		    
+		    else
+		    {
+			$alternate = fc $temp;
+		    }
+		}
+		
+		# If an alternate name was extracted, store it in the name context
+		# record under 'alternate_name'. Add the original name key to
+		# the $first_two and $first_last hashes under the first-two and
+		# first-last letters of the alternate name, so that it will be selected
+		# for comparison on that basis.
+		
+		if ( $alternate )
+		{
+		    $nr->{alternate_name} = $alternate;
+		    
+		    my $alt_ft = substr($alternate, 0, 2);
+		    
+		    $first_two{$alt_ft} ||= [];
+		    push $first_two{$alt_ft}->@*, $nkey;
+		    
+		    my @alt_fl = ($alternate =~ /^([[:alpha:]])\S*[[:alpha:]]\S*([[:alpha:]])/);
+		    
+		    if ( @alt_fl )
+		    {
+			my $alt_fl = $alt_fl[0] . $alt_fl[1];
+			$first_last{$alt_fl} ||= [];
+			push $first_last{$alt_fl}->@*, $nkey;
+		    }
+		    
+		    # Construct a name key using the alternate name and add it to
+		    # %strat_name_fc, because the alternate name should be considered to
+		    # be a known stratigraphic name.
+		    
+		    $strat_name_fc{"$alternate|$rank|$nr->{cc}"} = 1;
+		}
 	    }
 	    
 	    # Store the name key (and the alias key if there is one) under either
@@ -1156,6 +1260,13 @@ sub ImportPBDB {
 			{
 			    $matching_concepts{$alt_preliminary_no} = 1;
 			}
+			
+			# else
+			# {
+			#     my $alt_preliminary_no = ++$preliminary_concept_no;
+			#     CreateConcept($alt_nr, $alt_key, "${alt_preliminary_no}A");
+			#     $matching_concepts{"${alt_preliminary_no}A"} = 1;
+			# }
 		    }
 		}
 	    }
@@ -1752,6 +1863,42 @@ sub UpdateContainedIn {
 }
 
 
+# GeneratePrefix ( phrase )
+#
+# Generate one of the prefixes "lower", "middle", "upper", "base", "top" from the
+# specified phrase.
+
+sub GeneratePrefix {
+
+    my ($phrase) = @_;
+
+    if ( $phrase =~ /low|unt/i )
+    {
+	return "lower";
+    }
+    
+    elsif ( $phrase =~ /mid|mit/i )
+    {
+	return "middle";
+    }
+
+    elsif ( $phrase =~ /upp|obe/i )
+    {
+	return "upper";
+    }
+    
+    elsif ( $phrase =~ /base/i )
+    {
+	return "base";
+    }
+    
+    elsif ( $phrase =~ /top/i )
+    {
+	return "top";
+    }
+}
+
+
 # ConsolidateNames ( remaining, other )
 #
 # Extend the name record referred to by $remaining using the information from the name
@@ -2164,16 +2311,16 @@ sub ExtractSearchName {
 	return $raw_name;
     }
     
-    elsif ( $raw_name =~ qr{ ^ Estratos (?: \s del )? \s (.*) }xsi )
+    elsif ( $raw_name =~ qr{ ^ Estratos (?: \s+ del )? \s+ (.*) }xsi )
     {
 	return $1;
     }
     
-    elsif ( $raw_name =~ qr{ ^ (.*? \S) \s (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xsi )
+    elsif ( $raw_name =~ qr{ ^ (.*? \S) \s+ (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xsi )
     {
 	my $c = $2;
 
-	if ( $c =~ qr{ ^ [\p{Ll}\s]+ \s (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xs )
+	if ( $c =~ qr{ ^ [\p{Ll}\s]+ \s+ (?: del\s | des\s | de\s | du\s | do\s | d'\s? ) (\S.*) }xs )
 	{
 	    return $1;
 	}
@@ -2184,7 +2331,7 @@ sub ExtractSearchName {
 	}
     }
     
-    elsif ( $raw_name =~ qr{ ^ (.*? \S\s .*?) [aáà] \s (\S.*) }xsi )
+    elsif ( $raw_name =~ qr{ ^ (.*? \S\s .*?) \b [aáà] \s+ (\S.*) }xsi )
     {
 	return $2;
     }
@@ -2638,6 +2785,19 @@ sub NamesAreCompatible {
 	return $similarities;
     }
     
+    # If one or the other of the name records has an 'alternate_name', compare those as
+    # well.
+
+    elsif ( $nr->{alternate_name} && $alt_nr->{alternate_name} &&
+	        $IgnoreCaseAccents->eq($nr->{alternate_name}, $alt_nr->{alternate_name}) ||
+	    $nr->{alternate_name} && $IgnoreCaseAccents->eq($nr->{alternate_name}, $alt_name) ||
+	    $alt_nr->{alternate_name} && $IgnoreCaseAccents->eq($name, $alt_nr->{alternate_name}) )
+    {
+	$similarities += 2;
+	print "alternate name is equal to name: return $similarities\n\n" if $debug_this;
+	return $similarities;
+    }
+    
     # Otherwise, we require that the names have one of the following combinations of
     # similarities:
     
@@ -2727,8 +2887,6 @@ sub NamesAreCompatible {
     my $shortened = join(' ', @words);
     my $alt_shortened = join(' ', @alt_words);
     
-    my $edistance = edistance( $shortened, $alt_shortened, 2 );
-    
     print "comparing '$shortened' to '$alt_shortened'\n" if $debug_this;
     
     # If the remainder of either name is made up of null words, reject the match unless
@@ -2743,80 +2901,103 @@ sub NamesAreCompatible {
 	}
     }
     
-    # For names in New Zealand, we allow an edit distance of at most 1. This is because
-    # some distinct strata in New Zealand have very similar names.
-    
-    if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
-    {
-	if ( $edistance == 0 || $edistance == 1 )
-	{
-	    $similarities++;
-	    print "cc = NZ && edistance = $edistance: return $similarities\n\n"	if $debug_this;
-	    return $similarities;
-	}
-    }
-    
-    # For names of 5 or fewer characters, we allow an edit distance of at most 1.
-    
-    elsif ( length($shortened) <= 5 || length($alt_shortened) <= 5 )
-    {
-	if ( $edistance == 0 || $edistance == 1 )
-	{
-	    $similarities++;
-	    print "short word edistance = $edistance: return $similarities\n\n" if $debug_this;
-	    return $similarities;
-	}
-    }
+    # In looking for names that are slight misspellings of one another, we must consider
+    # both the original names and the alternate name(s) if any have been extracted.
+    # Thus, we will need a double loop.
 
-    # If both the ages and locations overlap (or nearly so) and we have at least 3
-    # similarities, then we allow an edit distance up to 2.
-    
-    elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
+    my @comparison = $shortened;
+    push @comparison, $nr->{alternate_name} if $nr->{alternate_name};
+
+    my @alt_comparison = $alt_shortened;
+    push @alt_comparison, $alt_nr->{alternate_name} if $alt_nr->{alternate_name};
+
+    foreach my $n ( @comparison )
     {
-	# If the names are both multiple words, make sure that no word less than 6
-	# characters has an edit distance of more than 1.
-	
-	if ( $shortened =~ / / && $alt_shortened =~ / / )
+	foreach my $an ( @alt_comparison )
 	{
-	    my @words = split /\s+/, $shortened;
-	    my @alt_words = split /\s+/, $alt_shortened;
+	    my $edistance = edistance( $n, $an, 2 );
 	    
-	    # If the number of words is the same, then check each word in turn. If the
-	    # number of words is different, that in itself takes up one of the allowable
-	    # differences, leaving only one in one of the words.
+	    # For names in New Zealand, we allow an edit distance of at most 1. This is
+	    # because some distinct strata in New Zealand have very similar names.
 	    
-	    if ( @words == @alt_words )
+	    if ( $nr->{cc} eq 'NZ' || $alt_nr->{cc} eq 'NZ' )
 	    {
-		foreach my $i ( 0..$#words )
+		if ( $edistance == 0 || $edistance == 1 )
 		{
-		    my $wdistance = edistance( $words[$i], $alt_words[$i], 2 );
-		    
-		    unless ( $wdistance == 0 || $wdistance == 1 || length($words[$i]) > 5 )
-		    {
-			say "too many differences in one word: return 0\n" if $debug_this;
-			return 0;
-		    }
+		    $similarities++;
+		    print "cc = NZ && edistance = $edistance: return $similarities\n\n"
+			if $debug_this;
+		    return $similarities;
 		}
 	    }
+	    
+	    # For names of 5 or fewer characters, we allow an edit distance of at most 1.
+	    
+	    elsif ( length($n) <= 5 || length($an) <= 5 )
+	    {
+		if ( $edistance == 0 || $edistance == 1 )
+		{
+		    $similarities++;
+		    print "short word edistance = $edistance: return $similarities\n\n"
+			if $debug_this;
+		    return $similarities;
+		}
+	    }
+	    
+	    # If both the ages and locations overlap (or nearly so) and we have at least
+	    # 3 similarities, then we allow an edit distance up to 2.
+	    
+	    elsif ( $ages_overlap && $locations_overlap && $similarities > 2 )
+	    {
+		# If the names are both multiple words, make sure that no word less than
+		# 6 characters has an edit distance of more than 1.
+		
+		if ( $n =~ / / && $an =~ / / )
+		{
+		    my @words = split /\s+/, $n;
+		    my @alt_words = split /\s+/, $an;
+		    
+		    # If the number of words is the same, then check each word in turn.
+		    # If the number of words is different, that in itself takes up one
+		    # of the allowable differences, leaving only one in one of the
+		    # words.
+		    
+		    if ( @words == @alt_words )
+		    {
+			foreach my $i ( 0..$#words )
+			{
+			    my $wdistance = edistance( $words[$i], $alt_words[$i], 2 );
+			    
+			    unless ( $wdistance == 0 || $wdistance == 1 || length($words[$i]) > 5 )
+			    {
+				say "too many differences in one word: return 0\n" if $debug_this;
+				return 0;
+			    }
+			}
+		    }
+		}
+		
+		# Otherwise, an edit distance of 2 is acceptable.
+		
+		if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
+		{
+		    $similarities++;
+		    print "long word edistance = $edistance: return $similarities\n\n"
+			if $debug_this;
+		    return $similarities;
+		}
+	    }
+	    
+	    # Otherwise, we allow an edit distance of at most 1.
+	    
+	    elsif ( $edistance == 0 || $edistance == 1 )
+	    {
+		$similarities++;
+		print "few similarities edistance = $edistance: return $similarities\n\n"
+		    if $debug_this;
+		return $similarities;
+	    }
 	}
-	
-	# Otherwise, an edit distance of 2 is acceptable.
-	
-	if ( $edistance == 0 || $edistance == 1 || $edistance == 2 )
-	{
-	    $similarities++;
-	    print "long word edistance = $edistance: return $similarities\n\n" if $debug_this;
-	    return $similarities;
-	}
-    }
-    
-    # Otherwise, we allow an edit distance of at most 1.
-    
-    elsif ( $edistance == 0 || $edistance == 1 )
-    {
-	$similarities++;
-	print "few similarities edistance = $edistance: return $similarities\n\n" if $debug_this;
-	return $similarities;
     }
     
     # As a special case, if the two names have the same rank and one name is equal to
@@ -4021,7 +4202,7 @@ sub ConsolidateNamesByUpdate {
 	# If the UPDATE statement completes without error, we are done.
 	
 	eval {
-	    DBCommand($pbdb, <<~END_SQL);
+	    DBCommand($pbdb, <<~END_SQL, 0);
 		UPDATE $TABLE{COLLECTION_STRAT_NAMES}
 		SET stratn_no = $qstratn
 		WHERE stratn_no = $qgone
