@@ -2996,12 +2996,66 @@ sub NamesAreCompatible {
     my @alt_comparison = $alt_shortened;
     push @alt_comparison, $alt_nr->{alternate_name} if $alt_nr->{alternate_name};
     
+    # In certain languages, we need to stem some names. The stems are added as alternate
+    # comparison terms. For efficiency, only do this in cases where the two main names
+    # begin with the same two letters and the two ranks are the same.
+    
+    if ( substr($name,0,2) eq substr($alt_name,0,2) && $nr->{rank} eq $alt_nr->{rank} )
+    {
+	if ( $name =~ /ian$|er$|ka$|sk[iy]$|ski[iye]$|ska[jy]a$/ )
+	{
+	    if ( $name =~ /(.*)ian$/ )
+	    {
+		push @comparison, $1;
+	    }
+	    
+	    elsif ( $nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
+		    $name =~ /(.*)er/ )
+	    {
+		push @comparison, $1;
+	    }
+	    
+	    elsif ( $nr->{cc} =~ /^BY|^KG|^KZ|^MN|^RU|^TJ|^UA/ &&
+		    $name =~ /(.*)(?:ka$|sk[iy]$|ski[iye]$|ska[jy]a$)/ )
+	    {
+		push @comparison, $1;
+	    }
+	}
+	
+	if ( $alt_name =~ /ian$|er$|ka$|sk[iy]$|ski[iye]$|ska[jy]a$/ )
+	{
+	    if ( $alt_name =~ /(.*)ian$/ )
+	    {
+		push @alt_comparison, $1;
+	    }
+	    
+	    elsif ( $alt_nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
+		    $alt_name =~ /(.*)er/ )
+	    {
+		push @alt_comparison, $1;
+	    }
+	    
+	    elsif ( $alt_nr->{cc} =~ /^BY|^KG|^KZ|^MN|^RU|^TJ|^UA/ &&
+		    $alt_name =~ /(.*)(?:ka$|sk[iy]$|ski[iye]$|ska[jy]a$)/ )
+	    {
+		push @alt_comparison, $1;
+	    }
+	}
+    }
+    
     # Loop over the names to be compared, pairwise.
     
     foreach my $n ( @comparison )
     {
 	foreach my $an ( @alt_comparison )
 	{
+	    if ( $n eq $an )
+	    {
+		$similarities++;
+		print "equal comparison: return $similarities\n\n" if $debug_this;
+		return $similarities;
+	    }
+	    
 	    my $edistance = edistance( $n, $an, 2 );
 	    
 	    # For names in New Zealand, we allow an edit distance of at most 1. This is
@@ -3084,38 +3138,6 @@ sub NamesAreCompatible {
 		    if $debug_this;
 		return $similarities;
 	    }
-	}
-    }
-    
-    # As a special case, if the two names have the same rank and one name is equal to
-    # the other plus -ian, the two names are compatible.
-    
-    if ( $same_rank )
-    {
-	if ( $name eq "${alt_name}ian" || $alt_name eq "${name}ian" )
-	{
-	    $similarities++;
-	    print "suffix -ian: return $similarities\n\n" if $debug_this;
-	    return $similarities;
-	}
-	
-	elsif ( $nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
-		$alt_nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
-		($name eq "${alt_name}er" || $alt_name eq "${name}er") )
-	{
-	    $similarities++;
-	    print "suffix -er: return $similarities\n\n" if $debug_this;
-	    return $similarities;
-	}
-	
-	elsif ( $nr->{cc} =~ /^BY|^KZ|^MN|^RU|^TJ|^UA/ &&
-		$alt_nr->{cc} =~ /^BY|^KZ|^MN|^RU|^TJ|^UA/ &&
-		($name eq "${alt_name}skaya" || $alt_name eq "${name}skaya" ||
-		 "${name}ka" eq "${alt_name}skaya" || "${alt_name}ka" eq "${alt_name}skaya") )
-	{
-	    $similarities++;
-	    print "suffix -skaya: return $similarities\n\n" if $debug_this;
-	    return $similarities;
 	}
     }
     
