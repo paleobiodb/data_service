@@ -156,6 +156,7 @@ our (%is_rock_type) = ( and => 1, arkose => 1, ash => 1, ashes => 1,
 			marga => 2, margas => 2,
 			marin => 2, marins => 2, marne => 2, marnes => 2,
 			'marno-calcaire' => 2, 'marno-calcaires' => 2, 'marno-crayeux' => 2,
+			medio => 2, media => 2,
 			melière => 2, melières => 2, meliere => 2, melieres => 2,
 			meulière => 2, meulières => 2, meuliere => 2, meulieres => 2,
 			molasse => 2, molasses => 2,
@@ -201,7 +202,6 @@ our (%is_null) = ( lower => 1, middle => 1, upper => 1, base => 1, basal => 1, t
 		   inférieurs => 2, supérieurs => 2, inferieurs => 2, superieurs => 2,
 		   miliaire => 2, miliaires => 2,
 		   obere => 1, oberer => 1, untere => 1, unterer => 1, mittlere => 1, mittlerer => 1,
-		   medio => 2, media => 2,
 		   moitié => 2, moitie => 2, les => 2, et => 2 );
 
 our (%allowed_suffix) = ( fjord => 1, fjords => 1, land => 1, lands => 1,
@@ -412,6 +412,7 @@ sub ImportPBDB {
 		group_concat(distinct r.doi) as doi,
 		group_concat(distinct cc.lithology1) as lithology1,
 		group_concat(distinct cc.lithology2) as lithology2,
+		group_concat(distinct cc.environment) as environment,
 		group_concat(cc.reference_no order by cc.created limit 1) as reference_no,
 		group_concat(cc.authorizer_no order by cc.created limit 1) as authorizer_no,
 		group_concat(cc.enterer_no order by cc.created limit 1) as enterer_no,
@@ -883,6 +884,13 @@ sub ImportPBDB {
 		}
 	    }
 	    
+	    # If the name begins with 'Formación', 'Miembre', or 'Member', remove it.
+
+	    if ( $c =~ qr{ ^ (?: formaci[oó]n | miembr[eo] | member ) \s+ (.*) }xsi )
+	    {
+		$c = $1;
+	    }
+	    
 	    # Put the component into fold-case so that we can do case-insensitive
 	    # comparisons.
 	    
@@ -906,13 +914,6 @@ sub ImportPBDB {
 		{
 		    next;
 		}
-	    }
-	    
-	    # If the name begins with 'Formación', 'Miembre', or 'Member', remove it.
-
-	    if ( $fc =~ qr{ ^ (?: formaci[oó]n | miembr[eo] | member ) \s (.*) }xsi )
-	    {
-		$fc = $1;
 	    }
 	    
 	    # Increment the component count for the name record.
@@ -1027,7 +1028,7 @@ sub ImportPBDB {
 	    {
 		my $alternate;
 		
-		if ( $c =~ qr{ ^ estratos (?: \s+ del )? \s+ (.*) }xsi )
+		if ( $c =~ qr{ ^ estratos (?: \s+ del? )? \s+ (.*) }xsi )
 		{
 		    $alternate = fc $1;
 		}
@@ -1121,38 +1122,11 @@ sub ImportPBDB {
     # refer to the same rock unit, depending on where in its geographic range you are
     # considering.
     
-    # The set of names in the %strat_names relation has been partitioned above into
-    # %gp_keys, %fm_keys, %sfm_keys, and %mbr_keys, each of which is processed in turn.
-    # This guarantees that parent concepts will be resolved before children, so that the
-    # 'same parents' relation can be used in the assignment process.
+    say "Consolidating name contexts...";
     
-    say "Assigning preliminary concepts...";
-    
-    my $progress_rank = '';
-    my $preliminary_concept_no = 0;
-    
-  KEY:
-    foreach my $nkey ( (sort { fc($a) cmp fc($b) } keys %gp_keys),
-		       (sort { fc($a) cmp fc($b) } keys %fm_keys),
-		       (sort { fc($a) cmp fc($b) } keys %sfm_keys),
-		       (sort { fc($a) cmp fc($b) } keys %mbr_keys) )
+    foreach my $nkey ( keys %strat_name )
     {
 	my ($name, $rank, $cc) = split /\|/, $nkey;
-	
-	# Note the progress through the ranks.
-	
-	if ( $rank ne $progress_rank )
-	{
-	    say "  Processing names of rank '$rank'...";
-	    $progress_rank = $rank;
-	}
-	
-	if ( $opt_check )
-	{
-	    next KEY unless $name eq $check_name1 || $name eq $check_name2;
-	    print "Found $check_name1\n" if $name eq $check_name1;
-	    print "Found $check_name2\n" if $name eq $check_name2;
-	}
 	
 	# If there are multiple stratigraphic name records for a given key, start by
 	# consolidating them if possible. For example, if we have name records whose raw
@@ -1190,7 +1164,7 @@ sub ImportPBDB {
 	    {
 		$single = { name => $name, rank => $rank, n_names => 1, cc => $cc,
 			    n_colls => 0, n_occs => 0, lithology1 => { }, lithology2 => { },
-			    reference_no => undef };
+			    environment => { }, reference_no => undef };
 	    }
 	    
 	    # Consolidate all the other records with the first one, or else keep them
@@ -1212,18 +1186,70 @@ sub ImportPBDB {
 	    
 	    $strat_name{$nkey} = [$single, @separate];
 	}
+    }
+    
+    # The set of names in the %strat_names relation has been partitioned above into
+    # %gp_keys, %fm_keys, %sfm_keys, and %mbr_keys, each of which is processed in turn.
+    # This guarantees that parent concepts will be resolved before children, so that the
+    # 'same parents' relation can be used in the assignment process.
+    
+    say "Assigning preliminary concepts...";
+    
+    my $progress_rank = '';
+    my $preliminary_concept_no = 0;
+    my %checked;
+    
+  KEY:
+    foreach my $nkey ( (sort { fc($a) cmp fc($b) } keys %gp_keys),
+		       (sort { fc($a) cmp fc($b) } keys %fm_keys),
+		       (sort { fc($a) cmp fc($b) } keys %sfm_keys),
+		       (sort { fc($a) cmp fc($b) } keys %mbr_keys) )
+    {
+	my ($name, $rank, $cc) = split /\|/, $nkey;
+	
+	# Note the progress through the ranks.
+	
+	if ( $rank ne $progress_rank )
+	{
+	    say "  Processing names of rank '$rank'...";
+	    $progress_rank = $rank;
+	}
+	
+	# If we are running under the --check option, note when we reach any of the
+	# indicated names.
+	
+	if ( $opt_check )
+	{
+	    next KEY unless $name eq $check_name1 || $name eq $check_name2;
+	    print "Found $check_name1\n" if $name eq $check_name1;
+	    print "Found $check_name2\n" if $name eq $check_name2;
+	}
 	
 	# Now the main loop. For each key, iterate through the consolidated
-	# stratigraphic name records associated with that key. Assign each name record
-	# to a stratigraphic concept. In the code below, $nr points to a stratigraphic
-	# name record, while $cr points to a stratigraphic concept record.
+	# stratigraphic name records associated with that key. Assign each name record a
+	# preliminary stratigraphic concept identifier.
 	
       RECORD:
 	foreach my $nr ( $strat_name{$nkey}->@* )
 	{
-	    # Generate a list of existing concepts that match this name record.
+	    # Generate a list of existing concepts and name records not yet assigned to
+	    # concepts that match this name record.
 	    
-	    my (%matching_concepts);
+	    my (%matching_concepts, %matching_records);
+	    
+	    # Start with this record itself. If it already has a concept identifier
+	    # associated with the current name key, then record that. Otherwise, add it
+	    # to the list (hash) of matching records that are not yet assigned to concepts.
+	    
+	    if ( my $preliminary_no = $nr->{preliminary_no}{$nkey} )
+	    {
+		$matching_concepts{$preliminary_no} = 1;
+	    }
+	    
+	    else
+	    {
+		$matching_records{$nkey} = [ $nr ];
+	    }
 	    
 	    # Check for other name records that could represent the same name or a
 	    # spelling variant, possibly at a different rank.
@@ -1252,7 +1278,20 @@ sub ImportPBDB {
 
 		foreach my $alt_nr ( $strat_name{$alt_key}->@* )
 		{
+		    # Don't consolidate a name with itself.
+		    
 		    next if $nr eq $alt_nr && $name eq $alt_name;
+		    
+		    # Only check each pair of name/record associations once. A naive
+		    # implementation would cause them to be checked twice, once with A
+		    # as the main name and B as the alternate, and once with B as the
+		    # main name and A as the alternate.
+		    
+		    my $check_key = GenerateCheckKey($name, $alt_name, $nr, $alt_nr);
+		    
+		    next if $checked{$check_key};
+		    
+		    $checked{$check_key} = 1;
 		    
 		    if ( NamesAreCompatible($name, $nr, $alt_name, $alt_nr) )
 		    {
@@ -1261,23 +1300,29 @@ sub ImportPBDB {
 			    $matching_concepts{$alt_preliminary_no} = 1;
 			}
 			
-			# else
-			# {
-			#     my $alt_preliminary_no = ++$preliminary_concept_no;
-			#     CreateConcept($alt_nr, $alt_key, "${alt_preliminary_no}A");
-			#     $matching_concepts{"${alt_preliminary_no}A"} = 1;
-			# }
+			else
+			{
+			    $matching_records{$alt_key} ||= [ ];
+			    push $matching_records{$alt_key}->@*, $alt_nr;
+			}
 		    }
 		}
 	    }
 	    
-	    # Now, if there is exactly one matching concept, associate the component name
-	    # key with this concept.
+	    # Now, if there is exactly one matching concept, add any matching records
+	    # that are not yet assigned to a concept to this concept.
 	    
 	    if ( keys %matching_concepts == 1 )
 	    {
 		my $preliminary_no = (keys %matching_concepts)[0];
-		AddToConcept($strat_prelim{$preliminary_no}, $nr, $nkey);
+		
+		foreach my $k ( keys %matching_records )
+		{
+		    foreach my $r ( $matching_records{$k}->@* )
+		    {
+			AddToConcept($strat_prelim{$preliminary_no}, $r, $k);
+		    }
+		}
 	    }
 	    
 	    # If there is more than one matching concept, then this name bridges
@@ -1294,16 +1339,30 @@ sub ImportPBDB {
 		    $strat_prelim{$preliminary_no}{consolidated_with} = $first;
 		}
 		
-		AddToConcept($strat_prelim{$first}, $nr, $nkey);
+		foreach my $k ( keys %matching_records )
+		{
+		    foreach my $r ( $matching_records{$k}->@* )
+		    {
+			AddToConcept($strat_prelim{$first}, $r, $k);
+		    }
+		}
 	    }
 	    
 	    # If there aren't any matching concepts, create a new stratigraphic concept
-	    # record and associate the component name key with it.
+	    # record and associate all matching records with it.
 	    
 	    else
 	    {
 		my $preliminary_no = ++$preliminary_concept_no;
-		CreateConcept($nr, $nkey, "${preliminary_no}A");
+		my $new = CreateConcept("${preliminary_no}A");
+		
+		foreach my $k ( keys %matching_records )
+		{
+		    foreach my $r ( $matching_records{$k}->@* )
+		    {
+			AddToConcept($new, $r, $k);
+		    }
+		}
 	    }
 	}
     }
@@ -1431,6 +1490,7 @@ sub ImportPBDB {
 	my $qname = $pbdb->quote($cr->{name});
 	my $qlith1 = $pbdb->quote(join ',', keys $cr->{lithology1}->%*);
 	my $qlith2 = $pbdb->quote(join ',', keys $cr->{lithology2}->%*);
+	my $qenviro = $pbdb->quote(join ',', keys $cr->{environment}->%*);
 	my $qncolls = $pbdb->quote($cr->{n_colls} || 0);
 	my $qnoccs = $pbdb->quote($cr->{n_occs} || 0);
 	my $qearly = $pbdb->quote($cr->{early_age} || '');
@@ -1445,7 +1505,7 @@ sub ImportPBDB {
 	$new_concepts++;
 	
 	$concept_values .= ', ' if $concept_values;
-	$concept_values .= "($qstratc, $qname, $qlith1, $qlith2, $qncolls, $qnoccs, " .
+	$concept_values .= "($qstratc, $qname, $qlith1, $qlith2, $qenviro, $qncolls, $qnoccs, " .
 	    "$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qposmin, $qnegmax)";
 
 	if ( length($concept_values) > $chunk_size )
@@ -1511,6 +1571,7 @@ sub ImportPBDB {
 	    my $qsearch = $pbdb->quote(ExtractSearchName($name, $nr->{cc}));
 	    my $qlith1 = $pbdb->quote(join ',', keys $nr->{lithology1}->%*);
 	    my $qlith2 = $pbdb->quote(join ',', keys $nr->{lithology2}->%*);
+	    my $qenviro = $pbdb->quote(join ',', keys $nr->{environment}->%*);
 	    my $doi = $pbdb->quote(join ',', keys $nr->{doi}->%*);
 	    my $qncolls = $pbdb->quote($nr->{n_colls} || 0);
 	    my $qnoccs = $pbdb->quote($nr->{n_occs} || 0);
@@ -1538,7 +1599,7 @@ sub ImportPBDB {
 		"$qauth, $qenter, $qcreated, $qcreated)";
 	    
 	    $name_attr_values .= ', ' if $name_attr_values;
-	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qncolls, $qnoccs, " .
+	    $name_attr_values .= "($qstratn, $qstratc, $qlith1, $qlith2, $qenviro, $qncolls, $qnoccs, " .
 		"$qearly, $qlate, $qlatmin, $qlatmax, $qlngmin, $qlngmax, $qposmin, $qnegmax, $doi)";
 	    
 	    if ( length($name_values) > $chunk_size )
@@ -1785,7 +1846,8 @@ sub UpdateStratRaw {
 		  n_colls => $source->{n_colls}, n_occs => $source->{n_occs},
 		  authorizer_no => $source->{authorizer_no},
 		  enterer_no => $source->{enterer_no}, created => $source->{created},
-		  reference_no => $source->{reference_no}, lithology1 => { }, lithology2 => { } };
+		  reference_no => $source->{reference_no}, lithology1 => { }, lithology2 => { },
+		  environment => { } };
 	
 	# If the field is 'member' and we are also given a formation, store it.
 	
@@ -1819,6 +1881,7 @@ sub UpdateStratRaw {
     $record->{lithology1}{$_} = 1 foreach grep { $_ && $_ ne 'not reported' }
 	split /,/, $source->{lithology1};
     $record->{lithology2}{$_} = 1 foreach grep { $_ } split /,/, $source->{lithology2};
+    $record->{environment}{$_} = 1 foreach grep { $_ } split /,/, $source->{environment};
     
     # The 'doi' field is an aggregate set of DOIs.
     
@@ -1965,7 +2028,7 @@ sub ConsolidateNames {
 	}
     }
     
-    # The lithology1, lithology2, and doi values are simply consolidated.
+    # The lithology1, lithology2, environment, and doi values are simply consolidated.
     
     if ( $other->{lithology1} )
     {
@@ -1975,6 +2038,11 @@ sub ConsolidateNames {
     if ( $other->{lithology2} )
     {
 	$remaining->{lithology2}{$_} = 1 foreach keys $other->{lithology2}->%*;
+    }
+    
+    if ( $other->{environment} )
+    {
+	$remaining->{environment}{$_} = 1 foreach keys $other->{environment}->%*;
     }
     
     if ( $other->{doi} )
@@ -2311,7 +2379,7 @@ sub ExtractSearchName {
 	return $raw_name;
     }
     
-    elsif ( $raw_name =~ qr{ ^ Estratos (?: \s+ del )? \s+ (.*) }xsi )
+    elsif ( $raw_name =~ qr{ ^ Estratos (?: \s+ del? )? \s+ (.*) }xsi )
     {
 	return $1;
     }
@@ -2343,17 +2411,34 @@ sub ExtractSearchName {
 }
 
 
+# GenerateCheckKey ( name1, name2, nr1, nr2 )
+# 
+# Generate a key that will be used to make sure that a given pair of names and
+# associated name records are only checked against each other once, whereas a naive
+# implementation would cause them to be checked twice.
+
+sub GenerateCheckKey {
+    
+    my ($name1, $name2, $nr1, $nr2) = @_;
+    
+    my $namekey = $name1 lt $name2 ? "$name1|$name2" : "$name2|$name1";
+    my $nrkey = $nr1 lt $nr2 ? "$nr1|$nr2" : "$nr2|$nr1";
+    
+    return "$namekey|$nrkey";
+}
+
+
 # NamesAreCompatible ( name, key, name_context, alt_name, alt_key, alt_name_context )
 #
 # Return true if name and alt_name are likely to be variants of each other.
 
 sub NamesAreCompatible {
 
-    my ($name, $nr, $alt_name, $alt_nr) = @_;
+    my ($name, $nr, $alt_name, $alt_nr, $debug_this) = @_;
     
     # If we are doing a debugging run, see if this is the comparison we need to debug.
     
-    my $debug_this; $debug_this = 1 if $opt_check &&
+    $debug_this = 1 if $opt_check &&
 	($name eq $check_name1 && $alt_name eq $check_name2 ||
 	 $name eq $check_name2 && $alt_name eq $check_name1);
     
@@ -2399,16 +2484,16 @@ sub NamesAreCompatible {
 		$similarities++;
 	    }
 	    
-	    # If the age ranges are separated by at least 5 million years in the
-	    # Cenozoic, 10 million in the Mesozoic, and 20 million in the Paleozoic, the
+	    # If the age ranges are separated by at least 3 million years in the
+	    # Cenozoic, 5 million in the Mesozoic, and 10 million in the Paleozoic, the
 	    # two names are not compatible.
 	    
 	    else
 	    {
 		my $threshold = ($rank_comparison{$nr->{rank}} eq 'Grp' &&
 				 $rank_comparison{$alt_nr->{rank}} eq 'Grp') ? 20
-				     : $nr->{early_age} <= 66 ? 5
-				     : $nr->{early_age} <= 252 ? 10 : 20;
+				     : $nr->{early_age} <= 66 ? 3
+				     : $nr->{early_age} <= 252 ? 5 : 10;
 		
 		if ( $nr->{early_age} < $alt_nr->{late_age} - $threshold &&
 		     $nr->{early_age} ne '999.999999' && $alt_nr->{late_age} ne '999.999999' ||
@@ -2910,7 +2995,9 @@ sub NamesAreCompatible {
 
     my @alt_comparison = $alt_shortened;
     push @alt_comparison, $alt_nr->{alternate_name} if $alt_nr->{alternate_name};
-
+    
+    # Loop over the names to be compared, pairwise.
+    
     foreach my $n ( @comparison )
     {
 	foreach my $an ( @alt_comparison )
@@ -3011,6 +3098,25 @@ sub NamesAreCompatible {
 	    print "suffix -ian: return $similarities\n\n" if $debug_this;
 	    return $similarities;
 	}
+	
+	elsif ( $nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
+		$alt_nr->{cc} =~ /^DE|^AT|^CH|^LU|^BE|^FR/ &&
+		($name eq "${alt_name}er" || $alt_name eq "${name}er") )
+	{
+	    $similarities++;
+	    print "suffix -er: return $similarities\n\n" if $debug_this;
+	    return $similarities;
+	}
+	
+	elsif ( $nr->{cc} =~ /^BY|^KZ|^MN|^RU|^TJ|^UA/ &&
+		$alt_nr->{cc} =~ /^BY|^KZ|^MN|^RU|^TJ|^UA/ &&
+		($name eq "${alt_name}skaya" || $alt_name eq "${name}skaya" ||
+		 "${name}ka" eq "${alt_name}skaya" || "${alt_name}ka" eq "${alt_name}skaya") )
+	{
+	    $similarities++;
+	    print "suffix -skaya: return $similarities\n\n" if $debug_this;
+	    return $similarities;
+	}
     }
     
     # If none of the criteria are satisfied, return false.
@@ -3088,32 +3194,45 @@ sub IsKnownStratum {
 }
 
 
+# sub CreateConcept {
+
+#     my ($nr, $key, $preliminary_no) = @_;
+    
+#     my ($strat_name) = split /\|/, $key;
+    
+#     my $cr = { name => $strat_name, strat_name => { $strat_name => 1 },
+# 	       rkeys => [ $nr->{rkey} ],
+# 	       preliminary_no => $preliminary_no,
+# 	       lat_min => $nr->{lat_min}, lat_max => $nr->{lat_max},
+# 	       lng_min => $nr->{lng_min}, lng_max => $nr->{lng_max},
+# 	       early_age => $nr->{early_age}, late_age => $nr->{late_age},
+# 	       n_colls => $nr->{n_colls}, n_occs => $nr->{n_occs}, cc => { },
+# 	       lithology1 => { }, lithology2 => { } };
+    
+#     $cr->{pos_lng_min} = $nr->{pos_lng_min} if defined $nr->{pos_lng_min};
+#     $cr->{neg_lng_max} = $nr->{neg_lng_max} if defined $nr->{neg_lng_max};
+    
+#     $cr->{cc}{$nr->{cc}} = 1 if $nr->{cc};
+#     $cr->{lithology1}{$_} = 1 foreach keys $nr->{lithology1}->%*;
+#     $cr->{lithology2}{$_} = 1 foreach keys $nr->{lithology2}->%*;
+    
+#     $nr->{preliminary_no}{$key} = $preliminary_no;
+    
+#     $strat_prelim{$preliminary_no} = $cr;
+    
+#     return $cr;
+# }
+
+
 sub CreateConcept {
 
-    my ($nr, $key, $preliminary_no) = @_;
-    
-    my ($strat_name) = split /\|/, $key;
-    
-    my $cr = { name => $strat_name, strat_name => { $strat_name => 1 },
-	       rkeys => [ $nr->{rkey} ],
-	       preliminary_no => $preliminary_no,
-	       lat_min => $nr->{lat_min}, lat_max => $nr->{lat_max},
-	       lng_min => $nr->{lng_min}, lng_max => $nr->{lng_max},
-	       early_age => $nr->{early_age}, late_age => $nr->{late_age},
-	       n_colls => $nr->{n_colls}, n_occs => $nr->{n_occs}, cc => { },
-	       lithology1 => { }, lithology2 => { } };
-    
-    $cr->{pos_lng_min} = $nr->{pos_lng_min} if defined $nr->{pos_lng_min};
-    $cr->{neg_lng_max} = $nr->{neg_lng_max} if defined $nr->{neg_lng_max};
-    
-    $cr->{cc}{$nr->{cc}} = 1 if $nr->{cc};
-    $cr->{lithology1}{$_} = 1 foreach keys $nr->{lithology1}->%*;
-    $cr->{lithology2}{$_} = 1 foreach keys $nr->{lithology2}->%*;
-    
-    $nr->{preliminary_no}{$key} = $preliminary_no;
-    
+    my ($preliminary_no) = @_;
+
+    my $cr = { strat_name => { }, rkeys => [ ], preliminary_no => $preliminary_no,
+	       cc => { }, lithology1 => { }, lithology2 => { }, environment => { } };
+
     $strat_prelim{$preliminary_no} = $cr;
-    
+
     return $cr;
 }
 
@@ -3157,10 +3276,10 @@ sub AddToConcept {
     $cr->{strat_name}{$strat_name} = 1;
     push $cr->{rkeys}->@*, $nr->{rkey};
     
-    $cr->{lat_min} = $nr->{lat_min} if $nr->{lat_min} < $cr->{lat_min};
-    $cr->{lat_max} = $nr->{lat_max} if $nr->{lat_max} > $cr->{lat_max};
-    $cr->{lng_min} = $nr->{lng_min} if $nr->{lng_min} < $cr->{lng_min};
-    $cr->{lng_max} = $nr->{lng_max} if $nr->{lng_max} > $cr->{lng_max};
+    $cr->{lat_min} = $nr->{lat_min} if !defined $cr->{lat_min} || $nr->{lat_min} < $cr->{lat_min};
+    $cr->{lat_max} = $nr->{lat_max} if !defined $cr->{lat_max} || $nr->{lat_max} > $cr->{lat_max};
+    $cr->{lng_min} = $nr->{lng_min} if !defined $cr->{lng_min} || $nr->{lng_min} < $cr->{lng_min};
+    $cr->{lng_max} = $nr->{lng_max} if !defined $cr->{lng_max} || $nr->{lng_max} > $cr->{lng_max};
     
     $cr->{pos_lng_min} = $nr->{pos_lng_min}
 	if ! defined $cr->{pos_lng_min} && defined $nr->{pos_lng_min} ||
@@ -3171,8 +3290,8 @@ sub AddToConcept {
 	defined $cr->{neg_lng_max} && defined $nr->{neg_lng_max} &&
 	$nr->{neg_lng_max} > $cr->{neg_lng_max};
     
-    $cr->{early_age} = $nr->{early_age} if $nr->{early_age} > $cr->{early_age};
-    $cr->{late_age} = $nr->{late_age} if $nr->{late_age} < $cr->{late_age};
+    $cr->{early_age} = $nr->{early_age} if !defined $cr->{early_age} || $nr->{early_age} > $cr->{early_age};
+    $cr->{late_age} = $nr->{late_age} if !defined $cr->{late_age} || $nr->{late_age} < $cr->{late_age};
     
     $cr->{n_colls} += $nr->{n_colls};
     $cr->{n_occs} += $nr->{n_occs};
@@ -3181,6 +3300,7 @@ sub AddToConcept {
     # $cr->{reference_no}{$_} = 1 foreach keys $nr->{reference_no}->%*;
     $cr->{lithology1}{$_} = 1 foreach keys $nr->{lithology1}->%*;
     $cr->{lithology2}{$_} = 1 foreach keys $nr->{lithology2}->%*;
+    $cr->{environment}{$_} = 1 foreach keys $nr->{environment}->%*;
 }
 
 
@@ -3215,6 +3335,7 @@ sub ConsolidateConcepts {
     # $remaining->{reference_no}{$_} = 1 foreach keys $other->{reference_no}->%*;
     $remaining->{lithology1}{$_} = 1 foreach keys $other->{lithology1}->%*;
     $remaining->{lithology2}{$_} = 1 foreach keys $other->{lithology2}->%*;
+    $remaining->{environment}{$_} = 1 foreach keys $other->{environment}->%*;
     
     $other->{is_consolidated} = 1;
 }
@@ -3234,8 +3355,13 @@ sub ContextsAreCompatible {
     
     if ( ! defined $context1->{early_age} ) { return 1; }
     
-    if ( $context2->{early_age} < $context1->{late_age} - 5 ) { return undef; }
-    if ( $context2->{late_age} > $context1->{early_age} + 5 ) { return undef; }
+    my $threshold = ($rank_comparison{$context1->{rank}} eq 'Grp' &&
+		     $rank_comparison{$context2->{rank}} eq 'Grp') ? 20
+			 : $context1->{early_age} <= 66 ? 3
+			 : $context2->{early_age} <= 252 ? 5 : 10;
+    
+    if ( $context2->{early_age} < $context1->{late_age} - $threshold ) { return undef; }
+    if ( $context2->{late_age} > $context1->{early_age} + $threshold ) { return undef; }
     
     return 1;
 }
@@ -4128,7 +4254,7 @@ sub ConsolidateNamesByUpdate {
     
     my %accumulator;
     
-    foreach my $field ( qw(lithology1 lithology2 doi) )
+    foreach my $field ( qw(lithology1 lithology2 environment doi) )
     {
 	if ( $other->{$field} )
 	{
@@ -4145,6 +4271,7 @@ sub ConsolidateNamesByUpdate {
     my $qgone = $pbdb->quote($other->{stratn_no});
     my $qlith1 = $pbdb->quote($remaining->{lithology1});
     my $qlith2 = $pbdb->quote($remaining->{lithology2});
+    my $qenviro = $pbdb->quote($remaining->{environment});
     my $doi = $pbdb->quote($remaining->{doi});
     my $qncolls = $pbdb->quote($remaining->{n_colls} || 0);
     my $qnoccs = $pbdb->quote($remaining->{n_occs} || 0);
@@ -4178,7 +4305,7 @@ sub ConsolidateNamesByUpdate {
     
     DBCommand($pbdb, <<~END_SQL);
 	UPDATE $TABLE{STRAT_NATTRS}
-	SET lithology1 = $qlith1, lithology2 = $qlith2, doi = $doi,
+	SET lithology1 = $qlith1, lithology2 = $qlith2, environment = $qenviro, doi = $doi,
 	    n_colls = $qncolls, n_occs = $qnoccs, early_age = $qearly, late_age = $qlate,
 	    lat_min = $qlatmin, lat_max = $qlatmax, lng_min = $qlngmin, lng_max = $qlngmax,
 	    pos_lng_min = $qposmin, neg_lng_max = $qnegmax
@@ -4833,6 +4960,7 @@ sub UpdateTables {
 	  `stratc_no` int(10) unsigned NOT NULL,
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
+	  `environment` varchar(255) NOT NULL DEFAULT '',
 	  `doi` varchar(255) DEFAULT NULL,
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
 	  `n_occs` smallint(6) NOT NULL DEFAULT 0,
@@ -4862,8 +4990,8 @@ sub UpdateTables {
 	  SELECT `stratn_no`, `stratc_no`, `rank`, `name`, `cc`, `search`,
 	    `early_age`, `late_age`,
 	    `n_colls`, `n_occs`, `lat_min`, `lat_max`, `lng_min`, `lng_max`,
-	    `pos_lng_min`, `neg_lng_max`, `lithology1`, `lithology2`, `reference_no`, `doi`,
-	    `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
+	    `pos_lng_min`, `neg_lng_max`, `lithology1`, `lithology2`, `environment`, `reference_no`,
+	    `doi`, `authorizer_no`, `enterer_no`, `modifier_no`, `created`, `modified`
 	  FROM `strat_names` left join `strat_name_attrs` using (`stratn_no`)
 	  GROUP BY `stratn_no`", 1);
     }
@@ -4880,6 +5008,7 @@ sub UpdateTables {
 	  `name` varchar(255) NOT NULL,
 	  `lithology1` varchar(255) NOT NULL DEFAULT '',
 	  `lithology2` varchar(255) NOT NULL DEFAULT '',
+	  `environment` varchar(255) NOT NULL DEFAULT '',
 	  `n_colls` smallint(6) NOT NULL DEFAULT 0,
 	  `n_occs` smallint(6) NOT NULL DEFAULT 0,
 	  `early_age` decimal(9,6) DEFAULT NULL,
@@ -4922,7 +5051,7 @@ sub UpdateTables {
 	  SELECT `stratc_no`, `name`, group_concat(`country`) as countries,
 		`early_age`, `late_age`, `n_colls`, `n_occs`, 
 		`lat_min`, `lat_max`, `lng_min`, `lng_max`, `pos_lng_min`, `neg_lng_max`,
-		`lithology1`, `lithology2`
+		`lithology1`, `lithology2`, `environment`
 	  FROM `strat_concepts` left join `strat_concept_ccs` using (stratc_no)
 	  GROUP BY `stratc_no`", 1);
     }
@@ -5099,7 +5228,7 @@ sub InsertNameAttrs {
     my ($dbh, $name_attr_values) = @_;
     
     DBCommand($dbh, "INSERT INTO `$TABLE{STRAT_NATTRS}` (stratn_no, stratc_no, " .
-	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
+	      "lithology1, lithology2, environment, n_colls, n_occs, early_age, late_age, " .
 	      "lat_min, lat_max, lng_min, lng_max, pos_lng_min, neg_lng_max, doi) VALUES " .
 	      $name_attr_values);
 }
@@ -5110,7 +5239,7 @@ sub InsertConcepts {
     my ($dbh, $concept_values) = @_;
 
     DBCommand($dbh, "INSERT INTO $TABLE{STRAT_CONCEPTS} (stratc_no, name, " .
-	      "lithology1, lithology2, n_colls, n_occs, early_age, late_age, " .
+	      "lithology1, lithology2, environment, n_colls, n_occs, early_age, late_age, " .
 	      "lat_min, lat_max, lng_min, lng_max, pos_lng_min, neg_lng_max) VALUES " .
 	      $concept_values);
 }
