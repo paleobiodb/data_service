@@ -763,10 +763,10 @@ sub quickParseIdentifiedName {
 	
 	# If we get here, then the name has been parsed correctly.
 	
-	if ( $species =~ /^indet[.]$|^spp?[.]$/ )
-	{
-	    $species = '';
-	}
+	# if ( $species =~ /^indet[.]$|^spp?[.]$/ )
+	# {
+	#     $species = '';
+	# }
 	
 	return ($genus, '', $subgenus, '', $species, '', $subspecies, '');
     }
