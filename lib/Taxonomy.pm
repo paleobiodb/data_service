@@ -91,6 +91,7 @@ my (%STD_OPTION) = ( fields => 1,
 		     order => 1,
 		     record_type => 1,
 		     debug_out => 1,
+		     debug_mode => 1,
 		     table => 1,
 		     count => 1,
 		     limit => 1,
@@ -454,6 +455,11 @@ sub list_taxa_simple {
     # Save this statement and execute it.
     
     $taxonomy->{sql_string} = $sql;
+    
+    if ( $options->{debug_mode} )
+    {
+	print STDERR "$sql\n";
+    }
     
     if ( ref $options->{debug_out} eq 'CODE' )
     {
@@ -1085,7 +1091,7 @@ sub list_taxa {
     return $taxonomy->execute_query($sql, { record_type => 'taxa',
 					    return_type => $return_type,
 					    count => $options->{count},
-					    debug_out => $options->{debug_out},
+					    debug_mode => $options->{debug_mode},
 					    sql_strings => \@sql_strings,
 					    base_nos => $base_nos,
 					    copy_exclusions => $copy_exclusions } );
@@ -1867,7 +1873,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type,
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
-						 debug_out => $options->{debug_out},
+						 debug_mode => $options->{debug_mode},
 						 count => 0 } );
     }
     
@@ -2218,7 +2224,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
-						 debug_out => $options->{debug_out},
+						 debug_mode => $options->{debug_mode},
 						 count => $options->{count} } );
     }
     
@@ -2247,7 +2253,7 @@ sub list_associated {
 	return $taxonomy->execute_query( $sql, { record_type => $record_type, 
 						 return_type => $return_type,
 						 sql_strings => \@sql_strings,
-						 debug_out => $options->{debug_out},
+						 debug_mode => $options->{debug_mode},
 						 count => $options->{count} } );
     }
 }
@@ -2439,10 +2445,9 @@ sub execute_query {
 	$taxonomy->{sql_string} = $sql;
     }
     
-    if ( $taxonomy->{test_mode} )
+    if ( $params->{debug_mode} )
     {
 	print STDERR "$taxonomy->{sql_string}\n\n";
-	return;
     }
     
     elsif ( ref $params->{debug_out} eq 'CODE' )
@@ -2722,6 +2727,11 @@ sub resolve_names {
 	    # Otherwise, the base will be undefined which will cause
 	    # subsequent lookups to fail.
 	    
+	    else
+	    {
+		$taxonomy->add_warning('W_NOT_FOUND', "The taxon '$name' was not found in the database");
+	    }
+	    
 	    # Now go on to the next entry.
 	    
 	    next NAME;
@@ -2738,6 +2748,7 @@ sub resolve_names {
 	# In that case, skip this entry.
 	
 	my $base_n = $n;
+	my $prefix = '';
 	my $range_clause;
 	my $prefix_rank = 25;	# an arbitrary high number, happens to equal 'unranked'
 	my @n_result;
@@ -2763,7 +2774,7 @@ sub resolve_names {
 		next NAME;
 	    }
 	}
-	
+		
 	$n =~ s{[.]}{% }g;
 	
 	if ( $scientific &&
@@ -2853,7 +2864,12 @@ sub resolve_names {
 	    $taxonomy->{sql_string} .= $sql;
 	    $taxonomy->{sql_string} .= "\n\n";
 	    
-	    if ( ref $options->{debug_out} eq 'CODE' )
+	    if ( $options->{debug_mode} )
+	    {
+		print STDERR "$sql\n\n";
+	    }
+	    
+	    elsif ( ref $options->{debug_out} eq 'CODE' )
 	    {
 		&{$options->{debug_out}}("$sql\n");
 	    }
@@ -2898,8 +2914,14 @@ sub resolve_names {
 	    push @clauses, "($range_clause)" if $range_clause;
 	    
 	    my $sql = $sql_base . join(' and ', @clauses) . "\n" . $sql_order . " " . $sql_limit;
+
 	    
-	    if ( ref $options->{debug_out} eq 'CODE' )
+	    if ( $options->{debug_mode} )
+	    {
+		print STDERR "$sql\n\n";
+	    }
+	    
+	    elsif ( ref $options->{debug_out} eq 'CODE' )
 	    {
 		&{$options->{debug_out}}("$sql\n");
 	    }
@@ -3224,8 +3246,13 @@ sub lookup_base {
 		WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
 		GROUP BY orig_no
 		ORDER BY v.taxon_size desc LIMIT 1";
+
+	if ( $options->{debug_mode} )
+	{
+	    print STDERR "$sql\n\n";
+	}
 	
-	if ( ref $options->{debug_out} eq 'CODE' )
+	elsif ( ref $options->{debug_out} eq 'CODE' )
 	{
 	    &{$options->{debug_out}}("$sql\n");
 	}
@@ -3251,7 +3278,12 @@ sub lookup_base {
 	WHERE taxon_name like $quoted and taxon_rank > 5 $range_clause
 	GROUP BY t.orig_no";
     
-    if ( ref $options->{debug_out} eq 'CODE' )
+    if ( $options->{debug_mode} )
+    {
+	print STDERR "$sql\n\n";
+    }
+    
+    elsif ( ref $options->{debug_out} eq 'CODE' )
     {
 	&{$options->{debug_out}}("$sql\n");
     }
@@ -5401,7 +5433,9 @@ sub taxon_joins {
 	if $tables_hash->{e};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ETBASIS_TABLE} as etb on etb.orig_no = vt.orig_no\n"
 	if $tables_hash->{etb};
-    
+
+    $joins .= "\t\tLEFT JOIN person as dp on dp.person_no = a.discussed_by"
+	if $tables_hash->{dp};
     # $joins .= "\t\tLEFT JOIN $taxonomy->{REFS_TABLE} as r on r.reference_no = a.reference_no\n"
     # 	if $tables_hash->{r};
     
@@ -5657,6 +5691,11 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				    'n.spelling_reason as accepted_reason',
 				    'vt.rank as accepted_rank', 'v.n_occs', 'v.is_extant',
 				    'v.is_trace', 'v.is_form'],
+		      AUTH_DISC => ['a.comments', 'a.discussion', 'dp.name as discussed_by'],
+		      AUTH_PAGES => ['a.pages', 'a.figures'],
+		      AUTH_TYPE => ['a.type_specimen', 'a.type_body_part', 'a.part_details',
+				    'a.preservation'],
+		      AUTH_LOC => ['a.type_locality'],
 		      AUTH_ASSOC => ['a.reference_no', 'a.taxon_no', 't.orig_no', 
 				     'a.taxon_name', 'a.taxon_rank',
 				     't.name as current_name', 't.spelling_no as current_no'],
@@ -5705,6 +5744,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				  'cast(a.taxon_rank as integer) as taxon_rank',
 				  'ap.taxon_name as parent_name',
 				  'pt.spelling_no as parent_current_no'],
+		      OP_DIAG => ['oo.comments', 'oo.diagnosis', 'oo.diagnosis_given'],
+		      OP_PAGES => ['oo.pages', 'oo.figures'],
 		      OP_ASSOC => ['o.reference_no', 'o.opinion_no', 'base.opinion_type as ref_type',
 				   'o.status', 'o.spelling_reason', 'o.pubyr', 'o.author',
 				   't.name as current_name', 't.spelling_no as current_no',
@@ -5763,6 +5804,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 
 our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
 			AUTH_DATA => ['v', 'vt', 'n', 'nn'],
+			AUTH_DISC => ['dp'],
 			REFTAXA_DATA => ['v', 'vt', 'n', 'nn'],
 			REF_DATA => ['r'],
 			REF_ATTR => ['r'],

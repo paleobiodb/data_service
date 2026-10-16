@@ -1370,6 +1370,10 @@ sub initialize {
 	    "You may specify this parameter along with F<base_name>, F<base_id>, or F<taxon_name>.",
 	    "If you do, then synonyms of the specified name(s) will",
 	    "be ignored.  No value is necessary for this parameter, just include the parameter name.",
+	{ optional => 'as_entered', valid => FLAG_VALUE },
+	    "You may specify this parameter along with F<base_name>, F<base_id>, F<taxon_name>,",
+	    "or F<taxon_id>. If you do, then only occurrences or reidentifications that are",
+	    "identified with this exact name will be selected.",
 	{ param => 'base_id', valid => VALID_IDENTIFIER('TID'), list => ',' },
 	    "Return only records associated with the specified taxa,",
 	    "I<including all subtaxa and synonyms>.  You may specify multiple taxon identifiers,",
@@ -3542,7 +3546,8 @@ sub generateMainFilters {
     # 'base_id', 'taxon_id'
     
     my ($taxon_name, $taxon_field, @taxon_nos, $value, @values);
-    my (@include_taxa, @exclude_taxa, $no_synonyms, $all_children, $do_match, $ident_used);
+    my (@include_taxa, @exclude_taxa, $no_synonyms, $as_entered,
+	$all_children, $do_match, $ident_used);
     my (@taxon_warnings);
     
     if ( $value = $request->clean_param('base_name') )
@@ -3551,6 +3556,7 @@ sub generateMainFilters {
 	$taxon_field = 'base_name';
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
+	$as_entered = $request->clean_param('as_entered');
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
@@ -3560,6 +3566,7 @@ sub generateMainFilters {
 	$taxon_field = 'match_name';
 	$do_match = 1;
 	$no_synonyms = 1;
+	$as_entered = 1;
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
@@ -3568,6 +3575,7 @@ sub generateMainFilters {
 	$taxon_name = $value;
 	$taxon_field = 'taxon_name';
 	$no_synonyms = $request->clean_param('immediate');
+	$as_entered = $request->clean_param('as_entered');
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
@@ -3576,6 +3584,7 @@ sub generateMainFilters {
 	@taxon_nos = @values;
 	$all_children = 1;
 	$no_synonyms = $request->clean_param('immediate');
+	$as_entered = $request->clean_param('as_entered');
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
@@ -3583,6 +3592,7 @@ sub generateMainFilters {
     {
 	@taxon_nos = @values;
 	$no_synonyms = $request->clean_param('immediate');
+	$as_entered = $request->clean_param('as_entered');
 	$tables->{o} = 1 unless $op eq 'prevalence' || $op eq 'quickdiv';
     }
     
@@ -3609,7 +3619,7 @@ sub generateMainFilters {
 	    
 	    @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
 							    all_names => 1, 
-							    debug_out => $debug_out });
+							    debug_mode => $request->debug });
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
 	    @include_taxa = grep { ! $_->{exclude} } @taxa;
@@ -3621,13 +3631,12 @@ sub generateMainFilters {
 	else
 	{
 	    my @taxa;
-	    my $debug_out; $debug_out = sub { $request->{ds}->debug_line($_[0]); } if $request->debug;
 	    my $current = $no_synonyms ? '' : 1;
 	    
 	    @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE,ATTR',
 							    all_names => 1,
 							    # current => $current,
-							    debug_out => $debug_out });
+							    debug_mode => $request->debug });
 	    
 	    push @taxon_warnings, $taxonomy->list_warnings;
 	    
@@ -3644,7 +3653,8 @@ sub generateMainFilters {
 		if ( $all_children )
 		{
 		    push @exclude_taxa, $taxonomy->list_taxa('juniors', \@include_taxa,
-							     { fields => 'RANGE,ATTR' });
+							     { fields => 'RANGE,ATTR',
+							       debug_mode => $request->debug });
 		}
 	    }
 	    
@@ -3654,9 +3664,11 @@ sub generateMainFilters {
 	    elsif ( $all_children )
 	    {
 		@include_taxa = $taxonomy->list_taxa('senior', \@include_taxa,
-						     { fields => 'RANGE,ATTR' });
+						     { fields => 'RANGE,ATTR',
+						       debug_mode => $request->debug });
 		@exclude_taxa = $taxonomy->list_taxa('senior', \@exclude_taxa,
-						     { fields => 'RANGE,ATTR' })
+						     { fields => 'RANGE,ATTR',
+						       debug_mode => $request->debug })
 		    if @exclude_taxa;
 	    }
 	    
@@ -3665,7 +3677,8 @@ sub generateMainFilters {
 	    else
 	    {
 		@include_taxa = $taxonomy->list_taxa('synonyms', \@include_taxa,
-						     { fields => 'RANGE,ATTR' });
+						     { fields => 'RANGE,ATTR',
+						       debug_mode => $request->debug });
 	    }
 	}
     }
@@ -3675,19 +3688,22 @@ sub generateMainFilters {
 	if ( $no_synonyms )
 	{
 	    @include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos,
-						 { fields => 'RANGE,ATTR' });
+						 { fields => 'RANGE,ATTR',
+						   debug_mode => $request->debug });
 	}
 	
 	elsif ( $all_children )
 	{
 	    @include_taxa = $taxonomy->list_taxa('senior', \@taxon_nos,
-						 { fields => 'RANGE,ATTR' });
+						 { fields => 'RANGE,ATTR',
+						   debug_mode => $request->debug });
 	}
 	
 	else
 	{
 	    @include_taxa = $taxonomy->list_taxa('synonyms', \@taxon_nos,
-						 { fields => 'RANGE,ATTR' });
+						 { fields => 'RANGE,ATTR',
+						   debug_mode => $request->debug });
 	}
     }
     
@@ -3699,7 +3715,8 @@ sub generateMainFilters {
 	if ( my @exclude_nos = $request->clean_param_list('exclude_id') )
 	{
 	    push @exclude_taxa, $taxonomy->list_taxa('exact', \@exclude_nos,
-						     { fields => 'RANGE,ATTR' });
+						     { fields => 'RANGE,ATTR',
+						       debug_mode => $request->debug });
 	}
     }
     
@@ -3758,7 +3775,7 @@ sub generateMainFilters {
 	
 	if ( $min_rank >= 4 )
 	{
-	    push @filters, "o.species_name in ('sp.', 'spp.', 'indet.')";
+	    push @filters, "o.species_name in ('sp.', 'spp.', 'indet.','')";
 	    push @filters, "o.subgenus_name = ''" if $min_rank >= 5;
 	}
 	
@@ -3773,7 +3790,7 @@ sub generateMainFilters {
     # or "diversity" then just abort with a warning.  We call this the
     # "identification branch".
     
-    elsif ( $taxon_name )
+    if ( $taxon_name && ( $as_entered || ! @include_taxa ) )
     {
 	if ( $op eq 'prevalence' || $op eq 'diversity' )
 	{
@@ -3791,9 +3808,20 @@ sub generateMainFilters {
 	
 	foreach my $name ( @raw_names )
 	{
-	    # Ignore selectors in this branch.
+	    # If a selector was given and $as_entered true and we have some included
+	    # taxa, then we are good to go. Otherwise, ignore this name. In this case
+	    # the name wasn't found under the selector, which means we have no way to
+	    # select between identifications that are supposed to fall under the
+	    # selector and those that aren't.
 	    
-	    $name =~ s/^.*://;
+	    if ( $name =~ /:/ )
+	    {
+		next unless $as_entered && @include_taxa;
+		
+		# Remove the selector, so that we can just check the genus and species.
+		
+		$name =~ s/^.*://;
+	    }
 	    
 	    # Remove exclusions
 	    
@@ -3803,10 +3831,10 @@ sub generateMainFilters {
 	    
 	    my ($genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
 		$species_name, $species_reso, $subspecies_name, $subspecies_reso) =
-		    parseIdentifiedName($taxon_name, { debug_out => ($request->debug ? $request :
-								     undef),
-						       loose => 1,
-						       wildcards => 1 });
+		    parseIdentifiedName($name, { debug_out => ($request->debug ? $request :
+							       undef),
+						 loose => 1,
+						 wildcards => 1 });
 	    
 	    if ( ref $genus_name )
 	    {
@@ -3942,9 +3970,8 @@ sub generateMainFilters {
     
     # If a number was given but it does not exist in the hierarchy, add a
     # filter that will guarantee no results.
-    
-    elsif ( $request->param_given('base_name') || $request->param_given('base_id') ||
-	    $request->param_given('taxon_name') || $request->param_given('taxon_id') )
+
+    if ( @taxon_nos && ! @include_taxa )
     {
 	push @filters, "o.orig_no = -1";
 	$tables->{non_summary} = 1;
@@ -5423,17 +5450,20 @@ sub generatePrevalenceFilters {
     
     if ( $base_name )
     {
-	@taxa = $taxonomy->resolve_names($base_name, { fields => 'RANGE' });
+	@taxa = $taxonomy->resolve_names($base_name, { fields => 'RANGE',
+						       debug_mode => $request->debug });
     }
     
     elsif ( @base_nos )
     {
-	@taxa = $taxonomy->list_taxa_simple(\@base_nos, { fields => 'RANGE' });
+	@taxa = $taxonomy->list_taxa_simple(\@base_nos, { fields => 'RANGE',
+							  debug_mode => $request->debug });
     }
     
     if ( @exclude_nos )
     {
-	push @taxa, $taxonomy->list_taxa_simple(\@exclude_nos, { fields => 'RANGE', exclude => 1 });
+	push @taxa, $taxonomy->list_taxa_simple(\@exclude_nos, { fields => 'RANGE', exclude => 1,
+								 debug_mode => $request->debug });
     }
     
     # Now add these to the proper list.

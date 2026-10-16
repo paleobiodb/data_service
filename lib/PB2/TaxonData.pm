@@ -1,4 +1,3 @@
-
 #  
 # TaxonData
 # 
@@ -61,7 +60,8 @@ sub initialize {
 	{ value => 'full', maps_to => '1.2:taxa:full_info' },
 	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
 	    "includes the following blocks: B<attr>, B<app>, B<common>, B<parent>",
-	    "B<size>, B<class>, B<ecospace>, B<otaph>, B<etbasis>, B<refattr>.",
+	    "B<size>, B<class>, B<ecospace>, B<otaph>, B<etbasis>, B<pages>, B<locality>,",
+	    "B<type>, B<disc>, B<refattr>.",
 	    "If we subsequently add new data fields to this record",
 	    "then B<full> will include those as well.  So if you are publishing a URL,",
 	    "it might be a good idea to include B<C<show=full>>.",
@@ -112,6 +112,15 @@ sub initialize {
 	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
 	    "Annotates the output block C<ecospace>, indicating at which",
 	    "taxonomic level each piece of information was entered.",
+	{ value => 'pages', maps_to => '1.2:taxa:pages' },
+	    "The page(s) and figure(s) associated with this taxon in its bibliographic reference",
+	{ value => 'locality', maps_to => '1.2:taxa:locality' },
+	    "If the type locality for this taxon is a PBDB collection, provides the collection",
+	    "identifier",
+	{ value => 'type', maps_to => '1.2:taxa:type_info' },
+	    "Information about the type specimen for this taxon",
+	{ value => 'disc', maps_to => '1.2:taxa:discussion' },
+	    "Discussion and comments about this taxon.",
 	{ value => 'pres', undocumented => 1 });
 	# The above has been deprecated, its information is now included in
 	# the 'flags' field.  But we keep it here to avoid errors.
@@ -566,6 +575,40 @@ sub initialize {
     	    "If this value is non-zero, you can use it to construct image URLs",
 	    "using L<taxa/thumb|node:taxa/thumb>.");
     
+    $ds->define_block('1.2:taxa:type_info' =>
+	{ select => 'AUTH_TYPE' },
+	{ output => 'type_specimen', com_name => 'tpsm' },
+	    "The museum and catalog number of the type specimen for this taxon",
+	{ output => 'type_body_part', com_name => 'tpbp' },
+	    "The body part(s) based on which this taxon was defined",
+	{ output => 'part_details', com_name => 'tpdt' },
+	    "Details about the type body part, if any",
+	{ output => 'preservation', com_name => 'tppr' },
+	    "Details about the preservation of the type body part");
+    
+    $ds->define_block('1.2:taxa:locality' => 
+	{ select => 'AUTH_LOC' },
+	{ output => 'type_locality', com_name => 'tlo' },
+	    "If the type locality for this taxon is a PBDB collection, the collection identifier");
+    
+    $ds->define_block('1.2:taxa:pages' =>
+	{ select => 'AUTH_PAGES' },
+	{ output => 'pages', com_name => 'pag' },
+	    "The page number(s) from the bibliographic reference which are relevant",
+	    "to this taxon",
+	{ output => 'figures', com_name => 'fig' },
+	    "The figure number(s) from the bibliographic reference that are relevant",
+		      "to this taxon");
+    
+    $ds->define_block('1.2:taxa:discussion' =>
+	{ select => 'AUTH_DISC' },
+	{ output => 'discussion', com_name => 'dsc' },
+	    "A discussion of the taxon, provided by the people who have edited it.",
+	{ output => 'discussed_by', com_name => 'dsb' },
+	    "The most recent person who contributed to the discussion.",
+	{ output => 'comments', com_name => 'tcm' },
+	    "Comments on this taxon, if any.");
+    
     $ds->define_block('1.2:taxa:auto' =>
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this taxonomic name",
@@ -637,7 +680,7 @@ sub initialize {
 	{ output => 'vision', com_name => 'jvs' },
 	    "The degree of vision possessed by this organism.",
 	    "See L<ecotaph vocabulary|node:general/ecotaph#Ecospace>.",
-	{ output => 'vision_basis', com_name => 'jvsb', if_block => 'etbasis' },
+	{ output => 'vision_basis', com_name => 'jvsb', if_block => '1.2:taxa:etbasis' },
 	    "Specifies the taxon from which the vision information is inherited.",
 	{ output => 'diet', com_name => 'jdt' },
 	    "The general diet or feeding mode of this organism.",
@@ -716,6 +759,10 @@ sub initialize {
 	{ include => '1.2:taxa:ecospace' },
 	{ include => '1.2:taxa:taphonomy' },
 	{ include => '1.2:taxa:etbasis' },
+	{ include => '1.2:taxa:locality' },
+	{ include => '1.2:taxa:pages' },
+	{ include => '1.2:taxa:type_info' },
+	{ include => '1.2:taxa:discussion' },
 	{ include => '1.2:refs:attr' });
 	# { include => '1.2:taxa:pres' });
     
@@ -723,14 +770,17 @@ sub initialize {
     
     $ds->define_output_map('1.2:opinions:output_map' =>
 	{ value => 'full', maps_to => '1.2:opinions:full_info' },
-	    "This is a shortcut for including all of the information that defines this record.  Currently, this",
-	    "includes the following blocks: B<basis>, B<refattr>.",
+	    "This is a shortcut for including all of the information that defines this record.",
+	    "Currently, this includes the following blocks: B<attr>, B<basis>, B<pages>,",
+	    "B<diag>, B<refattr>.",
 	{ value => 'attr', maps_to => '1.2:opinions:attr' },
 	    "The attribution of the taxonomic names mentioned in this opinion, by author and year.",
 	{ value => 'basis' },
-	    "The basis of the opinion, which will be one of the following:",
-	    "=over", "=item stated with evidence", "=item stated without evidence",
-			   "=item implied", "=item second hand", "=back",
+	    "The basis of the opinion, see below for a list of values",
+	{ value => 'pages', maps_to => '1.2:opinions:pages' },
+	    "The page(s) and figure(s) associated with this opinion in its bibliographic reference",
+	{ value => 'diag', maps_to => '1.2:opinions:diagnosis' },
+	    "The diagnosis on which this opinion is based",
 	{ value => 'seq', maps_to => '1.2:opinions:seq' },
 	    "The sequence numbers that mark the subject taxon's position in the tree.",
         { value => 'ref', maps_to => '1.2:refs:primary' },
@@ -798,7 +848,9 @@ sub initialize {
 	    "An indication of why this name was given.",
 	{ set => 'basis', from => 'ri', lookup => \%basis_code },
 	{ output => 'basis', com_name => 'bas', if_block => 'basis,full' },
-	    "The basis of the opinion, see above for a list.",
+	    "The basis of the opinion, which will be one of the following values:",
+	    "=over", "=item stated with evidence", "=item stated without evidence",
+	    "=item implied", "=item second hand", "=back",
 	{ output => 'author', com_name => 'oat' },
 	    "The author of the opinion.",
 	{ output => 'pubyr', com_name => 'opy' },
@@ -812,7 +864,29 @@ sub initialize {
 	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier of the reference from which this opinion was entered.");
     
+    $ds->define_block('1.2:opinions:pages' =>
+	{ select => 'OP_PAGES' },
+	{ output => 'pages', com_name => 'pag' },
+	    "The page number(s) from the bibliographic reference which are relevant",
+	    "to this taxon",
+	{ output => 'figures', com_name => 'fig' },
+	    "The figure number(s) from the bibliographic reference that are relevant",
+		      "to this taxon");
+    
+    $ds->define_block('1.2:opinions:diagnosis' =>
+	{ select => 'OP_DIAG' },
+	{ output => 'diagnosis', com_name => 'odg' },
+	    "The diagnosis on which this opinion was based",
+	{ output => 'diagnosis_given', com_name => 'odx' },
+	    "The status of this diagnosis",
+	{ output => 'comments', com_name => 'ocm' },
+	    "Comments on this diagnosis, if any.");
+    
     $ds->define_block('1.2:opinions:full_info' =>
+	{ include => '1.2:opinions:attr' },
+	{ include => '1.2:opinions:basis' },
+	{ include => '1.2:opinions:pages' },
+	{ include => '1.2:opinions:diagnosis' },
 	{ include => '1.2:refs:attr' });
     
     $ds->define_block('1.2:opinions:attr' =>
@@ -2232,15 +2306,9 @@ sub list_taxa {
     
     my $options = $request->generate_query_options('taxa', $rel);
     
-    # If debug mode is turned on, generate a closure which will be able to output debug
-    # messages. 
-    
-    if ( $request->debug )
-    {
-	$options->{debug_out} = sub {
-	    $request->{ds}->debug_line($_[0]);
-	};
-    }
+    # If debug mode is turned on, add the 'debug_mode' option.
+
+    $options->{debug_mode} = $request->debug;
     
     # If the 'strict' parameter was given, make sure we haven't generated any
     # warnings.
@@ -2405,6 +2473,7 @@ sub list_opinions {
     }
     
     $options->{return} = 'stmt';
+    $options->{debug_out} = ($request->debug ? $request : undef);
     # $options->{assoc_type} ||= 'all';
     
     # If the 'strict' parameter was given, make sure we haven't generated any
@@ -2915,7 +2984,7 @@ sub generate_query_base {
     
     my ($taxon_names, @taxon_ids, @exclude_ids, $rel);
     my $specified_rel = $request->clean_param('rel');
-    my $resolve_options = {};
+    my $resolve_options = { debug_mode => $request->debug };
     
     if ( $taxon_names = $request->clean_param('base_name') )
     {
@@ -3003,8 +3072,8 @@ sub generate_query_base {
 	my @warnings = $taxonomy->list_warnings;	
 	$request->add_warning(@warnings) if @warnings;
 	
-	my $sql = $taxonomy->last_sql;
-	print STDERR "$sql\n\n" if $sql && $request->debug;
+	# my $sql = $taxonomy->last_sql;
+	# print STDERR "$sql\n\n" if $sql && $request->debug;
     }
     
     # Otherwise, identifiers were given.  Resolve the list of identifiers
@@ -3032,7 +3101,8 @@ sub generate_query_base {
     
     if ( @exclude_ids = $request->clean_param_list('exclude_id') )
     {
-	push @taxa, $taxonomy->list_taxa_simple(\@exclude_ids, { exclude => 1 });
+	push @taxa, $taxonomy->list_taxa_simple(\@exclude_ids, { exclude => 1,
+							         debug_mode => $request->debug });
 	
 	my @warnings = $taxonomy->list_warnings;
 	$request->add_warning(@warnings) if @warnings;
@@ -3996,6 +4066,11 @@ sub process_taxon_ids {
     foreach my $f ( qw(image_no) )
     {
 	$record->{$f} = generate_identifier('PHP', $record->{$f}) if defined $record->{$f};
+    }
+
+    foreach my $f ( qw(type_locality) )
+    {
+	$record->{$f} = generate_identifier('COL', $record->{$f}) if defined $record->{$f};
     }
     
     # foreach my $f ( qw(authorizer_no enterer_no modifier_no) )
