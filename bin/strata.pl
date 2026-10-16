@@ -556,17 +556,13 @@ sub ImportPBDB {
 	    $raw_name =~ s/[[:cntrl:]\0177]//g;
 	}
 	
-	# Remove enclosing double quotation marks, and record " as the modifier.
+	# Remove double quotation marks, and record " as the modifier.
 	
-	if ( $raw_name =~ qr{ ^ " (.*?) " $ }xs )
+	if ( $raw_name =~ /["“”]/ )
 	{
-	    $raw_name = $1;
+	    $raw_name =~ s/["“”]//g;
 	    $nr->{modifier} = '"';
 	}
-	
-	# Remove all other double quotation marks.
-	
-	$raw_name =~ s/"//g;
 	
 	# A few names have the form "x? y?". Replace these with "x or y", which will be
 	# split up below.
@@ -735,10 +731,15 @@ sub ImportPBDB {
 	    # Remove paired single quotes, but leave unpaired ones. The latter
 	    # are part of the name, i.e. the 'Arqov formation in Israel.
 	    
-	    if ( $c =~ /'.*'(\s|$)/ )
+	    while ( $c =~ /(^|.*?\s)['‘’](.*?)['‘’](\s.*|$)/ )
 	    {
-		$c =~ s/'//g;
+		$c = "$1$2$3";
+		$nr->{modifier} ||= '"';
 	    }
+	    
+	    # Change all unpaired single quote marks to a right single quote/apostrophe.
+	    
+	    $c =~ s/['‘’]/’/g;
 	    
 	    # If the component ends in ' fm' or ' fm.' and the rank is 'Mbr', then
 	    # it represents a sub-formation contained in a larger formation.
