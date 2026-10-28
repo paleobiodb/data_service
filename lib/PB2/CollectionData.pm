@@ -3220,21 +3220,8 @@ sub generateAccessFilter {
     
     unless ( $request->clean_param('private') || $force_private )
     {
-	if ( $tables_ref->{c} )
-	{
-	    return ("c.access_level = 0", '');
-	}
-
-	elsif ( $tables_ref->{cc} || $mt eq 'cc' )
-	{
-	    $tables_ref->{cc} = 1;
-	    return ("cc.access_level = 'the public'", '');
-	}
-	
-	else
-	{
-	    return;
-	}
+	$tables_ref->{c} = 1;
+	return ("c.access_level = 0", '');
     }
     
     # Next see if we have a login cookie from Classic.  If so, extract the
