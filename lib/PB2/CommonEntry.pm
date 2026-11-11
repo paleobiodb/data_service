@@ -914,6 +914,12 @@ sub debug_out {
 }
 
 
+# generate_sandbox ( config )
+# 
+# Generate HTML code for a sandbox web page, which will allow users to experiment with
+# calling a specific data entry operation. The generation is controlled by the $config
+# parameter, which must be a hashref.
+
 sub generate_sandbox {
 
     my ($request, $config) = @_;

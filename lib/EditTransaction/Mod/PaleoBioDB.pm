@@ -1,5 +1,5 @@
 # 
-# EditTransaction::APP::PBDB
+# EditTransaction::Mod::PBDB
 # 
 # This module gives EditTransaction the extra semantics required by the Paleobiology Database.
 # 
@@ -715,7 +715,7 @@ sub validate_instance_permission {
     my ($class, $permission) = @_;
     
     croak "new EditTransaction: you must provide an object of class 'Permissions'"
-    	unless blessed $permission && $permission->isa('Permissions');
+    	unless $permission and blessed $permission and $permission->isa('Permissions');
     
     return $permission;
 }

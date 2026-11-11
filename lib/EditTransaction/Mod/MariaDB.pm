@@ -117,7 +117,7 @@ sub db_fetch_column_info {
 our (%PREFIX_SIZE) = ( tiny => 255,
 		       regular => 65535,
 		       medium => 16777215,
-		       large => 4294967295 );
+		       long => 4294967295 );
 
 
 sub db_unpack_column_type {
@@ -126,26 +126,28 @@ sub db_unpack_column_type {
 
     if ( $typeinfo =~ qr{ ^ ( var )? ( char | binary ) [(] ( \d+ ) }xs )
     {
-	my $type = $2 eq 'char' ? 'text' : 'data';
+	my $type = $2;
 	my $mode = $1 ? 'variable' : 'fixed';
 	my $size = $3;
 	my ($charset) = $cr->{Collation} && $cr->{Collation} =~ qr{ ^ ([^_]+) }xs;
-	$cr->{TypeMain} = 'char';
-	$cr->{TypeParams} = [ $type, $size, $mode, $charset ];
+	$cr->{TypeMain} = $type;
+	$cr->{TypeParams} = [ 'specified', $size, $mode, $charset ];
     }
     
     elsif ( $typeinfo =~ qr{ ^ ( tiny | medium | long )? ( text | blob ) (?: [(] ( \d+ ) )? }xs )
     {
-	my $type = $2 eq 'text' ? 'text' : 'data';
+	my $type = $2 eq 'text' ? 'char' : 'binary';
 	my $size = $3 || $PREFIX_SIZE{$1 || 'regular'};
+	my $sizetype = $1;
 	my ($charset) = $cr->{Collation} && $cr->{Collation} =~ qr{ ^ ([^_]+) }xs;
-	$cr->{TypeMain} = 'char';
-	$cr->{TypeParams} = [ $type, $size, 'variable', $charset ];
+	$cr->{TypeMain} = $type;
+	$cr->{TypeParams} = [ $sizetype, $size, 'variable', $charset ];
     }
     
     elsif ( $typeinfo =~ qr{ ^ tinyint [(] 1 [)] }xs )
     {
 	$cr->{TypeMain} = 'boolean';
+	$cr->{TypeParams} = [ 1 ];
     }
     
     elsif ( $typeinfo =~ qr{ ^ (tiny|small|medium|big)? int [(] (\d+) [)] \s* (unsigned)? }xs )
@@ -158,7 +160,7 @@ sub db_unpack_column_type {
     
     elsif ( $typeinfo =~ qr{ ^ decimal [(] (\d+) , (\d+) [)] \s* (unsigned)? }xs )
     {
-	my $unsigned = $3 ? 'unsigned' : '';
+	my $unsigned = $3 ? 'unsigned' : 'signed';
 	my $before = $1 - $2;
 	my $after = $2;
 	
@@ -168,7 +170,7 @@ sub db_unpack_column_type {
     
     elsif ( $typeinfo =~ qr{ ^ ( float | double ) (?: [(] ( \d+ ) , ( \d+ ) [)] )? \s* (unsigned)? }xs )
     {
-	my $unsigned = $4 ? 'unsigned' : '';
+	my $unsigned = $4 ? 'unsigned' : 'signed';
 	my $precision = $1;
 	my $before = defined $2 ? $2 - $3 : undef;
 	my $after = $3;

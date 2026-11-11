@@ -34,6 +34,11 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('AUTHORITY_DATA', CAN_DELETE => 'OWNER');
     set_table_property('AUTHORITY_DATA', LOG_CHANGES => 1);
     
+    set_table_name(AUTHORITY_AUTHORS => 'authority_authors');
+    set_table_property('AUTHORITY_AUTHORS', LOG_CHANGES => 1);
+    
+    set_table_group('authority_data' => 'AUTHORITY_DATA', 'AUTHORITY_AUTHORS');
+    
     set_table_name(OPINION_DATA => 'opinions');
     set_table_property('OPINION_DATA', CAN_POST => 'NOT_STUDENT');
     set_table_property('OPINION_DATA', CAN_MODIFY => 'NOT_STUDENT');
@@ -143,7 +148,6 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(REFERENCE_EDITORS => 'ref_editors');
     set_table_name(REFERENCE_SOURCES => 'ref_sources');
     set_table_name(REFERENCE_SCORES => 'ref_scores');
-    set_table_name(REFERENCE_SEARCH => 'ref_search');
     
     set_table_property('REFERENCE_DATA', PRIMARY_KEY => 'reference_no');
     set_table_property('REFERENCE_DATA', PRIMARY_FIELD => 'reference_id');
@@ -155,6 +159,9 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     
     set_table_property('REFERENCE_AUTHORS', LOG_CHANGES => 1);
     set_table_property('REFERENCE_EDITORS', LOG_CHANGES => 1);
+    
+    set_table_group('reference_data' => 'REFERENCE_DATA', 'REFERENCE_AUTHORS',
+		    'REFERENCE_EDITORS');
     
     set_table_name(INTERVAL_DATA => 'interval_data');
     set_table_name(CLASSIC_INTERVALS => 'intervals');

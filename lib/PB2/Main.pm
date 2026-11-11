@@ -226,7 +226,8 @@ our ($DROP_TABLE);
 			method => 'auto_complete',
 			output => '1.2:combined:auto',
 			optional_output => '1.2:combined:auto_optional'},
-	"Return a list of names matching any string of characters. This operation is intended",
+	"The B<C<combined/auto>> operation returns a list of names matching any string of",
+	"characters. This operation is intended",
 	"to be used for auto-completion in client applications. The desired record types",
 	"can be specified using the B<C<type>> parameter, and the number of records to be returned",
 	"using B<C<limit>>.");
@@ -237,9 +238,19 @@ our ($DROP_TABLE);
 			method => 'list_associated',
 			output => '1.2:combined:associated',
 			optional_output => '1.2:combined:associated_optional'},
-	"Return a list of records of the specified types that are associated with the",
+	"The B<C<combined/associated>> operation returns a list of records of the specified",
+	"types that are associated with the",
 	"specified bibliographic reference(s). The desired record types can be specified",
 	"using the B<C<type>> parameter.");
+
+    $ds2->define_node({ path => 'combined/uploads',
+			place => 1,
+			title => 'List uploads to this database',
+			method => 'list_uploads',
+			output => '1.2:combined:uploads' },
+	"The B<C<combined/uploads>> operation returns a list of data uploads that have been",
+	"made to this database. It can also be used to check that a prospective upload name",
+	"is available for use.");
     
     # Occurrences.  These paths are used to fetch information about fossil
     # occurrences known to the database.

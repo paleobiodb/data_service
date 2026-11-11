@@ -96,6 +96,22 @@ sub initialize {
 	{ value => 'ref (R)' },
 	    "This reference has an unknown or unspecified role in the database");
     
+    $ds->define_set('1.2:refs:pubtype' =>
+	{ value => 'unpublished' },
+	{ value => 'journal article' },
+	{ value => 'serial monograph' },
+	{ value => 'book' },
+	{ value => 'book chapter' },
+	{ value => 'book/book chapter' },
+	{ value => 'abstract' },
+	{ value => 'guidebook' },
+	{ value => 'compendium' },
+	{ value => 'news article' },
+	{ value => 'Ph.D. thesis' },
+	{ value => 'M.S. thesis' },
+	{ value => 'instcoll' }, "Use this type of reference for specimens in an ",
+	    "institutional collection");
+    
     # Then some output blocks:
     
     # One block for the reference operations themselves.
@@ -129,8 +145,8 @@ sub initialize {
 	  "Records that were deleted will have the value 'deleted' in this field.",
       { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', 
 	bibjson_name => 'type' },
-	  "The type of publication this entry represents. Examples include: article, book,",
-	  "unpublished, etc.",
+	  "The type of work this entry represents. The value will be one of the following:",
+	  $ds->document_set('1.2:refs:pubtype'),
       { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', bibjson_name => 'title',
 	not_block => 'formatted' },
 	  "The title of the document",
@@ -359,21 +375,6 @@ sub initialize {
 	    "This is only useful when querying for references associated with occurrences, taxa, etc.",
 	{ value => 'rank.asc', undocumented => 1 },
 	{ value => 'rank.desc', undocumented => 1 });
-    
-    $ds->define_set('1.2:refs:pubtype' =>
-	{ value => 'unpublished' },
-	{ value => 'journal article' },
-	{ value => 'serial monograph' },
-	{ value => 'book' },
-	{ value => 'book chapter' },
-	{ value => 'book/book chapter' },
-	{ value => 'abstract' },
-	{ value => 'guidebook' },
-	{ value => 'compendium' },
-	{ value => 'news article' },
-	{ value => 'Ph.D. thesis' },
-	{ value => 'M.S. thesis' },
-	{ value => 'instcoll' });
     
     $ds->define_ruleset('1.2:refs:display' =>
 	{ optional => 'show', valid => '1.2:refs:output_map', list => ',' },

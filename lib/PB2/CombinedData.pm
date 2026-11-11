@@ -15,11 +15,13 @@ package PB2::CombinedData;
 use HTTP::Validate qw(:validators);
 
 use IntervalBase qw(int_record);
-use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw(%TABLE $COLL_MATRIX $COLL_BINS $COLL_LITH $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
+use CoreTableDefs;
 use ExternalIdent qw(generate_identifier %IDRE VALID_IDENTIFIER);
 
 use Carp qw(carp croak);
+use Encode qw(encode_utf8);
 
 use Moo::Role;
 
@@ -250,6 +252,45 @@ sub initialize {
 	{ output => 'pubyr', com_name => 'opy' },
 	    "The year in which the opinion was published, if different from the",
 	    "bibliographic reference.");
+    
+    # The following definitions specify the 'uploads' operation. It is used to list
+    # uploads to this database and to check that a specific upload name hasn't been 
+    # used already.
+    
+    $ds->define_ruleset('1.2:combined:uploads' =>
+	{ optional => 'name', valid => ANY_VALUE },
+	    "A name to check, which may include the wildcards C<%> and C<_>. All matching",
+	    "upload names will be returned. If this name is not given, all upload names",
+	    "will be returned.",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
+    
+    $ds->define_block('1.2:combined:uploads' =>
+	{ output => 'name', com_name => 'name' },
+	    "An upload name that is recorded in the database",
+	{ output => 'occs', com_name => 'occs' },
+	    "If this upload included occurrences, the date on which the last occurrence was",
+	    "uploaded",
+	{ output => 'reids', com_name => 'reids' },
+	    "If this upload included reidentifications, the date on which the last reidentification",
+	    "was uploaded",
+	{ output => 'colls', com_name => 'colls' },
+	    "If this upload included collections, the date on which the last collection was",
+	    "uploaded",
+	{ output => 'specs', com_name => 'specs' },
+	    "If this upload included specimens, the date on which the last specimen was",
+	    "uploaded",
+	{ output => 'strata', com_name => 'strata' },
+	    "If this upload included stratigraphic names, the date on which the last name was",
+	    "uploaded",
+	{ output => 'taxa', com_name => 'taxa' },
+	    "If this upload included taxonomic names, the date on which the last name was uploaded",
+	{ output => 'opinions', com_name => 'opinions' },
+	    "If this upload included taxonomic opinions, the date on which the last opinion was",
+	    "uploaded",
+	{ output => 'refs', com_name => 'refs' },
+	    "If this upload included bibliographic references, the date on which the last reference",
+	    "was uploaded");
 }
 
 
@@ -511,6 +552,7 @@ sub auto_complete_cou {
     # }
 }
 
+
 # list_associated ( )
 # 
 # This operation returns a list of records of the specified types which are associated
@@ -700,6 +742,86 @@ sub generate_extids {
     {
 	$r->{child_spelling_no} = generate_identifier('VAR', $r->{child_spelling_no});
 	$r->{parent_spelling_no} = generate_identifier('VAR', $r->{parent_spelling_no});
+    }
+}
+
+
+# list_uploads ( )
+#
+# This operation returns a list of uploads matching the specified name, or all uploads
+# found in the database.
+
+my %upload_table = ( occs => 'OCCURRENCE_DATA', reids => 'REID_DATA',
+		     colls => 'COLLECTION_DATA', specs => 'SPECIMEN_DATA',
+		     strata => 'STRAT_NAMES',
+		     taxa => 'AUTHORITY_DATA', opinions => 'OPINION_DATA',
+		     refs => 'REFERENCE_DATA' );
+
+sub list_uploads {
+
+    my ($request) = @_;
+    
+    my $dbh = $request->get_connection;
+    my (@filters, %result, @result);
+    
+    if ( my $name = $request->clean_param('name') )
+    {
+	my $qname = $dbh->quote($name);
+	push @filters, "upload like $qname";
+    }
+    
+    push @filters, "upload <> ''" unless @filters;
+
+    my $filter_string = join(' and ', @filters);
+    
+    foreach my $type ( qw( occs reids colls specs strata taxa opinions refs ) )
+    {
+	my $table_spec = $upload_table{$type};
+	my $table_name = $TABLE{$table_spec};
+	
+	my $sql = <<~END_SQL;
+	    SELECT DISTINCT `upload` FROM `$table_name`
+	    WHERE $filter_string
+	    END_SQL
+	
+	print STDERR encode_utf8 "$sql\n\n" if $request->debug;
+	
+	my $sql_result = $dbh->selectcol_arrayref($sql);
+	
+	foreach my $n ( @$sql_result )
+	{
+	    my $qn = $dbh->quote($n);
+	    
+	    $sql = <<~END_SQL;
+		SELECT max(`created`) FROM `$table_name`
+		WHERE upload = $qn
+		END_SQL
+	    
+	    print STDERR encode_utf8 "$sql\n\n" if $request->debug;
+	    
+	    my ($max) = $dbh->selectrow_array($sql);
+	    
+	    if ( $max )
+	    {
+		$result{$n}{$type} = $max;
+	    }
+	}
+    }
+    
+    foreach my $k ( keys %result )
+    {
+	$result{$k}{name} = $k;
+	push @result, $result{$k};
+    }
+
+    if ( @result )
+    {
+	$request->list_result(\@result);
+    }
+    
+    else
+    {
+	die $request->exception(404, "Not found");
     }
 }
 
