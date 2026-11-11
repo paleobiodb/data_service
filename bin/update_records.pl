@@ -17,6 +17,7 @@ use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use DBQuery qw(DBHashQuery DBRowQuery DBCommand DBInsert);
+use MatrixBase qw(updateOccurrenceMatrix);
 
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use Encode qw(encode_utf8);
@@ -62,7 +63,9 @@ die "Could not connect to database: $DBI::errstr\n" unless $pbdb;
 
 # Determine which update to perform based on @ARGV.
 
-our (%update_routine) = (limestome => \&UpdateLimestome);
+our (%update_routine) = ( limestome => \&UpdateLimestome,
+			  'eodp-taxa' => \&UpdateEODPTaxa );
+
 our (@do_update);
 
 foreach my $update_name ( @ARGV )
@@ -128,6 +131,11 @@ sub ExecuteUpdates {
 }
 
 
+# UpdateLimestome ( )
+#
+# A few collection records list the formation 'Foraker Limestome' with an m instead of
+# an n. This is an easily fixable mistake.
+
 sub UpdateLimestome {
 
     say "\nUpdating collection records with formation 'Foraker Limesto>m<e'...";
@@ -158,36 +166,232 @@ sub UpdateLimestome {
 }
 
 
+# UpdateEODPTaxa ( )
+#
+# This routine fixes the following problem: When the eODP dataset was originally
+# compiled, most of the species had not yet been entered. So the taxon_no values mostly
+# linked the occurrences to be uploaded to their genera, which had been entered. By the
+# time the upload was actually done, Andrew McCoy had entered most or all of the
+# species. But I (Michael McClennen) didn't know that, so I uploaded the original
+# taxon_no values. This routine finds all occurrences whose identified name doesn't
+# match the linked taxonomic name, and fixes them.
+
+sub UpdateEODPTaxa {
+
+    say "\nUpdating occurrence records (mostly from the eODP upload) with bad taxon links...\n";
+    
+    # Create an EditTransaction to do the updates.
+    
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms,
+				     table => 'OCCURRENCE_DATA',
+				     allows => ['FIXUP_MODE'] } );
+    
+    my $eodp_count = 0;
+    my $other_count = 0;
+    
+    # First do the simple case: fetch occurrences with no subgenus, no subspecies.
+    
+    my $rows1 = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.species_name, a.taxon_name as current_name,
+	  na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name = concat_ws(' ', oc.genus_name, oc.species_name)
+	WHERE not(subgenus_name <> '') and not(subspecies_name <> '') and
+	  a.taxon_name not like '%(%' and a.taxon_name <> concat_ws(' ', oc.genus_name, oc.species_name)
+	END_SQL
+    
+    # Then fetch occurrences with a subspecies.
+    
+    my $rows2 = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.species_name, oc.subspecies_name,
+	  a.taxon_name as current_name, na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name =
+		concat_ws(' ', oc.genus_name, oc.species_name, oc.subspecies_name)
+	WHERE not(subgenus_name <> '') and subspecies_name <> '' and
+	  a.taxon_name <> concat_ws(' ', oc.genus_name, oc.species_name, oc.subspecies_name)
+	END_SQL
+    
+    # Then fetch occurrences with a subgenus.
+    
+    my $rows3 = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.subgenus_name, oc.species_name,
+	  a.taxon_name as current_name, na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name = concat_ws(' ', oc.genus_name,
+		concat('(', oc.subgenus_name, ')'), oc.species_name)
+	WHERE subgenus_name <> '' and not(subspecies_name <> '') and
+	  a.taxon_name <> concat_ws(' ', oc.genus_name,
+		concat('(', oc.subgenus_name, ')'), oc.species_name)
+	END_SQL
+    
+    # Then fetch occurrences with a subgenus and a subspecies.
+    
+    my $rows4 = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.subgenus_name, oc.species_name,
+	  oc.subspecies_name, a.taxon_name as current_name, na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name = concat_ws(' ', oc.genus_name,
+		concat('(', oc.subgenus_name, ')'), oc.species_name, oc.subspecies_name)
+	WHERE subgenus_name <> '' and subspecies_name <> '' and
+	  a.taxon_name <> concat_ws(' ', oc.genus_name, concat('(', oc.subgenus_name, ')'),
+		oc.species_name, oc.subspecies_name)
+	END_SQL
+    
+    # Do the updates.
+    
+    my @occurrence_nos;
+    
+    foreach my $row ( @$rows1, @$rows2, @$rows3, @$rows4 )
+    {
+	my $update = { occurrence_no => $row->{occurrence_no},
+		       taxon_no => $row->{taxon_no} };
+	
+	$edt->update_record('OCCURRENCE_DATA', $update);
+	
+	push @occurrence_nos, $row->{occurrence_no};
+	
+	if ( $row->{upload} eq 'eODP' )
+	{
+	    $eodp_count++;
+	}
+	
+	else
+	{
+	    $other_count++;
+	}
+    }
+    
+    say "    Generated $eodp_count eODP update records.";
+    say "    Generated $other_count other update records.";
+    
+    $DB::single = 1;
+    
+    if ( FinishUpdate($edt) )
+    {
+	say "Updating occurrence matrix...";
+	
+	updateOccurrenceMatrix($pbdb, \@occurrence_nos);
+	
+	say "Done.";
+    }
+    
+    # Now do a second pass and fix occurrences with a subspecies where the species was
+    # entered but not the subspecies, where the occurrence links to the genus.
+    
+    my @occurrence_nos2;
+    my $eodp_count2 = 0;
+    my $other_count2 = 0;
+    
+    $edt = PBDBEdit->new($pbdb, { permission => $perms,
+				  table => 'OCCURRENCE_DATA',
+				  allows => ['FIXUP_MODE'] } );
+    
+    # First, occurrences without a subgenus.
+    
+    my $rows2a = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.species_name, oc.subspecies_name,
+	  a.taxon_name as current_name, na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name =
+		concat_ws(' ', oc.genus_name, oc.species_name)
+	WHERE not(subgenus_name <> '') and subspecies_name <> '' and
+	  a.taxon_name <> concat_ws(' ', oc.genus_name, oc.species_name, oc.subspecies_name)
+	END_SQL
+    
+    # Then fetch occurrences with a subgenus.
+    
+    my $rows4a = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.upload, oc.genus_name, oc.subgenus_name, oc.species_name,
+	  oc.subspecies_name, a.taxon_name as current_name, na.taxon_no, na.taxon_name
+	FROM occurrences as oc
+	  join authorities as a using (taxon_no)
+	  join authorities as na on na.taxon_name = concat_ws(' ', oc.genus_name,
+		concat('(', oc.subgenus_name, ')'), oc.species_name)
+	WHERE subgenus_name <> '' and subspecies_name <> '' and a.taxon_no <> na.taxon_no and
+	  a.taxon_name <> concat_ws(' ', oc.genus_name, concat('(', oc.subgenus_name, ')'),
+		oc.species_name, oc.subspecies_name)
+	END_SQL
+    
+    foreach my $row ( @$rows2a, @$rows4a )
+    {
+	my $update = { occurrence_no => $row->{occurrence_no},
+		       taxon_no => $row->{taxon_no} };
+	
+	$edt->update_record('OCCURRENCE_DATA', $update);
+	
+	push @occurrence_nos2, $row->{occurrence_no};
+	
+	if ( $row->{upload} eq 'eODP' )
+	{
+	    $eodp_count2++;
+	}
+	
+	else
+	{
+	    $other_count2++;
+	}
+    }
+    
+    say "    Generated $eodp_count2 eODP update records.";
+    say "    Generated $other_count2 other update records.";
+    
+    $DB::single = 1;
+    
+    if ( FinishUpdate($edt) )
+    {
+	say "Updating occurrence matrix...";
+	
+	updateOccurrenceMatrix($pbdb, \@occurrence_nos);
+	
+	say "Done.";
+    }
+    
+}
+
+
 sub FinishUpdate {
 
     my ($edt) = @_;
-
+    
+    my $result;
+    
     if ( !$edt->actions )
     {
-	say "Nothing to update.";
+	say "\nNothing to update.";
+	$result = '';
     }
     
     elsif ( $edt->commit )
     {
-	say "Update succeeded.";
+	say "\nUpdate succeeded.";
+	$result = 1;
     }
     
     else
     {
-	say "Update failed!";
+	say "\nUpdate failed!";
+	$result = '';
     }
     
     my @warnings = $edt->nonfatals;
     my @errors = $edt->fatals;
-
+    
     if ( @warnings )
     {
 	say $_ foreach ("Warnings:", @warnings);
     }
-
+    
     if ( @errors )
     {
 	say $_ foreach ("Errors:", @errors);
     }
+    
+    return $result;
 }
 
