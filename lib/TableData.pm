@@ -418,11 +418,11 @@ sub complete_ruleset {
 	    my $list = $type_params[2];
 	    $list =~ s/','/', '/g;
 	    $doc_valid = "$prefix from the following list: C<$list>";
-	    unless ( $rr->{valid} )
-	    {
-		my @values = ($list =~ /'(\\.|[^'\\])*'/g);
-		$rr->{valid} = ENUM_VALUE(@values);
-	    }
+	    # unless ( $rr->{valid} )
+	    # {
+	    # 	my @values = ($list =~ /'(\\.|[^'\\])*'/g);
+	    # 	$rr->{valid} = ENUM_VALUE(@values);
+	    # }
 	}
 	
 	elsif ( $type eq 'datetime' )
