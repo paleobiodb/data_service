@@ -393,7 +393,7 @@ sub complete_ruleset {
 	    $prefix = 'an' if $size eq 'integer';
 	    
 	    $doc_valid = "$prefix $size value";
-	    $rr->{valid} ||= $type_params[0] eq 'unsigned' ? POS_VALUE : INT_VALUE;
+	    # $rr->{valid} ||= $type_params[0] eq 'unsigned' ? POS_ZERO_VALUE : INT_VALUE;
 	}
 	
 	elsif ( $type eq 'fixed' )
@@ -401,7 +401,7 @@ sub complete_ruleset {
 	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
 	    $doc_valid = "$prefix decimal value with at most $type_params[1] digits " .
 		"before the decimal and at most $type_params[2] digits after";
-	    $rr->{valid} ||= DECI_VALUE; 
+	    # $rr->{valid} ||= DECI_VALUE; 
 	}
 	
 	elsif ( $type eq 'floating' )
@@ -409,7 +409,7 @@ sub complete_ruleset {
 	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
 	    my $size = $type_params[2] eq 'double' ? 'double precision' : 'single precision';
 	    $doc_valid = "$prefix decimal value that can be stored in $size floating point";
-	    $rr->{valid} ||= DECI_VALUE;
+	    # $rr->{valid} ||= DECI_VALUE;
 	}
 	
 	elsif ( $type eq 'enum' )
