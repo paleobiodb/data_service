@@ -1216,7 +1216,7 @@ sub validate_float_value {
 
     my ($edt, $type, $value, $fieldname) = @_;
     
-    my ($unsigned, $precision) = ref $type eq 'ARRAY' ? $type->@* : $type;
+    my ($sign_mode, $precision) = ref $type eq 'ARRAY' ? $type->@* : $type;
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.
@@ -1228,7 +1228,7 @@ sub validate_float_value {
     
     elsif ( $value !~ $DECIMAL_NUMBER_RE )
     {
-	my $phrase = $unsigned ? 'an unsigned' : 'a';
+	my $phrase = ($sign_mode eq 'unsigned') ? 'an unsigned' : 'a';
 	
 	return [ 'E_FORMAT', $fieldname, "value must be $phrase floating point number" ];
     }
@@ -1239,7 +1239,7 @@ sub validate_float_value {
 	
 	# If the column is unsigned, make sure there is no minus sign.
 	
-	if ( $unsigned && $sign eq '-' )
+	if ( $sign_mode eq 'unsigned'  && $sign eq '-' )
 	{
 	    return [ 'E_RANGE', $fieldname, "value must be an unsigned floating point number" ];
 	}
