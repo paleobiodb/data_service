@@ -56,7 +56,7 @@ use namespace::clean;
     
     # Set properties for EDT_SUB
     
-    set_table_property(EDT_SUB => SUPERIOR_TABLE => 'EDT_TEST');
+    set_table_property(EDT_SUB => AUTH_TABLE => 'EDT_TEST');
     set_table_property(EDT_SUB => CAN_POST => 'AUTHORIZED');
     set_table_property(EDT_SUB => CAN_MODIFY => 'AUTHORIZED');
     set_table_property(EDT_SUB => PRIMARY_KEY => 'aux_no');
@@ -142,7 +142,7 @@ use namespace::clean;
 # The following methods override methods from EditTransaction.pm:
 # ---------------------------------------------------------------
 
-before 'authorize_action' => sub {
+before 'authorize_against_table' => sub {
     
     my ($edt, $action, $operation, $table, $keyexpr) = @_;
     

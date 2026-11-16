@@ -1010,18 +1010,27 @@ sub check_key_values {
 	    }
 	}
 	
-	# If the key column type is integer, reject key values that are not
-	# integers.
+	# If the key column type is integer, reject key values that are not integers.
 	
-	if ( $columninfo->{TypeMain} eq 'unsigned' && $v !~ /^\s*\d+\s*$/ )
+	if ( $columninfo->{TypeMain} eq 'integer' )
 	{
-	    push @bad_values, $v;
+	    if ( $columninfo->{TypeParams}[0] eq 'unsigned' && $v !~ /^\s*\d+\s*$/ )
+	    {
+		push @bad_values, $v;
+	    }
+	    
+	    elsif ( $columninfo->{TypeParams}[0] ne 'unsigned' && $v !~ /^\s*-?\d+\s*$/ )
+	    {
+		push @bad_values, $v;
+	    }
+	    
+	    else
+	    {
+		push @key_values, $v;
+	    }
 	}
 	
-	elsif ( $columninfo->{TypeMain} eq 'integer' && $v !~ /^\s*-?\d+\s*$/ )
-	{
-	    push @bad_values, $v;
-	}
+	# Otherwise, accept the value as given.
 	
 	else
 	{

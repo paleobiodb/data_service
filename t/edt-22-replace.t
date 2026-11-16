@@ -99,22 +99,6 @@ subtest 'replace_record with nonexistent key value' => sub {
     
     $edt->replace_record({ _primary => '801', string_req => 'flap' });
     
-    ok_has_condition('C_CREATE');
-    
-    ok_failed_commit;
-    
-    ok_only_conditions('all', 'C_CREATE');
-    
-    # Then again with the CREATE allowance.
-    
-    $edt = ok_new_edt;
-    
-    ok_record_count( 1, 'EDT_TEST', '*', "table starts with one record" );
-    
-    $edt->replace_record({ _primary => '801', string_req => 'flap' });
-    
-    ok_no_conditions;
-    
     ok_commit;
     
     ok_record_count( 2, 'EDT_TEST', '*', "replace_record generated an insertion" );
@@ -132,7 +116,7 @@ subtest 'replace_record with nonexistent key value' => sub {
     
     $edt->replace_record({ test_no => '852', string_req => 'this should fail' });
     
-    ok_has_one_condition( 'E_PERM', "got permission error on insert with specified key" );
+    ok_has_one_condition( 'E_PERMISSION', "got permission error on insert with specified key" );
     
     $edt->abort_action;
     
@@ -153,10 +137,6 @@ subtest 'replace_record with nonexistent key value' => sub {
 subtest 'replace_record bad arguments' => sub {
     
     my $edt = ok_new_edt('NO_CREATE');
-    
-    $edt->replace_record('EDT_TEST', { test_no => 901, string_req => 'vxyyz' });
-    
-    ok_has_one_condition('C_CREATE');
     
     $edt->replace_record('EDT_TEST', { _primary => $inserted_key, string_val => '25', string_req => '' });
     

@@ -64,7 +64,7 @@ sub record_operation {
     
     # Check for an inappropriate _where clause.
     
-    if ( $parameters->{_where} && $operation =~ /^ins|^rep/ )
+    if ( ref $parameters eq 'HASH' && $parameters->{_where} && $operation =~ /^ins|^rep/ )
     {
 	$edt->add_condition($action, 'E_HAS_WHERE');
     }

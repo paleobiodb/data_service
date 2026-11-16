@@ -314,6 +314,11 @@ sub keyexpr {
 	return "$_[0]{keycol} in ($_[0]{keyexpr})";
     }
     
+    elsif ( $_[0]{keyexpr} )
+    {
+	return $_[0]{keyexpr};
+    }
+    
     else
     {
 	return '0';

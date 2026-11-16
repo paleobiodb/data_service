@@ -414,7 +414,7 @@ subtest 'NOT_FOUND and PROCEED' => sub {
     is( $edt->fail_count, 1, "failed actions: 1" );
     is( $edt->skip_count, 0, "skipped actions: 0" );
     
-    ok_condition_count( 1, 'all', 'F_NOT_FOUND', "demoted E_NOT_FOUND to F_NOT_FOUND" );
+    ok_condition_count( 1, 'all', 'nonfatal', 'E_NOT_FOUND', "got E_NOT_FOUND as a nonfatal condition" );
     
     ok_record_count( 2, 'default', "string_val='updated'", "two records were changed" );
     ok_no_record( 'default', "string_val='not updated'", "bad update didn't go through" );
@@ -456,9 +456,9 @@ subtest 'NOT_FOUND and PROCEED' => sub {
     is( $edt->fail_count, 2, "failed actions: 2" );
     is( $edt->skip_count, 0, "skipped actions: 0" );
     
-    ok_condition_count( 1, 'all', 'F_NOT_FOUND', "demoted E_NOT_FOUND to F_NOT_FOUND" );
-    ok_condition_count( 0, 'all', 'E_NOT_FOUND', "it really was demoted" );
-    ok_condition_count( 1, 'all', 'F_FORMAT', "demoted E_FORMAT to F_FORMAT" );
+    ok_condition_count( 1, 'all', 'nonfatal', 'E_NOT_FOUND', "got E_NOT_FOUND as a nonfatal condition" );
+    ok_condition_count( 0, 'all', 'fatal', 'E_NOT_FOUND', "it really was demoted to nonfatal" );
+    ok_condition_count( 1, 'all', 'nonfatal', 'E_FORMAT', "got E_FORMAT as a nonfatal condition" );
     
     ok_record_count( 3, 'default', "string_val='updated'", "additional record was changed" );
     ok_no_record( 'default', "string_val='not updated'", "bad update didn't go through" );
@@ -526,8 +526,8 @@ subtest 'IMMEDIATE_EXECUTION' => sub {
     
     is( $edt->action_status, 'failed', "second action failed" );
     is( $edt->status, 'active', "transaction is still active" );
-    ok_has_condition('F_NOT_FOUND', "bad update was not executed");
-    ok_no_conditions('E_NOT_FOUND', "E_NOT_FOUND was demoted");
+    ok_has_condition('all', 'nonfatal', 'E_NOT_FOUND', "bad update was not executed");
+    ok_no_conditions('all', 'fatal', 'E_NOT_FOUND', "E_NOT_FOUND was demoted");
     ok_can_proceed;
     
     $edt->update_record({ _primary => $keyvals[1], string_val => 'aaa' });

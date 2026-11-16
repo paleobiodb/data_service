@@ -36,7 +36,7 @@ my $T = EditTester->new('ETBasicTest');
 
 subtest 'required methods' => sub {
     
-    can_ok( 'ETBasicTest', 'check_table_permission', 'check_row_permission', 'authorize_action' )
+    can_ok( 'ETBasicTest', 'check_table_permission', 'check_row_permission', 'authorize_against_table' )
 	
 	|| BAIL_OUT "EditTransaction and related modules are missing some required methods";
     
@@ -85,23 +85,23 @@ subtest 'check_row_permission' => sub {
 };
 
 
-subtest 'authorize_action' => sub {
+subtest 'authorize_against_table' => sub {
     
     my $edt = ok_new_edt;
     
     my $action = $edt->_test_action('insert', 'EDT_TEST', { abc => 1} );
     
-    ok_eval( sub { $edt->authorize_action($action, 'insert', 'EDT_TEST') },
-	     "authorize_action succeeded" )
+    ok_eval( sub { $edt->authorize_against_table($action, 'insert', 'EDT_TEST') },
+	     "authorize_against_table succeeded" )
     
 	|| return;
     
-    is( last_result, 'unrestricted', "authorize_action insert primary unrestricted" );
+    is( last_result, 'unrestricted', "authorize_against_table insert primary unrestricted" );
     
     $action->set_permission(undef);
     
-    ok_eval( sub { $edt->authorize_action($action, 'insert', 'NOT_A_TABLE_XXX') },
-	     "ok_eval authorize_action with bad table" );
+    ok_eval( sub { $edt->authorize_against_table($action, 'insert', 'NOT_A_TABLE_XXX') },
+	     "ok_eval authorize_against_table with bad table" );
     
     is( last_result, 'none', "bad table returns 'none'" );
     
@@ -110,96 +110,96 @@ subtest 'authorize_action' => sub {
     $action = $edt->_test_action('update', 'EDT_TEST', 
 				 { _primary => 3, string_req => 'def' });
     
-    my @result = $edt->authorize_action($action);
+    my @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action update primary unrestricted" );
-    is( $result[1], 1, "authorize_action update count 1" );
+    is( $result[0], 'unrestricted', "authorize_against_table update primary unrestricted" );
+    is( $result[1], 1, "authorize_against_table update count 1" );
     
     $action = $edt->_test_action('update', 'EDT_TEST', 
 				 { _primary => [3, 4, 5], string_req => 'ghi' });
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action update primary unrestricted" );
-    is( $result[1], 1, "authorize_action update count 1" );
+    is( $result[0], 'unrestricted', "authorize_against_table update primary unrestricted" );
+    is( $result[1], 1, "authorize_against_table update count 1" );
     
     $action = $edt->_test_action('update', 'EDT_TEST', 
 				 { _primary => [4, 5, 6], string_req => 'ghi' });
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'notfound', "authorize_action update primary notfound" );
-    is( $result[1], undef, "authorize_action update count undef" );
+    is( $result[0], 'notfound', "authorize_against_table update primary notfound" );
+    is( $result[1], undef, "authorize_against_table update count undef" );
     
     $action = $edt->_test_action('update', 'EDT_TEST', { _primary => 19 });
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'notfound', "authorize_action update single primary notfound" );
+    is( $result[0], 'notfound', "authorize_against_table update single primary notfound" );
     
     $action = $edt->_test_action('delete', 'EDT_TEST', "3");
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action delete single primary" );
-    is( $result[1], 1, "authorize_action delete count 1" );
+    is( $result[0], 'unrestricted', "authorize_against_table delete single primary" );
+    is( $result[1], 1, "authorize_against_table delete count 1" );
     
     $action = $edt->_test_action('other', 'EDT_TEST', "3");
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action other single primary" );
-    is( $result[1], 1, "authorize_action other count 1" );
+    is( $result[0], 'unrestricted', "authorize_against_table other single primary" );
+    is( $result[1], 1, "authorize_against_table other count 1" );
     
     $action = $edt->_test_action('other', 'EDT_TEST');
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action other no key" );
-    # is( $result[1], undef, "authorize_action other count undef" );
+    is( $result[0], 'unrestricted', "authorize_against_table other no key" );
+    # is( $result[1], undef, "authorize_against_table other count undef" );
 };
 
 
-subtest 'authorize_action change operation' => sub {
+subtest 'authorize_against_table change operation' => sub {
     
     my $edt = ok_new_edt;
     
     my $action = $edt->_test_action('insupdate', 'EDT_TEST', 
 				    { _primary => 8, string_req => 'hippo' });
     
-    my @result = $edt->authorize_action($action);
+    my @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action grants permission" );
+    is( $result[0], 'unrestricted', "authorize_against_table grants permission" );
     
-    is( $action->operation, 'insert', "authorize_action converted insupdate to insert" );
+    is( $action->operation, 'insert', "authorize_against_table converted insupdate to insert" );
     
     $action = $edt->_test_action('replace', 'EDT_TEST', 
 				 { _primary => 9, string_req => 'elephant' });
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action grants permission" );
+    is( $result[0], 'unrestricted', "authorize_against_table grants permission" );
     
-    is( $action->operation, 'insert', "authorize_action converts replace to insert" );
+    is( $action->operation, 'insert', "authorize_against_table converts replace to insert" );
     
     $action = $edt->_test_action('insupdate', 'EDT_TEST', { _primary => 3 });
     
-    @result = $edt->authorize_action($action);
+    @result = $edt->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action grants permission" );
+    is( $result[0], 'unrestricted', "authorize_against_table grants permission" );
     
-    is( $action->operation, 'update', "authorize_action converts insupdate to update" );
+    is( $action->operation, 'update', "authorize_against_table converts insupdate to update" );
     
     my $edtnc = ok_new_edt('NO_CREATE');
     
     $action = $edtnc->_test_action('insupdate', 'EDT_TEST', 
 				   { _primary => 10, string_req => 'giraffe' });
     
-    @result = $edtnc->authorize_action($action);
+    @result = $edtnc->authorize_against_table($action);
     
-    is( $result[0], 'unrestricted', "authorize_action grants permission" );
+    is( $result[0], 'unrestricted', "authorize_against_table grants permission" );
     
-    is( $action->operation, 'insert', "authorize_action converts insupdate to insert" );
+    is( $action->operation, 'insert', "authorize_against_table converts insupdate to insert" );
     
     # ok( $action->has_condition('C_CREATE'), "condition C_CREATE added absent CREATE allowance" );
     

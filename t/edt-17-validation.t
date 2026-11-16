@@ -309,7 +309,7 @@ subtest 'required and not null' => sub {
     
     vtest('insert', 'EDT_TEST', { string_val => 'required field missing' });
     
-    ok_has_one_condition('E_REQUIRED');
+    ok_has_one_condition('E_NOT_NULL');
     
     vtest('insert', 'EDT_TEST', { string_req => '' });
     

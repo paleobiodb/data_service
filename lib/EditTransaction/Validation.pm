@@ -324,7 +324,7 @@ sub validate_against_schema {
 	# opinion) bad behavior on the part of MariaDB, which will throw an
 	# error when you try to assign null to a column with a default.
 	
-	elsif ( !defined $value && $cr->{Null} && $cr->{Null} eq 'NO' &&
+	elsif ( $fieldname && !defined $value && $cr->{Null} && $cr->{Null} eq 'NO' &&
 		defined $cr->{Default} )
 	{
 	    $value = $cr->{Default};
