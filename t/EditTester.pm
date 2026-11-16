@@ -16,7 +16,7 @@ use List::Util qw(any);
 use Test::More;
 use parent 'Exporter';
 
-use CoreFunction qw(connectDB configData);
+use CoreFunction qw(connectDB loadConfig configData);
 use TableDefs qw(%TABLE $TEST_DB init_table_names enable_test_mode get_table_property);
 use Permissions;
 use EditTransaction;
@@ -157,6 +157,19 @@ sub new {
 sub connect_to_database {
     
     my $dbh;
+    
+    # If we are not running this from inside the pbapi container, adjust the hostname.
+    
+    loadConfig();
+    
+    my $dbconf = configData('Database');
+    
+    unless ( $ENV{PWD} =~ qr{^/var/paleomacro/pbapi} )
+    {
+	$dbconf->{host} = '127.0.0.1';
+    }
+    
+    # Now attempt to connect to the database.
     
     eval {
 	$dbh = connectDB("config.yml");
