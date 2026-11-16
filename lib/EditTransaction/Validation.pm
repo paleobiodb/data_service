@@ -8,6 +8,7 @@ package EditTransaction::Validation;
 use strict;
 
 use Encode qw(encode);
+use DBI qw(:sql_types);
 use Carp qw(carp croak);
 use Permissions;
 
@@ -847,7 +848,13 @@ sub validate_data_value {
     
     if ( $maintype eq 'char' )
     {
-	return $edt->validate_char_value($cr->{TypeParams}, $value, $fieldname, $cr->{ALLOW_TRUNCATE});
+	return $edt->validate_char_value($cr->{TypeParams}, $value, $fieldname,
+					 $cr->{ALLOW_TRUNCATE});
+    }
+    
+    elsif ( $maintype eq 'binary' )
+    {
+	return $edt->validate_binary_value($cr->{TypeParams}, $value, $fieldname);
     }
     
     elsif ( $maintype eq 'boolean' )
@@ -862,7 +869,8 @@ sub validate_data_value {
     
     elsif ( $maintype eq 'fixed' )
     {
-	return $edt->validate_fixed_value($cr->{TypeParams}, $value, $fieldname, $cr->{ALLOW_TRUNCATE});
+	return $edt->validate_fixed_value($cr->{TypeParams}, $value, $fieldname,
+					  $cr->{ALLOW_TRUNCATE});
     }
     
     elsif ( $maintype eq 'floating' )
@@ -897,7 +905,7 @@ sub validate_data_value {
 
 # validate_char_value ( type, value, fieldname, can_truncate )
 # 
-# Check that the specified value is suitable for storing into a boolean column in the
+# Check that the specified value is suitable for storing into a character/text column in the
 # database. If it is not, return an error condition as a listref.
 # 
 # If the value is good, return a canonical version suitable for storing into the column. An
@@ -909,24 +917,37 @@ sub validate_char_value {
     
     my ($edt, $type, $value, $fieldname, $can_truncate) = @_;
     
-    my ($subtype, $size, $var, $charset) = ref $type eq 'ARRAY' ? $type->@* : $type || '';
+    my ($sizetype, $size, $var, $charset) = ref $type eq 'ARRAY' ? $type->@* : $type || '';
     
-    my ($value_size, $truncated, $dbh, $quoted);
+    my ($value_size, $word, $dbh, $quoted);
     
-    # If the character set of a text/char column is not utf8, then encode the value into the
-    # proper character set before checking the length.
+    # $$$ TODO: check for invalid characters.
     
-    if ( $subtype eq 'text' && $charset && $charset ne 'utf8' )
+    # If the column is a char/varchar, the declared size is the number of characters
+    # that can be stored, regardless of character set.
+    
+    if ( $sizetype eq 'specified' )
     {
-	# If the column is latin1, we can do the conversion in Perl.
+	$value_size = length($value);
+	$word = 'characters';
+    }
+    
+    # If the column is one of the text types, the size limit is in bytes in the
+    # column's character set.
+    
+    else
+    {
+	$word = 'bytes';
 	
-	if ( $charset eq 'latin1' )
+	if ( ! $charset || $charset =~ /^utf8/ )
 	{
-	    $value = encode('cp1252', $value);
-	    $value_size = length($value);
+	    $value_size = length(encode('UTF-8', $value));
 	}
 	
-	# Otherwise, we must let the database do the conversion.
+	elsif ( $charset eq 'latin1' )
+	{
+	    $value_size = length(encode('cp1252', $value));
+	}
 	
 	else
 	{
@@ -936,45 +957,70 @@ sub validate_char_value {
 	}
     }
     
-    else
-    {
-	$value_size = length(encode('UTF-8', $value));
-    }
-    
     # If the size of the value exceeds the size of the column, then we either truncate the data if
     # allowed or else reject the value.
     
     if ( $size && $value_size > $size )
     {
-	my $word = $subtype eq 'text' ? 'characters' : 'bytes';
+	# If we can truncate the value, then do so. But only do this for char/varchar
+	# columns. Trying to truncate to a byte size is too involved.
 	
-	# If we can truncate the value, then do so. If the character set is neither utf8 nor
-	# latin1, have the database do it.
-	
-	if ( $can_truncate )
+	if ( $can_truncate && $sizetype eq 'specified' )
 	{
-	    if ( $quoted )
-	    {
-		($truncated) = $dbh->selectrow_array("SELECT left(convert($quoted using $charset)), $size)");
-	    }
+	    my $truncated = substr($value, 0, $size);
 	    
-	    else
-	    {
-		$truncated = substr($value, 0, $size);
-	    }
-	    
-	    return ('clean', $truncated, [ 'W_TRUNC', $fieldname, "value was truncated to $size $word" ]);
+	    return ('clean', $truncated, [ 'W_TRUNC', $fieldname,
+					   "value was truncated to $size $word" ]);
 	}
 	
 	else
 	{
-	    return [ 'E_WIDTH', $fieldname, "value exceeds column size of $size $word (was $value_size)" ];
+	    return [ 'E_WIDTH', $fieldname,
+		     "value exceeds column size of $size $word (was $value_size)" ];
 	}
     }
     
     # If the value is valid as-is, return the empty list.
     
     return;
+}
+
+
+# validate_binary_value ( type, value, fieldname )
+# 
+# Check that the specified value is suitable for storing into a binary/blob column in the
+# database. If it is not, return an error condition as a listref.
+# 
+# If the value is good, return empty. If the value is too wide for the column, return an error
+# condition.
+
+sub validate_binary_value {
+    
+    my ($edt, $type, $value, $fieldname) = @_;
+    
+    my ($sizetype, $size, $var) = ref $type eq 'ARRAY' ? $type->@* : $type || '';
+
+    if ( utf8::is_utf8($value) )
+    {
+	$value = encode('UTF-8', $value);
+    }
+    
+    my $value_size = length($value);
+    
+    # If the size of the value exceeds the size of the column, reject the value.
+    
+    if ( $size && $value_size > $size )
+    {
+	return [ 'E_WIDTH', $fieldname,
+		 "value exceeds column size of $size bytes (was $value_size)" ];
+    }
+    
+    # Otherwise, quote the result as a binary string.
+    
+    else
+    {
+	return ('unquoted', $edt->dbh->quote($value, SQL_VARBINARY));
+    }
 }
 
 
@@ -997,7 +1043,7 @@ sub validate_boolean_value {
     
     if ( $value =~ qr{ ^ \s* $ }xs )
     {
-	return (1, undef);
+	return ('clean', undef);
     }
     
     elsif ( $value =~ qr{ ^ \s* (?: ( 1 | true | yes | y | on ) | 
@@ -1041,7 +1087,7 @@ sub validate_integer_value {
     
     my ($unsigned, $size) = ref $type eq 'ARRAY' ? $type->@* : $type;
     
-    my $max = $type eq 'unsigned' ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
+    my $max = $unsigned eq 'unsigned' ? $UNSIGNED_BOUND{$size} : $SIGNED_BOUND{$size};
     
     # First make sure that the value is either empty or matches the proper format. A value which
     # is empty or contains only whitespace will be treated as a NULL.
@@ -1053,18 +1099,29 @@ sub validate_integer_value {
     
     elsif ( $value !~ qr{ ^ \s* ( [-+]? ) \s* ( \d+ ) \s* $ }xs )
     {
-	my $phrase = $type eq 'unsigned' ? 'an unsigned' : 'an';
+	my $phrase = $unsigned eq 'unsigned' ? 'an unsigned' : 'an';
 	
 	return [ 'E_FORMAT', $fieldname, "value must be $phrase integer" ];
     }
     
-    elsif ( $type eq 'unsigned' )
+    elsif ( $unsigned eq 'unsigned' )
     {
 	$value = $2;
 	
 	if ( $1 && $1 eq '-' )
 	{
-	    return [ 'E_RANGE', $fieldname, "value must an unsigned integer" ];
+	    return [ 'E_RANGE', $fieldname, "value must be an unsigned integer" ];
+	}
+	
+	elsif ( $size eq 'big' )
+	{
+	    my $dbh = $edt->dbh;
+	    my ($too_big) = $dbh->selectrow_array("SELECT $value > $max");
+	    
+	    if ( $too_big )
+	    {
+		return [ 'E_RANGE', $fieldname, "value must be less than or equal to $max" ];
+	    }
 	}
 	
 	elsif ( defined $max && $value > $max )
@@ -1081,7 +1138,18 @@ sub validate_integer_value {
 	{
 	    my $lower = $max + 1;
 	    
-	    if ( $value > $max || (-1 * $value) > $lower )
+	    if ( $size eq 'big' )
+	    {
+		my $dbh = $edt->dbh;
+		my ($too_big) = $dbh->selectrow_array("SELECT $value > $max or $value < -$max - 1");
+		
+		if ( $too_big )
+		{
+		    return [ 'E_RANGE', $fieldname, "value must lie between -$lower and $max" ];
+		}
+	    }
+	    
+	    elsif ( $value > $max || (-1 * $value) > $lower )
 	    {
 		return [ 'E_RANGE', $fieldname, "value must lie between -$lower and $max" ];
 	    }
@@ -1119,7 +1187,7 @@ sub validate_fixed_value {
     
     elsif ( $value !~ $DECIMAL_NUMBER_RE )
     {
-	my $phrase = $unsigned ? 'an unsigned' : 'a';
+	my $phrase = $unsigned eq 'unsigned' ? 'an unsigned' : 'a';
 	
 	return ['E_FORMAT', $fieldname, "value must be $phrase decimal number" ];
     }
@@ -1128,7 +1196,7 @@ sub validate_fixed_value {
     {
 	# If the column is unsigned, make sure there is no minus sign.
 	
-	if ( $unsigned && defined $1 && $1 eq '-' )
+	if ( $unsigned eq 'unsigned' && defined $1 && $1 eq '-' )
 	{
 	    return [ 'E_RANGE', $fieldname, "value must be an unsigned decimal number" ];
 	}
@@ -1370,6 +1438,11 @@ sub validate_datetime_value {
     my ($edt, $type, $value, $fieldname) = @_;
     
     my ($specific) = ref $type eq 'ARRAY' ? $type->@* : $type;
+
+    if ( $value eq '' )
+    {
+	return ('clean', undef);
+    }
     
     if ( $value =~ qr{ ^ now (?: [(] [)] ) ? $ }xsi )
     {

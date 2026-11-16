@@ -853,9 +853,16 @@ sub execute_insert {
 	    
 	    if ( $result )
 	    {
-		$new_keyval = $dbh->last_insert_id(undef, undef, undef, undef);
-		$action->set_keyval($new_keyval);
-		$action->set_resultinfo($new_keyval);
+		if ( $new_keyval = $action->keyval )
+		{
+		    $action->set_resultinfo($new_keyval);
+		}
+		
+		elsif ( $new_keyval = $dbh->last_insert_id(undef, undef, undef, undef) )
+		{
+		    $action->set_keyval($new_keyval);
+		    $action->set_resultinfo($new_keyval);
+		}
 	    }
 	    
 	    # If we got a non-empty key value, then the insertion succeeded.
