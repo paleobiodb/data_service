@@ -148,8 +148,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		W_BAD_ALLOWANCE => "Unknown allowance '&1'",
 		W_EXECUTE => ["&1", "Unknown"],
-		W_UNCHANGED => "",
-		W_NOT_FOUND => "",
+		W_UNCHANGED => ["&1", "The record was unchanged by the update"],  # [Changed by Claude under the guidance of Michael McClennen]
+		W_NOT_FOUND => ["&1", "The specified key value was not found"],  # [Changed by Claude under the guidance of Michael McClennen]
 		W_DISCARDED => ["Field '&1': the specified value has been discarded " .
 				"because of a handling directive"],
 		W_PARAM => "",

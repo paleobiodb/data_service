@@ -371,13 +371,18 @@ sub new {
     {
 	my $negated;
 	
-	if ( $k =~ /^NO_(.+)$/ )
-	{
-	    $k = $1;
-	    $negated = 1;
-	}
+	# A name starting with 'NO_' negates the allowance named by the rest of it, unless
+	# the whole name is itself an allowance, such as 'NO_LOG_MODE'.
+	# [Changed by Claude under the guidance of Michael McClennen]
 	
 	$k = $ALLOW_ALIAS{$k} || $k;
+	
+	if ( $k =~ /^NO_(.+)$/ && ! ( $ALLOW_BY_CLASS{$class}{$k} ||
+					$ALLOW_BY_CLASS{EditTransaction}{$k} ) )
+	{
+	    $k = $ALLOW_ALIAS{$1} || $1;
+	    $negated = 1;
+	}
 	
 	if ( $ALLOW_BY_CLASS{$class}{$k} || $ALLOW_BY_CLASS{EditTransaction}{$k} )
 	{
@@ -1001,7 +1006,7 @@ sub commit {
     {
 	if ( $edt->can_proceed )
 	{
-	    $edt->{transaction} = 'aborted';
+	    $edt->{transaction} = 'committed';  # [Changed by Claude under the guidance of Michael McClennen]
 	    $edt->{has_finished} = 1;
 	    return 1;
 	}
@@ -1581,6 +1586,14 @@ sub failed_keys {
 sub _result_keys {
     
     my ($edt, $type, $table_key) = @_;
+    
+    # If the transaction was rolled back, no action remains executed, so only failed
+    # actions are reported. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( $type ne 'failed' && $edt->status =~ /^failed|^aborted/ )
+    {
+	return wantarray ? () : 0;
+    }
 
     # Scan through the action list, collecting all of the keys associated with
     # successfully executed actions of the requested type.
@@ -1795,6 +1808,14 @@ sub record_count {
     return $_[0]{record_count} || 0;
 }
 
+
+# exec_count ( )
+# 
+# Return the number of actions that have been executed. This includes actions whose changes
+# were later undone because the transaction was rolled back, so it shows how far execution
+# got. Use 'has_committed' to find out whether the changes were kept.
+# 
+# Added by Claude under the guidance of Michael McClennen.
 
 sub exec_count {
     

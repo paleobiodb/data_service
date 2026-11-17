@@ -862,7 +862,7 @@ sub execute_insert {
     # If we are logging this event, do any necessary prep work.
     
     my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG};  # [Changed by Claude under the guidance of Michael McClennen]
     
     if ( $do_logging )
     {
@@ -1051,7 +1051,7 @@ sub execute_replace {
     # If we are logging this event, do any necessary prep work.
     
     my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG};  # [Changed by Claude under the guidance of Michael McClennen]
     
     if ( $do_logging )
     {
@@ -1184,7 +1184,7 @@ sub execute_update {
     # If we are logging this event, do any necessary prep work.
     
     my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG};  # [Changed by Claude under the guidance of Michael McClennen]
     
     if ( $do_logging )
     {
@@ -1236,7 +1236,11 @@ sub execute_update {
 	{
 	    my $matched;
 	    
-	    if ( $action->keymult )
+	    # Count the matching records for any update with multiple keys or a single key value,
+	    # so that a record which no longer exists can be reported.
+	    # [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    if ( $action->keymult || $action->keyvalues )
 	    {
 		($matched) = $dbh->selectrow_array("
 			SELECT count(*) FROM $quoted_table WHERE $keyexpr");
@@ -1271,7 +1275,15 @@ sub execute_update {
 	    {
 		$action->set_resultinfo($result, 1);
 		
-		unless ( $result > 0 )
+		# If the record selected by a single key value no longer exists, report that
+		# instead of reporting it as unchanged. [Changed by Claude under the guidance of Michael McClennen]
+		
+		if ( defined $matched && ! $matched )
+		{
+		    $edt->add_condition($action, 'W_NOT_FOUND', 'the specified key value was not found');
+		}
+		
+		elsif ( ! ( $result > 0 ) )
 		{
 		    $edt->add_condition($action, 'W_UNCHANGED', 'row was unchanged by the update');
 		}
@@ -1350,7 +1362,7 @@ sub execute_delete {
     # If we are logging this event, do any necessary prep work.
     
     my $do_logging = $table_info->{LOG_CHANGES} || 
-	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG_CHANGES};
+	$EditTransaction::LOG_ALL_TABLES && ! $table_info->{NO_LOG};  # [Changed by Claude under the guidance of Michael McClennen]
     
     if ( $do_logging )
     {
@@ -1401,7 +1413,7 @@ sub execute_delete {
 		{
 		    my $missing = $action->keyvalues - $result;
 		    
-		    $edt->add_condition($action, 'W_NOT_FOUND', "$missing key values(s) were not found");
+		    $edt->add_condition($action, 'W_NOT_FOUND', "$missing key value(s) were not found");
 		}
 	    }
 	    
