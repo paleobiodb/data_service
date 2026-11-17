@@ -14,7 +14,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use File::Temp qw(tempdir);
 
@@ -141,4 +141,39 @@ subtest 'key values in the log' => sub {
 	  "update selected by _where is logged with '?'" );
     unlike( $log, qr/^# [^|]+ \| UPDATE \| \Q$table_name\E \| $/m,
 	    "no header line has an empty key value" );
+};
+
+
+# Check that before_log_event is passed the operation of each action that is logged.
+
+subtest 'before_log_event' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five'), (6, 'six')");
+    
+    my @operations;
+    
+    no warnings 'redefine';
+    
+    local *ETBasicTest::before_log_event = sub {
+	my ($edt, $action, $operation, $table_specifier) = @_;
+	push @operations, "$operation $table_specifier";
+    };
+    
+    with_logging( sub {
+	
+	my $edt = ok_new_edt;
+	
+	$edt->insert_record('EDT_TEST', { string_req => 'logged insert' });
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'logged update' });
+	$edt->replace_record('EDT_TEST', { test_no => 5, string_req => 'logged replace' });
+	$edt->delete_record('EDT_TEST', 6);
+	
+	ok_commit;
+    });
+    
+    is_deeply( \@operations, [ 'insert EDT_TEST', 'update EDT_TEST', 'replace EDT_TEST',
+			       'delete EDT_TEST' ],
+	       "before_log_event is passed the operation of each action" );
 };
