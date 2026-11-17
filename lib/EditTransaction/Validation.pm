@@ -535,24 +535,26 @@ sub validate_data_column {
 	# action reference, check to make sure that the reference is resolvable and that
 	# the referenced action uses the proper table.
 	
-	if ( $value =~ /^&/ )
+	if ( $value && $value =~ /^&/ )
 	{
 	    my $ref_action = $edt->{action_ref}{$value};
 	    
 	    unless ( $ref_action )
 	    {
 		$edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_', $fieldname, $value);
+		return 'ignore';
 	    }
 	    
 	    unless ( $ref_action->table eq $foreign_table )
 	    {
 		$edt->add_condition($action, 'E_BAD_REFERENCE', '_mismatch_', $fieldname, $value);
+		return 'ignore';
 	    }
 	    
 	    $action->add_precheck($colname, $fieldname, 'foreign_key',
 				  $foreign_table, $cr->{FOREIGN_COL});
 	    
-	    return 'ignore';
+	    return ('unquoted', $value);
 	}
 	
 	# If the value is not an action reference and is not empty, add a pre-check.
@@ -642,8 +644,9 @@ sub validate_special_column {
 	unless ( $cr->{TypeMain} eq 'datetime' )
 	{
 	    my $reportname = $fieldname || $colname;
+	    my $tablename = $action->table;
 	    
-	    $edt->error_line("Error: table '$action->table', column '$reportname':");
+	    $edt->error_line("Error: table '$tablename', column '$reportname':");
 	    $edt->error_line("    directive '$directive' requires a column type of " .
 			     "date, time, datetime, or timestamp");
 	    
@@ -705,7 +708,7 @@ sub validate_special_column {
 	    
 	    else
 	    {
-		$edt->add_condition('main', 'E_PERM', 'fixup_mode', $action->table);
+		$edt->add_condition('main', 'E_PERMISSION', 'fixup_mode', $action->table);
 		return 'ignore';
 	    }
 	}
@@ -751,8 +754,9 @@ sub validate_special_column {
 	unless ( $cr->{TypeMain} eq 'boolean' || $cr->{TypeMain} eq 'integer' )
 	{
 	    my $reportname = $fieldname || $colname;
+	    my $tablename = $action->table;
 	    
-	    $edt->error_line("Error: table '$action->table', column '$reportname':");
+	    $edt->error_line("Error: table '$tablename', column '$reportname':");
 	    $edt->error_line("    directive '$directive' requires a column type of " .
 			     "boolean or integer");
 	    

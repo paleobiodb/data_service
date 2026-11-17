@@ -54,11 +54,12 @@ no warnings 'uninitialized';
 #                     this operation only, the record may be a primary key value instead
 #                     of a hashref.
 #   
-#   delete_cleanup    Delete all records in the specified database table that match a
-#                     specified SQL expression, except for those records that were
-#                     inserted, replaced, or updated during the current transaction.
-#                     This can be used to replace an entire set of records with the
-#                     ones specified in this transaction.
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+# #   delete_cleanup    Delete all records in the specified database table that match a
+# #                     specified SQL expression, except for those records that were
+# #                     inserted, replaced, or updated during the current transaction.
+# #                     This can be used to replace an entire set of records with the
+# #                     ones specified in this transaction.
 # 
 # The table must be specified as a table reference from the Tables module rather than as an actual
 # table name.

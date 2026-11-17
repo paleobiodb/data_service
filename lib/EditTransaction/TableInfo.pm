@@ -286,7 +286,7 @@ sub fetch_table_schema {
     # Confirm that this table exists. The fetch statement is slightly different for a database
     # qualified name than for a simple table name.
     
-    my ($check_table, $quoted_name) = $edt->db_check_table_exists($dbh, $table_name);
+    my $check_table = $edt->db_check_table_exists($dbh, $table_name);  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
     
     # If the table exists in the database, add it to the table definition system under its own
     # name if it is not already there.
@@ -320,9 +320,10 @@ sub fetch_table_schema {
     # Add the table name to its definition.
     
     $table_definition{TABLE_NAME} = $table_name;
-    $table_definition{QUOTED_NAME} = $quoted_name;
     
     # Then fetch the table column descriptions from the database.
+    
+    my $quoted_name = $edt->quoted_table_name($table_key || $table_name);  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
     
     my $column_info = $edt->db_fetch_column_info($dbh, $table_name, $quoted_name);
     
@@ -632,6 +633,32 @@ sub table_exists {
     my $tableinfo = $edt->table_info_ref($tablename);
     
     return $tableinfo ? $tableinfo->{TABLE_NAME} : '';
+}
+
+
+# quoted_table_name ( table_specifier )
+# 
+# Return the name of the database table corresponding to the specified table specifier,
+# with each part enclosed in backquotes. A name of the form 'db.table' is returned as
+# `db`.`table`. A name that already contains backquotes is returned unchanged. If the
+# specifier does not correspond to any known table, return undef.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub quoted_table_name {
+    
+    my ($edt, $table_specifier) = @_;
+    
+    return undef unless $table_specifier ne '' && exists $TABLE{$table_specifier};
+    
+    my $name = $TABLE{$table_specifier};
+    
+    return undef unless $name ne '';
+    return $name if $name =~ /`/;
+    
+    my ($first, $second) = split /[.]/, $name, 2;
+    
+    return defined $second ? "`$first`.`$second`" : "`$first`";
 }
 
 

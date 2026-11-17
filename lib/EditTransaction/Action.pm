@@ -25,7 +25,7 @@ use namespace::clean;
 our %OPERATION_TYPE = ( skip => 'record', test => 'record', insupdate => 'record',
 			insert => 'record', update => 'record', replace => 'record',
 			update_many => 'selector', insupdate => 'record', null => 'record',
-			delete => 'keys', delete_cleanup => 'keys',
+			delete => 'keys', # delete_cleanup => 'keys',  [commented out by Claude under the guidance of Michael McClennen]
 			delete_many => 'selector', sql => 'selector', other => 'keys' );
 
 
@@ -408,7 +408,7 @@ sub linkexpr {
     
     if ( $_[0]{linkexpr} && $_[0]{linkcol} )
     {
-	return "$_[0]{linkcol} in ($_[0]{linkexpr})";
+	return "$_[0]{authcol} in ($_[0]{linkexpr})";
     }
     
     else
@@ -952,12 +952,12 @@ sub all_directives {
 
 sub add_precheck {
 
-    my ($action, $column_name, $check_type, @params) = @_;
+    my ($action, $column_name, $field_name, $check_type, @params) = @_;
 
     croak "invalid precheck '$check_type'" unless $check_type eq 'foreign_key';
 
     $action->{prechecks} ||= [ ];
-    push $action->{prechecks}->@*, [ $column_name, $check_type, @params ];
+    push $action->{prechecks}->@*, [ $column_name, $field_name, $check_type, @params ];
 }
 
 

@@ -73,18 +73,16 @@ sub db_check_table_exists {
     
     my ($edt, $dbh, $table_name) = @_;
     
-    my ($sql, $check_table, $quoted_name);
+    my ($sql, $check_table);  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
     
     if ( $table_name =~ /(\w+)[.](.+)/ )
     {
 	$sql = "SHOW TABLES FROM `$1` LIKE " . $dbh->quote($2);
-	$quoted_name = $dbh->quote_identifier($1, $2);
     }
     
     else
     {
 	$sql = "SHOW TABLES LIKE " . $dbh->quote($table_name);
-	$quoted_name = $dbh->quote_identifier($table_name);
     }
     
     $edt->debug_line("$sql\n") if ref $edt && $edt->debug_mode;
@@ -93,7 +91,7 @@ sub db_check_table_exists {
 	($check_table) = $dbh->selectrow_array($sql);
     };
     
-    return ($check_table, $quoted_name);
+    return $check_table;
 }
 
 
@@ -290,7 +288,9 @@ sub db_count_matching_rows {
     
     my ($edt, $table_specifier, $expression) = @_;
     
-    my $sql = "SELECT count(*) FROM $TABLE{$table_specifier} WHERE $expression";
+    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my $sql = "SELECT count(*) FROM $quoted_table WHERE $expression";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
     
@@ -328,7 +328,7 @@ sub fetch_record {
     
     if ( my $tableinfo = $edt->table_info_ref($table_specifier) )
     {
-	my $quoted_name = $tableinfo->{QUOTED_NAME};
+	my $quoted_name = $edt->quoted_table_name($table_specifier);  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
 	my $sql = "SELECT * FROM $quoted_name WHERE $keyexpr LIMIT 1";
 	
 	$edt->debug_line("$sql\n") if $edt->debug_mode;
@@ -355,7 +355,7 @@ sub get_old_values {
     
     if ( my $tableinfo = $edt->table_info_ref($tablename) )
     {
-	my $quoted_name = $tableinfo->{QUOTED_NAME};
+	my $quoted_name = $edt->quoted_table_name($tablename);  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
 	
 	my $sql = "SELECT $fields FROM $quoted_name WHERE $keyexpr LIMIT 1";
 	

@@ -26,7 +26,7 @@ no warnings 'uninitialized';
 our (@EXPORT_OK) = qw(%VALID_OPERATION);
 
 our (%VALID_OPERATION) = ( insert => 1, update => 1, insupdate => 1, 
-			   delete => 1, replace => 1, delete_cleanup => 1, 
+			   delete => 1, replace => 1, # delete_cleanup => 1,  [commented out by Claude under the guidance of Michael McClennen]
 			   other => 1, sql => 1 );
 
 
@@ -76,6 +76,12 @@ sub record_operation {
     {
 	$operation = defined $action->keyval ? 'update' : 'insert';
 	$action->operation($operation);
+	
+	# Remember that this action started out as 'insupdate', so that a key value that
+	# does not match any record can be reported as E_BAD_KEY.
+	# [Changed by Claude under the guidance of Michael McClennen]
+	
+	$action->{insupdate} = 1;
     }
     
     # Execute the following code inside an eval block. If an exception is thrown
@@ -140,8 +146,7 @@ sub record_operation {
 	
 	if ( $action->can_proceed )
 	{
-	    $edt->authorize_against_table($action, $operation, $table_specifier, 
-					  $parameters);
+	    $edt->authorize_against_table($action, $operation, $table_specifier);
 	}
 	
 	# If the action can proceed (in other words, if authorization does not
@@ -323,14 +328,15 @@ sub insert_update_record {
 # 
 # This action is only valid if the specified table is a subordinate table.
 
-sub delete_cleanup {
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+# sub delete_cleanup {
     
-    my ($edt, @rest) = @_;
+#     my ($edt, @rest) = @_;
     
-    # my ($table_specifier, $parameters) = $edt->_action_args('delete_cleanup', @rest);
+#     # my ($table_specifier, $parameters) = $edt->_action_args('delete_cleanup', @rest);
     
-    $edt->record_operation('delete_cleanup', @rest);
-}
+#     $edt->record_operation('delete_cleanup', @rest);
+# }
 
 
 # record_action ( method, [table_specifier], parameters )
@@ -368,7 +374,7 @@ sub record_action {
     # limitation in future, but for now the action is authorized if they have 'modify' permission
     # on the corresponding table row.
     
-    if ( $edt->keyval )
+    if ( $action->keyval )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	eval {
 	    # First check to make sure we have permission to update this record. An error
@@ -573,7 +579,7 @@ sub process_record {
 
 	elsif ( $parameters->{_operation} eq 'insert' )
 	{
-	    return $edt->replace_record($table_specifier, $parameters);
+	    return $edt->insert_record($table_specifier, $parameters);  # [Changed by Claude under the guidance of Michael McClennen]
 	}
 
 	elsif ( $parameters->{_operation} eq 'update' )
@@ -593,7 +599,7 @@ sub process_record {
     
     elsif ( $parameters->{_action} )
     {
-	return $edt->other_action($table_specifier, $parameters->{_action}, $parameters);
+	return $edt->record_action($parameters->{_action}, $table_specifier, $parameters);  # [Changed by Claude under the guidance of Michael McClennen]
     }
     
     # Otherwise, fall back to insert_update_record. If the record contains a
@@ -606,6 +612,42 @@ sub process_record {
     {
 	return $edt->insert_update_record($table_specifier, $parameters);
     }
+}
+
+
+# _substitute_table_names ( sql )
+# 
+# Return a copy of the specified SQL statement in which each table specifier of the form
+# <<NAME>> has been replaced by the corresponding table name from %TABLE, enclosed in
+# backquotes by 'quoted_table_name'. Specifiers that appear inside quoted values or
+# backquoted identifiers are left unchanged. A quote character can be included in a
+# quoted value either by doubling it or by preceding it with a backslash. An unterminated
+# quoted value extends to the end of the statement. If any specifier outside of quotes
+# does not correspond to a known table, or is empty, throw an exception.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _substitute_table_names {
+    
+    my ($edt, $sql) = @_;
+    
+    my @bad_tables;
+    
+    $sql =~ s{ ( ' (?: [^'\\] | \\. | '' )* (?: ' | \z )
+	       | " (?: [^"\\] | \\. | "" )* (?: " | \z )
+	       | ` (?: [^`] | `` )* (?: ` | \z ) )
+	     | << (\w*) >> }
+	     { defined $1 ? $1
+		   : $edt->quoted_table_name($2)
+		       // do { push @bad_tables, $2; "<<$2>>" } }xseg;
+    
+    if ( @bad_tables )
+    {
+	my $list = join("', '", @bad_tables);
+	croak "E_BAD_TABLE: invalid table name '$list'";
+    }
+    
+    return $sql;
 }
 
 
@@ -622,17 +664,11 @@ sub do_sql {
 
     my ($edt, $sql, $options) = @_;
     
-    # Substitute any table specifiers in the SQL statement for the actual table names.
+    # Substitute the actual table names for any table specifiers of the form <<NAME>>,
+    # except inside quoted values. If any of the specifiers are invalid, an exception
+    # will be thrown. [Added by Claude under the guidance of Michael McClennen]
     
-    # $sql =~ s{ << (\w+) >> }{ $TABLE{$1} || "_INVALID_<<$1>>" }xseg;
-    
-    # If any invalid tables were found, throw an exception.
-
-    if ( $sql =~ qr{ _INVALID_<< (\w+) >> | <<>> }xs )
-    {
-	my $bad_table = $1 || '';
-	croak "E_BAD_TABLE: invalid table name '$bad_table'";
-    }
+    $sql = $edt->_substitute_table_names($sql);
     
     # Otherwise, create a record containing this statement and then create a new action for it.
     

@@ -261,7 +261,7 @@ sub authorize_insert_key {
 
 sub authorize_against_table {
     
-    my ($edt, $action, $operation, $table_specifier) = @_;
+    my ($edt, $action, $operation, $table_specifier, $state) = @_;
     
     # If the action permission is already set, return it.
     
@@ -315,14 +315,67 @@ sub authorize_against_table {
 	    $edt->add_condition('E_EXECUTE', 'no linking column was found');
 	}
 	
+	# If any of the link values is a reference to another action, the key value of the
+	# referenced record will not be known until that action has been executed. Before
+	# execution time, leave the permission as 'PENDING' and return. At execution time,
+	# substitute the key value(s) of the referenced action and recompute the link
+	# expression. [Added by Claude under the guidance of Michael McClennen]
+	
+	if ( grep { /^&./ } $action->linkvalues )
+	{
+	    return $action->permission('PENDING') unless $state && $state eq 'FINAL';
+	    
+	    my $link_field = $action->{linkfield} || $link_col;
+	    my (@link_values, $bad_reference);
+	    
+	    foreach my $v ( $action->linkvalues )
+	    {
+		unless ( $v =~ /^&./ )
+		{
+		    push @link_values, $v;
+		    next;
+		}
+		
+		my $ref_action = $edt->{action_ref}{$v};
+		my @ref_keys = $ref_action ? $ref_action->keyvalues : ();
+		
+		if ( $ref_action && $ref_action->table ne $auth_table )
+		{
+		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_mismatch_', $link_field, $v);
+		    $bad_reference = 1;
+		}
+		
+		elsif ( ! @ref_keys )
+		{
+		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_', $link_field, $v);
+		    $bad_reference = 1;
+		}
+		
+		else
+		{
+		    push @link_values, @ref_keys;
+		}
+	    }
+	    
+	    return $action->set_permission('none') if $bad_reference;
+	    
+	    my $dbh = $edt->dbh;
+	    my $link_list = join(',', map { $dbh->quote($_) } @link_values);
+	    
+	    $action->set_linkinfo($auth_col, $link_col, $link_field,
+				  @link_values == 1 ? $link_values[0] : \@link_values, $link_list);
+	}
+	
 	# If no linking keys were found, attempt to fetch a linking key from the
 	# existing database record.
 	
-	if ( $key_expr && ! $action->linkvalues )
+	elsif ( $key_expr && ! $action->linkvalues )
 	{
 	    my $dbh = $edt->dbh;
 	    
-	    my $sql = "SELECT distinct $link_col FROM $TABLE{$table_specifier} WHERE $key_expr";
+	    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+	    
+	    my $sql = "SELECT distinct $link_col FROM $quoted_table WHERE $key_expr";
 	    
 	    $edt->debug_line("$sql\n") if $edt->debug_mode;
 	    
@@ -584,7 +637,16 @@ sub authorize_against_table {
     
     if ( $primary eq 'notfound' )
     {
-	if ( $link_permission )
+	# If the operation started out as 'insupdate', the key value does not match any
+	# existing record. [Changed by Claude under the guidance of Michael McClennen]
+	
+	if ( $action->{insupdate} )
+	{
+	    $edt->add_condition($action, 'E_BAD_KEY', $action->keyfield,
+				join(',', $action->keyvalues));
+	}
+	
+	elsif ( $link_permission )
 	{
 	    $edt->add_condition($action, 'E_NOT_FOUND', 'link');
 	}
@@ -769,21 +831,22 @@ sub unpack_key_values {
 	}
     }
     
-    # If the operation is 'delete_cleanup', key values refer to the superior table rather
-    # than the one we are operating on.
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+#     # If the operation is 'delete_cleanup', key values refer to the superior table rather
+#     # than the one we are operating on.
     
-    if ( $operation eq 'delete_cleanup' )
-    {
-	unless ( $auth_table )
-	{
-	    $edt->add_condition('E_BAD_TABLE', 'no superior', $table_specifier);
-	    $abort = 1;
-	}
+#     if ( $operation eq 'delete_cleanup' )
+#     {
+# 	unless ( $auth_table )
+# 	{
+# 	    $edt->add_condition('E_BAD_TABLE', 'no superior', $table_specifier);
+# 	    $abort = 1;
+# 	}
 	
-	$key_column = $tableinfo->{AUTH_KEY};
-	$table_specifier = $auth_table;
-	$tableinfo = $auth_tableinfo;
-    }
+# 	$key_column = $tableinfo->{AUTH_KEY};
+# 	$table_specifier = $auth_table;
+# 	$tableinfo = $auth_tableinfo;
+#     }
     
     if ( $abort )
     {
@@ -832,7 +895,7 @@ sub unpack_key_values {
     
     if ( $key_field && $raw_values )
     {
-	if ( my @key_values = $edt->check_key_values($action, $columninfo,
+	if ( my @key_values = $edt->check_key_values($action, $action->table, $columninfo,
 						     $key_field, $raw_values, $app_call) )
 	{
 	    my $quoted = join ',', map { $dbh->quote($_) } @key_values;
@@ -878,7 +941,7 @@ sub unpack_key_values {
 		$ref_type = ref $link_value;
 		
 		next unless ! $ref_type || $ref_type =~ /::/ ||
-		    $ref_type eq 'ARRAY' && $raw_values->@*;
+		    $ref_type eq 'ARRAY' && $link_value->@*;  # [Changed by Claude under the guidance of Michael McClennen]
 		
 		if ( $link_field && $link_field ne $p )
 		{
@@ -895,18 +958,26 @@ sub unpack_key_values {
 	
 	if ( $link_field && $link_value )
 	{
-	    my @link_values = $edt->check_key_values($action, $link_columninfo,
+	    my @link_values = $edt->check_key_values($action, $auth_table, $link_columninfo,
 						     $link_field, $link_value, $app_call);
+	    
+	    # Store and quote the cleaned link value returned by check_key_values, rather
+	    # than the raw parameter value. [Changed by Claude under the guidance of Michael McClennen]
 	    
 	    if ( @link_values > 1 )
 	    {
-		$edt->add_condition($action, 'E_BAD_FIELD', 'link', $tableinfo->{AUTH_KEY});
+		$edt->add_condition($action, 'E_MULTI_KEY', 'link', $link_field);
+	    }
+	    
+	    elsif ( @link_values )
+	    {
+		my $quoted = $dbh->quote($link_values[0]);
+		$action->set_linkinfo($auth_column, $link_column, $link_field, $link_values[0], $quoted);
 	    }
 	    
 	    else
 	    {
-		my $quoted = $dbh->quote($link_value);
-		$action->set_linkinfo($auth_column, $link_column, $link_field, $link_value, $quoted);
+		$action->set_linkinfo($auth_column, $link_column, $link_field);
 	    }
 	}
 	
@@ -937,12 +1008,10 @@ sub unpack_key_values {
 
 sub check_key_values {
     
-    my ($edt, $action, $columninfo, $field, $value, $app_call) = @_;
+    my ($edt, $action, $table, $columninfo, $field, $value, $app_call) = @_;
     
     my (@key_values, @bad_values);
-    
-    my $action_table = $action->table;
-        
+            
   VALUE:
     foreach my $v ( ref $value eq 'ARRAY' ? $value->@* : 
 		    $value =~ /,/ ? split(/\s*,\s*/, $value) : $value )
@@ -966,7 +1035,7 @@ sub check_key_values {
 	{
 	    my $ref_action = $edt->{action_ref}{$v};
 		
-	    if ( $ref_action && $ref_action->table eq $action_table )
+	    if ( $ref_action && $ref_action->table eq $table )
 	    {
 		if ( $ref_action->keyvalues )
 		{
@@ -979,10 +1048,15 @@ sub check_key_values {
 		    $action->permission('PENDING');
 		}
 	    }
-		
+	    
+	    elsif ( $ref_action )
+	    {
+		$edt->add_condition($action, 'E_BAD_REFERENCE', '_mismatch_', $field, $v);
+	    }
+	    
 	    else
 	    {
-		$action->add_condition('E_BAD_REFERENCE', $field, $v);
+		$edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_', $field, $v);
 	    }
 		
 	    next VALUE;

@@ -10,7 +10,7 @@ package EditTransaction::Execution;
 
 use strict;
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE get_table_property);
 use Switch::Plain;
 use Carp qw(carp croak);
 use Fcntl qw(:flock SEEK_END);
@@ -93,16 +93,21 @@ sub execute_action_list {
 		$edt->pre_execution_check($action) && $edt->execute_delete($action);
 	    }
 	    
-	    case 'delete_cleanup' : {
-		$edt->pre_execution_check($action) && $edt->execute_delete_cleanup($action);
-	    }
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+# 	    case 'delete_cleanup' : {
+# 		$edt->pre_execution_check($action) && $edt->execute_delete_cleanup($action);
+# 	    }
 	    
 	    case 'other': {
 		$edt->pre_execution_check($action) && $edt->execute_other($action);
 	    }
 	    
 	    case 'null': {
-		# do nothing
+		# A null action does nothing to the database, but it is marked as executed
+		# and counted. [Changed by Claude under the guidance of Michael McClennen]
+		
+		$action->set_status('executed');
+		$edt->{exec_count}++;
 	    }
 	    
 	  default: {
@@ -219,7 +224,15 @@ sub pre_execution_check {
     
     # If any prechecks have been defined for this action, do them now.
     
-    $edt->_do_all_prechecks($action, $operation, $table_specifier);
+    eval {
+	$edt->_do_all_prechecks($action, $operation, $table_specifier);
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+    }
     
     # If the action can now proceed, return true. This implies that no error conditions were added
     # during execution of this subroutine. 
@@ -264,9 +277,9 @@ sub _do_all_prechecks {
     {
 	# A 'foreign_key' precheck checks the column value against a foreign table.
 	
-	if ( $check->[0] eq 'foreign_key' )
+	if ( $check->[2] eq 'foreign_key' )
 	{
-	    my $colname = $check->[1];
+	    my $colname = $check->[0];
 	    
 	    $fkey_check{$colname} = $check;
 	}
@@ -281,7 +294,7 @@ sub _do_all_prechecks {
 	if ( $fkey_check{$cols->[$i]} )
 	{
 	    my $colname   = $cols->[$i];
-	    my $fieldname = $fkey_check{$colname}[2];
+	    my $fieldname = $fkey_check{$colname}[1];
 	    my $ftable =    $fkey_check{$colname}[3];
 	    my $fcolname =  $fkey_check{$colname}[4] || get_table_property($ftable, 'PRIMARY_KEY');
 	    my $checkval =  $vals->[$i];
@@ -314,7 +327,7 @@ sub _do_all_prechecks {
 
 		    else
 		    {
-			$checkval = $refkey;
+			$checkval = $edt->dbh->quote($refkey);
 		    }
 		}
 		
@@ -340,9 +353,26 @@ sub _do_all_prechecks {
 	    else
 	    {
 		$vals->[$i] = '_INVALID_';
+		$checkval =~ s/^'//;
+		$checkval =~ s/'$//;
+		$edt->add_condition($action, 'E_BAD_REFERENCE', $fieldname, $checkval);
 	    }
 	}
     }
+}
+
+
+sub check_key {
+    
+    my ($edt, $table, $colname, $checkval) = @_;
+
+    my $quoted_table = $edt->quoted_table_name($table);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my ($verified) = $edt->dbh->selectrow_array(<<~END_SQL);
+	SELECT $colname FROM $quoted_table where $colname = $checkval
+	END_SQL
+
+    return defined($verified);    
 }
 
 
@@ -827,7 +857,9 @@ sub execute_insert {
     my $column_string = join(',', @$cols);
     my $value_string = join(',', @$vals);
     
-    my $sql = "	INSERT INTO $TABLE{$table_specifier} ($column_string)
+    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my $sql = "	INSERT INTO $quoted_table ($column_string)
 		VALUES ($value_string)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
@@ -984,7 +1016,9 @@ sub execute_replace {
     my $column_list = join(',', @$cols);
     my $value_list = join(',', @$vals);
     
-    my $sql = "	REPLACE INTO $TABLE{$table_specifier} ($column_list)
+    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my $sql = "	REPLACE INTO $quoted_table ($column_list)
 		VALUES ($value_list)";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
@@ -1122,7 +1156,9 @@ sub execute_update {
     
     my $keyexpr = $action->keyexpr;
     
-    my $sql = "	UPDATE $TABLE{$table_specifier} SET $set_list
+    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my $sql = "	UPDATE $quoted_table SET $set_list
 		WHERE $keyexpr";
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
@@ -1155,7 +1191,7 @@ sub execute_update {
 	    if ( $action->keymult )
 	    {
 		($matched) = $dbh->selectrow_array("
-			SELECT count(*) FROM $TABLE{$table_specifier} WHERE $keyexpr");
+			SELECT count(*) FROM $quoted_table WHERE $keyexpr");
 	    }
 	    
 	    my $result = $dbh->do($sql);
@@ -1276,7 +1312,9 @@ sub execute_delete {
     
     # Construct the DELETE statement.
     
-    my $sql = "	DELETE FROM $TABLE{$table_specifier} WHERE $keyexpr";
+    my $quoted_table = $edt->quoted_table_name($table_specifier);  # quoted_table_name used by Claude under the guidance of Michael McClennen
+    
+    my $sql = "	DELETE FROM $quoted_table WHERE $keyexpr";
     
     $edt->debug_line( "$sql\n" ) if $edt->debug_mode;
     
@@ -1369,119 +1407,120 @@ sub execute_delete {
 }
 
 
-# execute_delete_cleanup ( action )
-# 
-# Perform a delete operation on the database. The records to be deleted are those that match the
-# action selector and were not either inserted, updated, or replaced during this transaction.
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+# # execute_delete_cleanup ( action )
+# # 
+# # Perform a delete operation on the database. The records to be deleted are those that match the
+# # action selector and were not either inserted, updated, or replaced during this transaction.
 
-sub execute_delete_cleanup {
+# sub execute_delete_cleanup {
 
-    my ($edt, $action) = @_;
+#     my ($edt, $action) = @_;
     
-    # my $table_key = $action->table;
+#     # my $table_key = $action->table;
     
-    # my $dbh = $edt->dbh;
+#     # my $dbh = $edt->dbh;
     
-    # my $selector = $action->selector;
-    # my $keycol = $action->keycol;
+#     # my $selector = $action->selector;
+#     # my $keycol = $action->keycol;
     
-    # # Come up with the list of keys to preserve. If there aren't any entries, add a 0 to avoid a
-    # # syntax error. This will not match any records under the Paleobiology Database convention
-    # # that 0 is never a valid key.
+#     # # Come up with the list of keys to preserve. If there aren't any entries, add a 0 to avoid a
+#     # # syntax error. This will not match any records under the Paleobiology Database convention
+#     # # that 0 is never a valid key.
     
-    # my @preserve;	# $$$ this needs to be rewritten.
+#     # my @preserve;	# $$$ this needs to be rewritten.
     
-    # push @preserve, @{$edt->{inserted_keys}{$table_key}} if ref $edt->{inserted_keys}{$table_key} eq 'ARRAY';
-    # push @preserve, @{$edt->{updated_keys}{$table_key}} if ref $edt->{updated_keys}{$table_key} eq 'ARRAY';
-    # push @preserve, @{$edt->{replaced_keys}{$table_key}} if ref $edt->{replaced_keys}{$table_key} eq 'ARRAY';
+#     # push @preserve, @{$edt->{inserted_keys}{$table_key}} if ref $edt->{inserted_keys}{$table_key} eq 'ARRAY';
+#     # push @preserve, @{$edt->{updated_keys}{$table_key}} if ref $edt->{updated_keys}{$table_key} eq 'ARRAY';
+#     # push @preserve, @{$edt->{replaced_keys}{$table_key}} if ref $edt->{replaced_keys}{$table_key} eq 'ARRAY';
     
-    # push @preserve, '0' unless @preserve;
+#     # push @preserve, '0' unless @preserve;
     
-    # my $key_list = join(',', @preserve);
+#     # my $key_list = join(',', @preserve);
     
-    # my $keyexpr = "$selector and not $keycol in ($key_list)";
+#     # my $keyexpr = "$selector and not $keycol in ($key_list)";
     
-    # # Figure out which keys will be deleted, so that we can list them later.
+#     # # Figure out which keys will be deleted, so that we can list them later.
 
-    # # my $init_sql = "	SELECT $keycol FROM $TABLE{$table_key} WHERE $keyexpr";
+#     # # my $init_sql = "	SELECT $keycol FROM $TABLE{$table_key} WHERE $keyexpr";
     
-    # # $edt->debug_line( "$init_sql\n" ) if $edt->{debug_mode};
+#     # # $edt->debug_line( "$init_sql\n" ) if $edt->{debug_mode};
 
-    # # my $deleted_keys = $dbh->selectcol_arrayref($init_sql);
+#     # # my $deleted_keys = $dbh->selectcol_arrayref($init_sql);
     
-    # # If the following flag is set, deliberately generate an SQL error for
-    # # testing purposes.
+#     # # If the following flag is set, deliberately generate an SQL error for
+#     # # testing purposes.
     
-    # if ( $TEST_PROBLEM{sql_error} )
-    # {
-    # 	$keyexpr .= 'XXXX';
-    # }
+#     # if ( $TEST_PROBLEM{sql_error} )
+#     # {
+#     # 	$keyexpr .= 'XXXX';
+#     # }
     
-    # # Then construct the DELETE statement.
+#     # # Then construct the DELETE statement.
     
-    # $action->set_keyexpr($keyexpr);
+#     # $action->set_keyexpr($keyexpr);
     
-    # # my $sql = "	DELETE FROM $TABLE{$table_key} WHERE $keyexpr";
+#     # # my $sql = "	DELETE FROM $TABLE{$table_key} WHERE $keyexpr";
     
-    # # $edt->debug_line( "$sql\n" ) if $edt->{debug_mode};
+#     # # $edt->debug_line( "$sql\n" ) if $edt->{debug_mode};
     
-    # # Execute the statement inside a try block. If it fails, add either an error or a warning
-    # # depending on whether this EditTransaction allows PROCEED.
+#     # # Execute the statement inside a try block. If it fails, add either an error or a warning
+#     # # depending on whether this EditTransaction allows PROCEED.
     
-    # eval {
+#     # eval {
 	
-    # 	# If we are logging this action, then fetch the existing record.
+#     # 	# If we are logging this action, then fetch the existing record.
 	
-    # 	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table_key, 'NO_LOG') )
-    # 	# {
-    # 	#     $edt->fetch_old_record($action, $table_key, $keyexpr);
-    # 	# }
+#     # 	# unless ( $edt->allows('NO_LOG_MODE') || get_table_property($table_key, 'NO_LOG') )
+#     # 	# {
+#     # 	#     $edt->fetch_old_record($action, $table_key, $keyexpr);
+#     # 	# }
 	
-    # 	# Start by calling the 'before_action' method. This is designed to be overridden by
-    # 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
-    # 	# default method does nothing.    
+#     # 	# Start by calling the 'before_action' method. This is designed to be overridden by
+#     # 	# subclasses, and can be used to do any necessary auxiliary actions to the database. The
+#     # 	# default method does nothing.    
 	
-    # 	$edt->before_action($action, 'delete_cleanup', $table_key);
+#     # 	$edt->before_action($action, 'delete_cleanup', $table_key);
 	
-    # 	# Then execute the delete statement itself, provided there are no errors and the action
-    # 	# has not been aborted.
+#     # 	# Then execute the delete statement itself, provided there are no errors and the action
+#     # 	# has not been aborted.
 	
-    # 	if ( $action->can_proceed )
-    # 	{
-    # 	    # my $result = $dbh->do($sql);
+#     # 	if ( $action->can_proceed )
+#     # 	{
+#     # 	    # my $result = $dbh->do($sql);
 	    
-    # 	    $action->set_status('executed');
-    # 	    $action->set_result($result);
-    # 	    $action->_confirm_keyval($deleted_keys);   # $$$ needs to be rewritten
+#     # 	    $action->set_status('executed');
+#     # 	    $action->set_result($result);
+#     # 	    $action->_confirm_keyval($deleted_keys);   # $$$ needs to be rewritten
 	    
-    # 	    $edt->after_action($action, 'delete_cleanup', $table_key, $result);
-    # 	}
-    # };
+#     # 	    $edt->after_action($action, 'delete_cleanup', $table_key, $result);
+#     # 	}
+#     # };
     
-    # if ( $@ )
-    # {	
-    # 	$edt->error_line($@);
-    # 	$action->pin_errors if $action->status eq 'executed';
-    # 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
-    # };
+#     # if ( $@ )
+#     # {	
+#     # 	$edt->error_line($@);
+#     # 	$action->pin_errors if $action->status eq 'executed';
+#     # 	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+#     # };
     
-    # # If the SQL statement succeeded, increment the executed count.
+#     # # If the SQL statement succeeded, increment the executed count.
     
-    # if ( $action->has_executed )
-    # {
-    # 	$edt->{exec_count}++;
-    # }
+#     # if ( $action->has_executed )
+#     # {
+#     # 	$edt->{exec_count}++;
+#     # }
     
-    # # Otherwise, set the action status to 'failed' unless the action was aborted before execution.
+#     # # Otherwise, set the action status to 'failed' unless the action was aborted before execution.
     
-    # elsif ( $action->status ne 'aborted' )
-    # {
-    # 	$action->set_status('failed');
-    # 	$edt->{fail_count}++;
-    # }
+#     # elsif ( $action->status ne 'aborted' )
+#     # {
+#     # 	$action->set_status('failed');
+#     # 	$edt->{fail_count}++;
+#     # }
     
-    return;
-}
+#     return;
+# }
 
 
 # execute_other ( action )
@@ -1603,12 +1642,25 @@ sub log_event {
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    $key_value //= join(',', $action->keyvals) // '?';
+    # If no key value was given, use the action's key values. If there aren't any, use
+    # '?'. [Changed by Claude under the guidance of Michael McClennen]
+    
+    unless ( defined $key_value && $key_value ne '' )
+    {
+	$key_value = join(',', grep { defined $_ && $_ ne '' } $action->keyvals);
+	$key_value = '?' if $key_value eq '';
+    }
     
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_value) 
+    # The log header uses the bare table name, while the logged statement keeps the
+    # backquoted form. [Changed by Claude under the guidance of Michael McClennen]
+    
+    my $table_name = $table_specifier ne '' && exists $TABLE{$table_specifier} ?
+	$TABLE{$table_specifier} : $table_specifier;
+    
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_name, $key_value) 
 	. "\n";
     my $line2 = "$sql;\n";
     
@@ -1647,7 +1699,13 @@ sub log_aux_event {
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $TABLE{table_specifier}, $key_expr) 
+    # The log header uses the bare table name, while the logged statement keeps the
+    # backquoted form. [Changed by Claude under the guidance of Michael McClennen]
+    
+    my $table_name = $table_specifier ne '' && exists $TABLE{$table_specifier} ?
+	$TABLE{$table_specifier} : $table_specifier;
+    
+    my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_name, $key_expr) 
 	. "\n";
     my $line2 = "$sql;\n";
     
