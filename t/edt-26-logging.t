@@ -14,14 +14,14 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 4;
+use Test::More tests => 6;
 
 use File::Temp qw(tempdir);
 
 use ETBasicTest;
-use EditTester qw(ok_new_edt ok_commit clear_table sql_command);
+use EditTester qw(ok_new_edt ok_commit ok_failed_commit clear_table sql_command);
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE set_table_property);
 
 
 # Establish an EditTester instance.
@@ -176,4 +176,140 @@ subtest 'before_log_event' => sub {
     is_deeply( \@operations, [ 'insert EDT_TEST', 'update EDT_TEST', 'replace EDT_TEST',
 			       'delete EDT_TEST' ],
 	       "before_log_event is passed the operation of each action" );
+};
+
+
+# Execute the specified code with the log file name set to the specified name in a
+# temporary directory, and LOG_ALL_TABLES set to the specified value. Return a list of
+# the files that were written, and the combined contents of those files.
+
+sub with_log_settings {
+    
+    my ($filename, $log_all, $code) = @_;
+    
+    my $logdir = tempdir(CLEANUP => 1);
+    
+    my $save_filename = ETBasicTest->log_filename;
+    my $save_all = ETBasicTest->log_all_tables;
+    
+    ETBasicTest->log_filename("$logdir/$filename");
+    ETBasicTest->log_all_tables($log_all);
+    
+    eval { $code->() };
+    my $error = $@;
+    
+    ETBasicTest->log_filename($save_filename);
+    ETBasicTest->log_all_tables($save_all);
+    
+    die $error if $error;
+    
+    my @files = map { s{^.*/}{}r } glob("$logdir/*");
+    my $log = '';
+    
+    foreach my $file ( glob("$logdir/*") )
+    {
+	if ( open(my $fh, '<', $file) )
+	{
+	    local $/;
+	    $log .= <$fh>;
+	}
+    }
+    
+    return (\@files, $log);
+}
+
+
+# Set or clear a property of EDT_TEST, and clear the table cache so that the change
+# takes effect.
+
+sub set_test_property {
+    
+    my ($property, $value) = @_;
+    
+    set_table_property(EDT_TEST => $property => $value);
+    ETBasicTest->clear_table_cache('EDT_TEST');
+}
+
+
+# Check which transactions and tables are logged.
+
+subtest 'what is logged' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five'), (6, 'six')");
+    
+    my ($files, $log) = with_log_settings('test.log', 0, sub {
+	my $edt = ok_new_edt;
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'not logged' });
+	ok_commit;
+    });
+    
+    is_deeply( $files, [ ], "nothing is logged without LOG_ALL_TABLES or LOG_CHANGES" );
+    
+    set_test_property(LOG_CHANGES => 1);
+    
+    ($files, $log) = with_log_settings('test.log', 0, sub {
+	my $edt = ok_new_edt;
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'logged by property' });
+	ok_commit;
+    });
+    
+    set_test_property(LOG_CHANGES => 0);
+    
+    like( $log, qr/logged by property/, "a table with LOG_CHANGES is logged" );
+    
+    ($files, $log) = with_log_settings('test.log', 1, sub {
+	my $edt = ok_new_edt;
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'failed transaction' });
+	$edt->insert_record('EDT_TEST', { string_req => 'bad', signed_val => 'not a number' });
+	ok_failed_commit;
+    });
+    
+    is_deeply( $files, [ ], "a failed transaction writes nothing to the log" );
+    
+    ($files, $log) = with_log_settings('test-DATE.log', 1, sub {
+	my $edt = ok_new_edt;
+	$edt->replace_record('EDT_TEST', { test_no => 6, string_req => 'logged replace' });
+	ok_commit;
+    });
+    
+    my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+    my $date = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
+    
+    is_deeply( $files, [ "test-$date.log" ], "DATE in the log file name is replaced by the date" );
+    
+    like( $log, qr/^# [^|]+ \| REPLACE \| \Q$TABLE{EDT_TEST}\E \| 6$/m, "replace header" );
+    like( $log, qr/^REPLACE INTO .*\n.*logged replace/m, "replace statement" );
+};
+
+
+# Check the ways of turning logging off.
+
+subtest 'turning logging off' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five')");
+    
+    my ($files, $log) = with_log_settings('test.log', 1, sub {
+	my $edt = ok_new_edt('NO_LOG_MODE');
+	ok( $edt->allows('NO_LOG_MODE'), "NO_LOG_MODE is accepted as an allowance" );
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'no log mode' });
+	ok_commit;
+    });
+    
+    is_deeply( $files, [ ], "NO_LOG_MODE prevents logging" );
+    
+    ok( eval { set_test_property(NO_LOG => 1); 1 }, "NO_LOG can be set on a table" );
+    
+    ($files, $log) = with_log_settings('test.log', 1, sub {
+	my $edt = ok_new_edt;
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'no log table' });
+	ok_commit;
+    });
+    
+    set_test_property(NO_LOG => 0);
+    
+    is_deeply( $files, [ ], "a table with NO_LOG is not logged even with LOG_ALL_TABLES" );
 };

@@ -346,7 +346,10 @@ subtest 'link to a new parent record' => sub {
 	ok_failed_commit("transaction fails if there is no permission on the new parent");
     });
     
-    my ($parent_key) = $edt->inserted_keys('EDT_TEST');
+    # The transaction was rolled back, so inserted_keys reports nothing. The key of the
+    # new parent is still recorded in its action.
+    
+    my $parent_key = $edt->action_keyval('&np');
     
     ok( (grep { $_ eq "row EDT_TEST modify test_no in ('$parent_key')" } @CALLS),
 	"permission was checked on the new parent record" );
