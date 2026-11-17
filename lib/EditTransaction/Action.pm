@@ -214,6 +214,12 @@ sub add_child {
 	$child->{parent} = $parent;
 	$child->{label} = $parent->{label} . '-' . scalar($parent->{child}->@*);
 	
+	# Conditions already attached to the child are relabeled to match.
+	# [Changed by Claude under the guidance of Michael McClennen]
+	
+	$_->[0] = $child->{label} foreach $child->conditions;
+	
+	
 	foreach my $c ( $child->conditions )
 	{
 	    if ( $c->[1] =~ /^[ECF]/ )

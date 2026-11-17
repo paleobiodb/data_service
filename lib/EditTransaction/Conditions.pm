@@ -94,6 +94,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 				     default => ["Field '&1': no record with the proper type matches '&2'",
 						 "No record with the proper type matches '&2'",
 						 "No record with the proper type matches '&1'"] },
+		E_BAD_LINK => ["Could not check permission on the linked record '&1'",  # [Changed by Claude under the guidance of Michael McClennen]
+			       "Could not check permission on the linked record"],
 		E_BAD_DIRECTIVE => ["Field '&1': &2", "Field '&1': invalid handling directive"],
 		E_NOT_FOUND => { link => ["Linked record '&2' was not found",
 					  "Linked record was not found"],
@@ -107,6 +109,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_FIXUP_MODE => "You must be an administrator to use fixup mode",
 		E_PERMISSION => { insert => "You do not have permission to insert into this table",
 				  update => "You do not have permission to update this record",
+				  insert_key => "You do not have permission to insert a record with key '&2'",  # [Changed by Claude under the guidance of Michael McClennen]
 				  replace_new => "No record was found with key '&2', ".
 				  "and you do not have permission to insert one",
 				  replace => "You do not have permission to replace this record",
@@ -154,6 +157,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    "Field '&1': value has been truncated to fit the database column"],
 		W_EXTID => ["Field '&1' : &2", 
 			    "Field '&1': column does not accept external identifiers, value looks like one"],
+		W_LOCKED => "This record is locked, but you have permission to unlock it",  # [Changed by Claude under the guidance of Michael McClennen]
 		W_EMPTY_RECORD => "This action was skipped because no field values were specified",
 		W_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		UNKNOWN_TEMPLATE => ["No template found for '&0' with '&1', '&2'",

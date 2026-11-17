@@ -32,13 +32,23 @@ sub execute_action_list {
     
     local ($_);
     
-    # Iterate through the action list, starting after the last completed action.
+    # If the action list is already being executed, return. This happens when an action is
+    # added while another is executing, for example by 'add_child_action' called from
+    # 'before_action' or 'after_action'. The loop below will reach the new action.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    return if $edt->{executing_action_list};
+    
+    local $edt->{executing_action_list} = 1;
+    
+    # Iterate through the action list, starting after the last completed action. The length of
+    # the list is checked on each iteration, so that actions added during execution are also
+    # executed. [Changed by Claude under the guidance of Michael McClennen]
     
     my $start_index = $edt->{completed_count};
-    my $end_index = $edt->{action_list}->$#*;
     
   ACTION:
-    foreach my $i ( $start_index .. $end_index )
+    for ( my $i = $start_index; $i < scalar($edt->{action_list}->@*); $i++ )
     {
 	my $action = $edt->{action_list}[$i];
 	
@@ -173,14 +183,23 @@ sub pre_execution_check {
     
     my ($edt, $action, $operation, $table_specifier) = @_;
     
-    # If the authorization step has not been completed, do so now.
+    # If the operation and table are not given, take them from the action.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    $operation ||= $action->operation;
+    $table_specifier ||= $action->table;
+    
+    # If the authorization step has not been completed, do so now. The resulting permission is
+    # read from the action afterward, because the return value of 'authorize_against_table'
+    # is a list in some cases. [Changed by Claude under the guidance of Michael McClennen]
     
     my $permission = $action->permission;
     
     if ( ! $permission || $permission eq 'PENDING' )
     {
-	$permission = $edt->authorize_against_table($action, $operation, $table_specifier,
-						    'FINAL');
+	$edt->authorize_against_table($action, $operation, $table_specifier, 'FINAL');
+	
+	$permission = $action->permission;
     }
     
     # If we don't have a valid permission by this point (including 'none'), something went wrong.
@@ -963,15 +982,45 @@ sub execute_insert {
 	$edt->{exec_count}++;
     }
     
-    # Otherwise, set the action status to 'failed' and increment the fail count.
+    # Otherwise, the action has failed or was aborted. [Changed by Claude under the guidance of Michael McClennen]
     
     else
     {
-	$action->set_status('failed');
-	$edt->{fail_count}++;
+	$edt->_handle_failed_action($action, 'insert', $table_specifier);
     }
     
     return;
+}
+
+
+# _handle_failed_action ( action, operation, table_specifier )
+# 
+# This is called by each of the execution methods when an action was not executed. If the
+# action was aborted, for example by a call to 'abort_action' from 'before_action', it has
+# already been marked as skipped and counted, so nothing more is done. Otherwise, mark it as
+# failed and call 'cleanup_action' so that any changes made to the database by
+# 'before_action' can be reversed.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _handle_failed_action {
+    
+    my ($edt, $action, $operation, $table_specifier) = @_;
+    
+    return if $action->status eq 'skipped';
+    
+    $action->set_status('failed');
+    $edt->{fail_count}++;
+    
+    eval {
+	$edt->cleanup_action($action, $operation, $table_specifier);
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during cleanup_action');
+    }
 }
 
 
@@ -1097,12 +1146,11 @@ sub execute_replace {
 	$edt->{exec_count}++;
     }
     
-    # Otherwise, set the action status to 'failed' and increment fail_count.
+    # Otherwise, the action has failed or was aborted. [Changed by Claude under the guidance of Michael McClennen]
     
     else
     {
-	$action->set_status('failed');
-	$edt->{fail_count}++;
+	$edt->_handle_failed_action($action, 'replace', $table_specifier);
     }
     
     return;
@@ -1272,12 +1320,11 @@ sub execute_update {
 	$edt->{exec_count}++;
     }
     
-    # Otherwise, set the action status to 'failed' and increment fail_count.
+    # Otherwise, the action has failed or was aborted. [Changed by Claude under the guidance of Michael McClennen]
     
     else
     {
-	$action->set_status('failed');
-	$edt->{fail_count}++;
+	$edt->_handle_failed_action($action, 'update', $table_specifier);
     }
     
     return;
@@ -1307,7 +1354,7 @@ sub execute_delete {
     
     if ( $do_logging )
     {
-	$edt->before_log_event($action, 'replace', $table_specifier);
+	$edt->before_log_event($action, 'delete', $table_specifier);  # [Changed by Claude under the guidance of Michael McClennen]
     }
     
     # Construct the DELETE statement.
@@ -1395,12 +1442,11 @@ sub execute_delete {
 	$edt->{exec_count}++;
     }
     
-    # Otherwise, set the action status to 'failed' and increment the failed count.
+    # Otherwise, the action has failed or was aborted. [Changed by Claude under the guidance of Michael McClennen]
     
     else
     {
-	$action->set_status('failed');
-	$edt->{fail_count}++;
+	$edt->_handle_failed_action($action, 'delete', $table_specifier);
     }
     
     return;
@@ -1575,12 +1621,11 @@ sub execute_other {
 	$edt->{exec_count}++;
     }
     
-    # Otherwise, set the action status to 'failed' and increment fail_count.
+    # Otherwise, the action has failed or was aborted. [Changed by Claude under the guidance of Michael McClennen]
     
     else
     {
-	$action->set_status('failed');
-	$edt->{fail_count}++;
+	$edt->_handle_failed_action($action, $method, $table_specifier);
     }
     
     return;

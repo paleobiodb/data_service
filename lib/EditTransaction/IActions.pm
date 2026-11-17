@@ -13,7 +13,7 @@ package EditTransaction::IActions;
 use strict;
 
 use Switch::Plain;
-use Scalar::Util qw(weaken reftype);
+use Scalar::Util qw(weaken reftype blessed);  # blessed added by Claude under the guidance of Michael McClennen
 use List::Util qw(any);
 use Carp qw(carp croak);
 
@@ -340,7 +340,7 @@ sub add_child_action {
 	$parent = shift @params;
 	
 	croak "bad reference $parent: must be of class EditTransaction::Action"
-	    unless $parent->isa('EditTransaction::Action');
+	    unless blessed $parent && $parent->isa('EditTransaction::Action');  # [Changed by Claude under the guidance of Michael McClennen]
     }
     
     else
@@ -362,6 +362,13 @@ sub add_child_action {
     my $child = $edt->_new_action($op, $table_specifier, $parameters);
     
     $parent->add_child($child);
+    
+    # The child action is given a new label based on its parent's label. Register that
+    # label as a reference to the child, so that the reference returned below can be used.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    $edt->{action_ref}{'&' . $child->label} = $child;
+    weaken $edt->{action_ref}{'&' . $child->label};
     
     # Because this action is a child of an authorized action, it is assumed to
     # be authorized.

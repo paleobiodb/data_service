@@ -1041,7 +1041,10 @@ sub commit {
 	$edt->_call_finalize;
     }
     
-    else
+    # If the transaction cannot proceed, including because 'finalize_transaction' added an
+    # error or threw an exception, call 'cleanup_transaction'. [Changed by Claude under the guidance of Michael McClennen]
+    
+    unless ( $edt->can_proceed )
     {
 	$edt->_call_cleanup('errors');
     }
@@ -1319,6 +1322,11 @@ sub _call_initialize {
     
     local($@);
     
+    # Record that 'initialize_transaction' was called, so that 'cleanup_transaction' is only
+    # called for a transaction that was initialized. [Changed by Claude under the guidance of Michael McClennen]
+    
+    $edt->{initialize_called} = 1;
+    
     eval {
 	$edt->initialize_transaction($edt->{default_table});
     };
@@ -1356,6 +1364,13 @@ sub _call_finalize {
 sub _call_cleanup {
     
     my ($edt, $reason) = @_;
+    
+    # Call 'cleanup_transaction' at most once for each transaction, and only if
+    # 'initialize_transaction' was called.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    return if $edt->{cleanup_called} || ! $edt->{initialize_called};
+    $edt->{cleanup_called} = 1;
     
     local($@);
     
@@ -1490,7 +1505,7 @@ sub after_action {
 
 sub cleanup_action {
     
-    my ($edt, $action, $operation, $table_specifier);
+    my ($edt, $action, $operation, $table_specifier) = @_;  # [Changed by Claude under the guidance of Michael McClennen]
 }
 
 

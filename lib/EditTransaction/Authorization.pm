@@ -387,6 +387,26 @@ sub authorize_against_table {
 	    {
 		$action->set_linkinfo($auth_col, $link_col, $link_col, $result, $link_list);
 	    }
+	    
+	    # If no existing record matches the key expression, report that the record was not
+	    # found. An insert or replace is not reported here, because those operations require
+	    # a link value instead. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    elsif ( $operation !~ /^ins|^rep/ )
+	    {
+		if ( $action->{insupdate} )
+		{
+		    $edt->add_condition($action, 'E_BAD_KEY', $action->keyfield,
+					join(',', $action->keyvalues));
+		}
+		
+		else
+		{
+		    $edt->add_condition($action, 'E_NOT_FOUND');
+		}
+		
+		return $action->set_permission('notfound');
+	    }
 	}
 	
 	# If a link expression is present, check for 'modify' permission on the specified
@@ -405,7 +425,7 @@ sub authorize_against_table {
 	    {
 		my $msg = join(': ', $link_permission->@*);
 		$edt->error_line($msg);
-		$edt->add_condition($action, 'E_BAD_LINK', $action->linkval);
+		$edt->add_condition($action, 'E_BAD_LINK', join(',', $action->linkvalues));  # [Changed by Claude under the guidance of Michael McClennen]
 		return $action->set_permission('none');
 	    }
 	    
@@ -460,8 +480,12 @@ sub authorize_against_table {
 		    
 		    if ( $insert_perm eq 'none' )
 		    {
-			$edt->add_condition($action, 'E_NOT_FOUND');
-			return $action->set_permission('notfound');
+			# The user may not insert a record with a key value of their choosing.
+			# [Changed by Claude under the guidance of Michael McClennen]
+			
+			my $selector = $operation =~ /^rep/ ? 'replace_new' : 'insert_key';
+			$edt->add_condition($action, 'E_PERMISSION', $selector, join(',', $action->keyvalues));
+			return $action->set_permission('none');
 		    }
 		    
 		    else
@@ -522,8 +546,12 @@ sub authorize_against_table {
 	    
 	    if ( $insert_perm eq 'none' )
 	    {
-		$edt->add_condition($action, 'E_NOT_FOUND');
-		return $action->set_permission('notfound');
+		# The user may not insert a record with a key value of their choosing.
+		# [Changed by Claude under the guidance of Michael McClennen]
+		
+		my $selector = $operation =~ /^rep/ ? 'replace_new' : 'insert_key';
+		$edt->add_condition($action, 'E_PERMISSION', $selector, join(',', $action->keyvalues));
+		return $action->set_permission('none');
 	    }
 	    
 	    else
