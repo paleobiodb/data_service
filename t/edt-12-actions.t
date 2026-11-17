@@ -106,11 +106,12 @@ subtest '_test_action with delete'  => sub {
     ok_eval( sub { $edt->_test_action('delete', { _primary => ["12522", "8207"] }); },
 	     "_test_action executed successfully with 'delete', '_primary', list" );
     
-    ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
-	     "_test_action executed successfully with 'delete_cleanup'" );
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+#     ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
+# 	     "_test_action executed successfully with 'delete_cleanup'" );
     
-    ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', ["18", 19]); },
-	     "_test_action executed successfully with 'delete_cleanup', list" );
+#     ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', ["18", 19]); },
+# 	     "_test_action executed successfully with 'delete_cleanup', list" );
 };
 
 

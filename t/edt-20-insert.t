@@ -14,7 +14,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 8;
+use Test::More tests => 10;
 
 use TableDefs qw(set_table_property);
 use ETBasicTest;
@@ -283,4 +283,64 @@ subtest 'insert_record exceptions' => sub {
     
     ok_exception( sub { $edt->insert_record('EDT_TEST') }, qr/parameter/,
 		  "exception thrown if no parameters are given" );
+};
+
+
+# Check that records can be inserted into a table whose primary key is not
+# auto_increment, with the key value given in the record. This subtest was
+# added by Claude under the guidance of Michael McClennen, to check the fix to
+# 'execute_insert' made in commit 9bd5242f.
+
+subtest 'insert with non-auto-increment key' => sub {
+    
+    clear_table('EDT_TYPES');
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TYPES', { name => 'key1', signed_val => 3 });
+    $edt->insert_record('EDT_TYPES', { name => 'key2', signed_val => -4 });
+    
+    ok_no_conditions('all');
+    
+    ok_commit;
+    
+    is_deeply( [ sort $edt->inserted_keys ], [ 'key1', 'key2' ], "inserted keys are the given key values" );
+    
+    ok_found_record( 'EDT_TYPES', "name = 'key1' and signed_val = 3", "first record was stored" );
+    ok_found_record( 'EDT_TYPES', "name = 'key2' and signed_val = -4", "second record was stored" );
+    
+    # Inserting a duplicate key value should produce E_DUPLICATE.
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TYPES', { name => 'key1', signed_val => 9 });
+    
+    ok_failed_commit("insert with duplicate key fails");
+    
+    ok_has_one_condition('all', 'E_DUPLICATE', "got E_DUPLICATE for duplicate key value");
+    
+    ok_found_record( 'EDT_TYPES', "name = 'key1' and signed_val = 3", "original record unchanged" );
+};
+
+
+# Check that records can be inserted into a table with no primary key. This
+# subtest was added by Claude under the guidance of Michael McClennen.
+
+subtest 'insert into table with no primary key' => sub {
+    
+  TODO: {
+	local $TODO = "inserts into a table with no primary key are counted as failures";
+	
+	clear_table('EDT_NOPRIM');
+	
+	my $edt = ok_new_edt;
+	
+	$edt->insert_record('EDT_NOPRIM', { name => 'abc', value => 'def' });
+	
+	ok_commit("insert into table with no primary key commits");
+	
+	ok_no_conditions('all', "no conditions from insert into table with no primary key");
+	
+	ok_found_record( 'EDT_NOPRIM', "name = 'abc' and value = 'def'", "record was stored" );
+    }
 };

@@ -2243,7 +2243,7 @@ sub get_table_name {
     my $tableinfo = $T->{edt_class}->table_info_ref($specifier, $T->{dbh}) ||
 	croak "unknown table '$specifier'";
     
-    return $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
+    return $T->{edt_class}->quoted_table_name($specifier) || croak "could not determine table name";  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
 }
 
 
@@ -2459,7 +2459,7 @@ sub _ok_record_count {
     my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
 	croak "unknown table '$table'";
     
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
+    my $tablename = $T->{edt_class}->quoted_table_name($table) || croak "could not determine table name";  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
     
     # If the given expression is a single decimal number, assume it is a key.
     
@@ -2643,7 +2643,7 @@ sub fetch_records {
     my $tableinfo = $T->{edt_class}->table_info_ref($table, $dbh) ||
 	croak "unknown table '$table'";
     
-    my $tablename = $tableinfo->{QUOTED_NAME} || croak "could not determine table name";
+    my $tablename = $T->{edt_class}->quoted_table_name($table) || croak "could not determine table name";  # Changed by Claude under the guidance of Michael McClennen: QUOTED_NAME dropped, quoted_table_name used instead
     
     my $label = "fetch_records had a nonempty result";
     

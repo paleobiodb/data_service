@@ -12,12 +12,13 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 10;
+use Test::More tests => 12;  # plan updated by Claude under the guidance of Michael McClennen
 
 use ETBasicTest;
 use ETTrivialClass;
 use EditTester qw(ok_eval ok_exception ok_new_edt 
-		  ok_no_conditions ok_has_condition ok_has_one_condition);
+		  ok_no_conditions ok_has_condition ok_has_one_condition
+		  clear_table sql_command ok_commit ok_no_record ok_found_record);
 
 
 # Establish an EditTester instance.
@@ -121,12 +122,13 @@ subtest 'delete key values'  => sub {
 	is( $edt->action_keyval, 23521, "action_keyval returns specified key value" );
     }
     
-    if ( ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
-		  "_test_action with 'delete_cleanup'" ) )
-    {
-	can_ok( $edt, 'action_keyval' ) &&
-	    is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
-    }
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+#     if ( ok_eval( sub { $edt->_test_action('delete_cleanup', 'EDT_SUB', "18"); },
+# 		  "_test_action with 'delete_cleanup'" ) )
+#     {
+# 	can_ok( $edt, 'action_keyval' ) &&
+# 	    is( $edt->action_keyval, "18", "action_keyval returns specified key value" );
+#     }
 };
 
 
@@ -285,6 +287,54 @@ subtest 'bad values' => sub {
 };
 
 
+# Check that negative key values are accepted for a table whose primary key is
+# a signed integer, and that they can be used to delete records. This subtest
+# was added by Claude under the guidance of Michael McClennen, to check the fix
+# to 'check_key_values' made in commit f0115eb8.
+
+subtest 'signed key values' => sub {
+    
+    clear_table('EDT_SIGNED');
+    
+    my $edt = $T->new_edt( table => 'EDT_SIGNED' );
+    
+    $edt->_test_action('delete', { _primary => '-5' });
+    
+    ok_no_conditions("negative key value accepted for signed key column");
+    
+    is( $edt->action_keyval, '-5', "negative keyval" );
+    
+    $edt->_test_action('delete', { _primary => " -5 , 7, -12 " });
+    
+    ok_no_conditions("list of signed key values accepted");
+    
+    is( $edt->action_keyvalues, 3, "three signed key values" );
+    
+    $edt->_test_action('delete', { _primary => "-abc" });
+    
+    ok_has_one_condition('E_BAD_KEY', "non-integer key value rejected for signed key column");
+    
+    $edt->_test_action('delete', { _primary => "4.5" });
+    
+    ok_has_one_condition('E_BAD_KEY', "non-integer key value rejected for signed key column");
+    
+    # Now check that a record with a negative key can actually be deleted.
+    
+    sql_command("INSERT INTO <<EDT_SIGNED>> (signed_no, string_val) VALUES (-5, 'neg'), (5, 'pos')");
+    
+    $edt = ok_new_edt( table => 'EDT_SIGNED' );
+    
+    $edt->delete_record({ _primary => -5 });
+    
+    ok_no_conditions;
+    
+    ok_commit;
+    
+    ok_no_record( 'EDT_SIGNED', "signed_no = -5", "record with negative key was deleted" );
+    ok_found_record( 'EDT_SIGNED', "signed_no = 5", "record with positive key remains" );
+};
+
+
 # Check the key references are handled properly.
 
 subtest 'key references' => sub {
@@ -376,4 +426,75 @@ subtest 'multiple fields' => sub {
     $edt->_test_action('update', { test_id => "66", _primary => "xxx" });
     
     ok_has_condition( qr/E_BAD_KEY_FIELD.*_primary/, "caught test_id and _primary" );
+};
+
+
+# Check the key values that link records in a subordinate table to their
+# authorization table, and key conflicts that have not been checked above. In
+# EDT_SUB, 'test_no' links to EDT_TEST. This subtest was added by Claude under
+# the guidance of Michael McClennen.
+
+subtest 'link key values' => sub {
+    
+    clear_table('EDT_TEST');
+    clear_table('EDT_SUB');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five'), (6, 'six')");
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_SUB', { name => 'plain', test_no => 5 });
+    
+    ok_commit("record with a link value is inserted");
+    
+    ok_found_record('EDT_SUB', "name = 'plain' and test_no = 5", "link value was stored");
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_SUB', { name => 'multiple', test_no => '5,6' });
+    
+    ok_has_one_condition('&_', 'errors', "multiple link values are rejected");
+    
+    ok_has_one_condition('&_', 'errors', qr/^(?!.*Field 'link')/,
+			 "error for multiple link values has a sensible message");
+    
+    # A quoted link value and an arrayref link value are both accepted when checking
+    # the link to the authorization table, but neither is a valid value for the
+    # integer link column, so both are rejected with E_FORMAT.
+    
+    my $edt_quoted = ok_new_edt;
+    
+    $edt_quoted->insert_record('EDT_SUB', { name => 'quoted', test_no => "'5'" });
+    
+    ok( ! (grep { /^E_NOT_FOUND|^E_BAD_KEY/ } $edt_quoted->conditions),
+	"quoted link value matches the linked record" );
+    
+    my $edt_listref = ok_new_edt;
+    
+    ok_eval( sub { $edt_listref->insert_record('EDT_SUB', { name => 'listref', test_no => [5] }) },
+	     "arrayref link value does not throw an exception" );
+    
+    ok( ! (grep { /^E_NOT_FOUND|^E_BAD_KEY/ } $edt_listref->conditions),
+	"arrayref link value matches the linked record" );
+    
+    ok_has_one_condition($edt_quoted, 'all', 'E_FORMAT', qr/test_no/,
+			 "quoted value for the link column is rejected with E_FORMAT");
+    
+    ok_has_one_condition($edt_listref, 'all', 'E_FORMAT', qr/test_no/,
+			 "arrayref value for the link column is rejected with E_FORMAT");
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_TEST', { _where => 'test_no = 5', test_no => 5, string_req => 'w' });
+    
+    ok_has_one_condition('&_', 'E_BAD_KEY', "_where together with a key value is rejected");
+    
+    $edt->update_record('EDT_NOPRIM', { _primary => 5, name => 'np' });
+    
+    ok_has_one_condition('&_', 'E_BAD_KEY', qr/no primary key/,
+			 "_primary on a table with no primary key is rejected");
+    
+    $edt->update_record('EDT_TEST', { string_req => 'no key' });
+    
+    ok_has_one_condition('&_', 'E_NO_KEY', "update without a key value is rejected");
 };

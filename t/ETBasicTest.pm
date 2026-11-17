@@ -43,7 +43,14 @@ use namespace::clean;
     set_table_name(EDT_AUTH => 'edt_auth');
     set_table_name(EDT_ANY => 'edt_any');
     
-    set_table_group('edt_test' => 'EDT_TEST', 'EDT_TYPES', 'EDT_SUB', 'EDT_NOPRIM');
+    # The table EDT_SIGNED, which has a signed integer primary key, was added by Claude
+    # under the guidance of Michael McClennen, for testing key validation (edt-13).
+    
+    set_table_name(EDT_SIGNED => 'edt_signed');
+    
+    set_table_group('edt_test' => 'EDT_TEST', 'EDT_TYPES', 'EDT_SUB', 'EDT_NOPRIM', 'EDT_SIGNED');
+    
+    set_table_property(EDT_SIGNED => PRIMARY_KEY => 'signed_no');
     
     # Set properties for EDT_TEST
     
@@ -393,12 +400,13 @@ sub before_action {
 	}
     }
     
-    elsif ( $operation eq 'delete_cleanup' )
-    {
-	my $keyexpr = $action->keyexpr;
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+#     elsif ( $operation eq 'delete_cleanup' )
+#     {
+# 	my $keyexpr = $action->keyexpr;
 	
-	$edt->{save_before_keyexpr} = $keyexpr;
-    }
+# 	$edt->{save_before_keyexpr} = $keyexpr;
+#     }
     
     if ( my $value = $edt->get_attr('before add') )
     {
@@ -455,12 +463,13 @@ sub after_action {
 	}
     }
     
-    elsif ( $operation eq 'delete_cleanup' )
-    {
-	my $keyexpr = $action->keyexpr;
+# [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
+#     elsif ( $operation eq 'delete_cleanup' )
+#     {
+# 	my $keyexpr = $action->keyexpr;
 	
-	$edt->{save_after_keyexpr} = $keyexpr;
-    }
+# 	$edt->{save_after_keyexpr} = $keyexpr;
+#     }
     
     if ( $edt->get_attr('after delete') )
     {
@@ -613,6 +622,10 @@ sub establish_test_tables {
 
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_TYPES}");
     
+    # The columns tinytext_val, greek_text, bigint_val, and ubigint_val were added by Claude
+    # under the guidance of Michael McClennen, for testing value validation (edt-18).
+    # The columns latin1_text, date_val, and time_val were added for edt-19.
+    
     $dbh->do("CREATE TABLE $TABLE{EDT_TYPES} (
 		name varchar(40) not null primary key,
 		interval_no int unsigned not null default 0,
@@ -621,10 +634,15 @@ sub establish_test_tables {
 		greek_val varchar(40) charset greek not null default '',
 		binary_val varbinary(40),
 		text_val text,
+		tinytext_val tinytext,
+		greek_text tinytext charset greek,
+		latin1_text tinytext charset latin1,
 		blob_val blob,
 		signed_val mediumint,
 		unsigned_val mediumint unsigned not null default 0,
 		tiny_val tinyint unsigned,
+		bigint_val bigint,
+		ubigint_val bigint unsigned,
 		decimal_val decimal(5,2),
 		unsdecimal_val decimal(5,2) unsigned not null default 0,
 		double_val double,
@@ -634,6 +652,8 @@ sub establish_test_tables {
 		set_val set('abc', 'd\N{U+1F10}f', 'ghi', '''jkl'''),
 		dcr timestamp,
 		dmd timestamp,
+		date_val date,
+		time_val time,
 		dcrauto timestamp default current_timestamp,
 		dmdauto timestamp default current_timestamp on update current_timestamp)
 		
@@ -646,6 +666,14 @@ sub establish_test_tables {
 		value varchar(40) not null,
 		unique key (name, value)) default charset utf8");
     
+    # The table EDT_SIGNED was added by Claude under the guidance of Michael McClennen.
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_SIGNED}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDT_SIGNED} (
+		signed_no int primary key,
+		string_val varchar(40) not null default '') default charset utf8");
+    
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_ANY}");
     
     $dbh->do("CREATE TABLE $TABLE{EDT_ANY} (
@@ -656,6 +684,9 @@ sub establish_test_tables {
 		string_req varchar(255) not null default '') default charset utf8");
     
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDT_AUTH}");
+    
+    # The columns tinytext_val, greek_text, bigint_val, and ubigint_val were added by Claude
+    # under the guidance of Michael McClennen, for testing value validation (edt-18).
     
     $dbh->do("CREATE TABLE $TABLE{EDT_AUTH} (
 		test_no int unsigned primary key auto_increment,
@@ -669,10 +700,14 @@ sub establish_test_tables {
 		greek_val varchar(40) charset greek not null default '',
 		binary_val varbinary(40),
 		text_val text,
+		tinytext_val tinytext,
+		greek_text tinytext charset greek,
 		blob_val blob,
 		signed_val mediumint,
 		unsigned_val mediumint unsigned not null default 0,
 		tiny_val tinyint unsigned,
+		bigint_val bigint,
+		ubigint_val bigint unsigned,
 		decimal_val decimal(5,2),
 		unsdecimal_val decimal(5,2) unsigned not null default 0,
 		double_val double,
