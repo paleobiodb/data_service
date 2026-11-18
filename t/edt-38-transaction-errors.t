@@ -8,8 +8,9 @@
 # edt-38-transaction-errors.t : Test the parts of EditTransaction.pm that are not covered
 #                               elsewhere: the less common forms of the constructor,
 #                               failures of the database statements that start, commit, and
-#                               roll back a transaction, the allowance methods, and the
-#                               default hook methods.
+#                               roll back a transaction, the loss of the database connection
+#                               during a transaction, the allowance methods, and the default
+#                               hook methods.
 #
 # Added by Claude under the guidance of Michael McClennen.
 #
@@ -17,7 +18,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -37,26 +38,24 @@ my $dbh = $T->dbh;
 my ($TEST_DB) = $TABLE{EDT_TEST} =~ /^(\w+)\./;
 
 
-# Call the specified code with DBI's 'do' method replaced, so that the statement matching
-# the specified pattern throws an exception. If $before is given, it is executed first,
-# using the real 'do' method.
+# Call the specified code with one of the DBI methods 'begin_work', 'commit', or 'rollback'
+# replaced, so that it throws an exception. If $before is given, it is called first with
+# the database handle and the real method.
 
-my $DBI_DO = \&DBI::db::do;
+my %DBI_METHOD = map { $_ => \&{"DBI::db::$_"} } qw(begin_work commit rollback);
 
-sub with_failing_statement {
+sub with_failing_method {
     
-    my ($pattern, $before, $code) = @_;
+    my ($method, $before, $code) = @_;
     
+    my $real = $DBI_METHOD{$method};
+    
+    no strict 'refs';
     no warnings 'redefine';
     
-    local *DBI::db::do = sub {
-	if ( $_[1] =~ $pattern )
-	{
-	    $DBI_DO->($_[0], $before) if $before;
-	    die "simulated failure of '$_[1]'\n";
-	}
-	
-	return $DBI_DO->(@_);
+    local *{"DBI::db::$method"} = sub {
+	$before->($_[0], $real) if $before;
+	die "simulated failure of '$method'\n";
     };
     
     return $code->();
@@ -171,7 +170,7 @@ subtest 'start transaction fails' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'not started' });
     
-    with_failing_statement(qr/^START TRANSACTION/, undef, sub {
+    with_failing_method('begin_work', undef, sub {
 	ok_failed_commit("commit fails if the transaction cannot be started");
     });
     
@@ -180,6 +179,8 @@ subtest 'start transaction fails' => sub {
     is( $edt->status, 'failed', "the transaction status is 'failed'" );
     
     ok( ! in_transaction(), "no database transaction is active" );
+    
+    ok( $dbh->{AutoCommit}, "AutoCommit is still on" );
     
     ok_no_record('EDT_TEST', "string_req = 'not started'", "the record was not stored");
     
@@ -190,11 +191,13 @@ subtest 'start transaction fails' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'started' });
     
-    with_failing_statement(qr/^START TRANSACTION/, 'START TRANSACTION', sub {
+    with_failing_method('begin_work', sub { $_[1]->($_[0]) }, sub {
 	ok_failed_commit("commit fails if starting the transaction throws an exception");
     });
     
     ok( ! in_transaction(), "the database transaction was rolled back" );
+    
+    ok( $dbh->{AutoCommit}, "AutoCommit is turned back on" );
 };
 
 
@@ -215,7 +218,7 @@ subtest 'commit fails' => sub {
     
     $edt->do_sql("CREATE TABLE $TEST_DB.edt_held (a int)");
     
-    with_failing_statement(qr/^COMMIT$/, undef, sub {
+    with_failing_method('commit', undef, sub {
 	ok_failed_commit("commit fails if the COMMIT statement fails");
     });
     
@@ -224,6 +227,8 @@ subtest 'commit fails' => sub {
     is( $edt->status, 'failed', "the transaction status is 'failed'" );
     
     ok( ! in_transaction(), "the transaction was rolled back" );
+    
+    ok( $dbh->{AutoCommit}, "AutoCommit is turned back on" );
     
     ok_no_record('EDT_TEST', "string_req = 'not committed'", "the record was not stored");
     
@@ -238,7 +243,7 @@ subtest 'commit fails' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'rolled back by the server' });
     
-    my $result = with_failing_statement(qr/^COMMIT$/, 'ROLLBACK', sub { $edt->commit });
+    my $result = with_failing_method('commit', sub { $_[0]->do('ROLLBACK') }, sub { $edt->commit });
     
     ok_has_one_condition('all', 'E_EXECUTE', qr/committing the transaction/, "the failure is reported");
     
@@ -247,6 +252,8 @@ subtest 'commit fails' => sub {
     ok( ! $result, "commit returns false" );
     
     is( $edt->status, 'failed', "the transaction status is 'failed'" );
+    
+    ok( $dbh->{AutoCommit}, "AutoCommit is turned back on" );
 };
 
 
@@ -260,14 +267,65 @@ subtest 'rollback fails' => sub {
     
     $edt->insert_record('EDT_TEST', { string_req => 'rollback' });
     
-    with_failing_statement(qr/^ROLLBACK$/, undef, sub { $edt->rollback });
+    with_failing_method('rollback', undef, sub { $edt->rollback });
     
     ok_has_one_condition('main', 'E_EXECUTE', qr/rolling back the transaction/,
 			 "the failure is reported");
     
     is( $edt->status, 'aborted', "the transaction status is 'aborted'" );
     
-    $DBI_DO->($dbh, 'ROLLBACK');
+    ok( $dbh->{Active}, "a handle whose connection is still good is not disconnected" );
+    
+    $DBI_METHOD{rollback}->($dbh);
+};
+
+
+# Check what happens if the database connection is lost in the middle of a transaction.
+# The connection is killed from the main handle. Because the transaction has turned
+# AutoCommit off, the driver does not reconnect, so the statements that follow fail and
+# nothing is committed. The handle is then disconnected, so that a new connection will be
+# made for it. Each case uses its own copy of the database handle, because a
+# handle whose connection was lost cannot be used again.
+
+subtest 'connection lost' => sub {
+    
+    foreach my $allowance ( '', 'PROCEED' )
+    {
+	clear_table('EDT_TEST');
+	
+	my $lost_dbh = $dbh->clone || die "could not clone the database handle";
+	
+	my $edt = ETBasicTest->new($lost_dbh, { allows => [ 'SILENT_MODE', $allowance || () ] });
+	
+	my $label = $allowance ? " with $allowance" : "";
+	
+	$edt->start_execution;
+	
+	$edt->insert_record('EDT_TEST', { string_req => 'before' });
+	
+	is( $edt->action_status('&_'), 'executed', "the first action was executed$label" );
+	
+	my ($id) = $lost_dbh->selectrow_array('SELECT CONNECTION_ID()');
+	
+	$dbh->do("KILL CONNECTION $id");
+	
+	$edt->insert_record('EDT_TEST', { string_req => 'after' });
+	
+	isnt( $edt->action_status('&_'), 'executed', "the second action was not executed$label" );
+	
+	my $result = eval { $edt->commit };
+	
+	ok( ! $@, "commit does not throw an exception$label" );
+	
+	ok( ! $result, "commit returns false$label" );
+	
+	is( $edt->status, 'failed', "the transaction status is 'failed'$label" );
+	
+	ok_no_record('EDT_TEST', "string_req = 'before'", "the first record was not stored$label");
+	ok_no_record('EDT_TEST', "string_req = 'after'", "the second record was not stored$label");
+	
+	ok( ! $lost_dbh->{Active}, "the handle whose connection was lost has been disconnected$label" );
+    }
 };
 
 

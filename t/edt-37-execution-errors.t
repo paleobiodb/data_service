@@ -26,7 +26,7 @@ use EditTester qw(ok_new_edt ok_commit ok_failed_commit ok_no_conditions ok_no_e
 		  ok_has_condition ok_has_one_condition clear_table sql_command
 		  ok_found_record ok_no_record);
 
-use TableDefs qw(%TABLE set_table_name set_column_property);
+use TableDefs qw(%TABLE set_table_name set_column_property get_table_property);
 
 
 # Establish an EditTester instance.
@@ -233,6 +233,41 @@ subtest 'foreign key prechecks' => sub {
     
     is( scalar(grep { /E_BAD_REFERENCE/ } $edt->conditions), 1,
 	"the unresolved reference is reported once" );
+    
+    # A foreign key to a table whose primary key is not set as a table property, but is
+    # found in the database schema. [Added by Claude under the guidance of Michael
+    # McClennen]
+    
+    clear_table('EDT_TYPES');
+    
+    sql_command("INSERT INTO <<EDT_TYPES>> (name) VALUES ('type one')");
+    sql_command("DROP TABLE IF EXISTS $TEST_DB.edt_fkey_types");
+    sql_command("CREATE TABLE $TEST_DB.edt_fkey_types (fk_no int unsigned primary key auto_increment,
+		 type_name varchar(40) not null default '')");
+    
+    set_table_name(EDT_FKEY_TYPES => "$TEST_DB.edt_fkey_types");
+    set_column_property(EDT_FKEY_TYPES => type_name => FOREIGN_KEY => 'EDT_TYPES');
+    
+    ok( ! defined get_table_property('EDT_TYPES', 'PRIMARY_KEY'),
+	"EDT_TYPES has no PRIMARY_KEY property" );
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_FKEY_TYPES', { type_name => 'type one' });
+    
+    ok_commit("a foreign key value is checked against the primary key from the schema");
+    
+    ok_found_record('EDT_FKEY_TYPES', "type_name = 'type one'", "the record was stored");
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_FKEY_TYPES', { type_name => 'no such type' });
+    
+    ok_failed_commit("a foreign key value that does not exist in that table fails");
+    
+    ok_has_one_condition('all', 'E_BAD_REFERENCE', qr/no such type/, "the bad value is reported");
+    
+    sql_command("DROP TABLE $TEST_DB.edt_fkey_types");
 };
 
 
