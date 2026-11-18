@@ -413,13 +413,13 @@ sub add_child_action {
 # completed    Return completed actions
 # pending      Return all actions that have been registered but not completed
 # executed     Return all actions that were executed successfully
-# notex        Return all actions that were skipped, abandoned, or failed
+# unexecuted   Return all actions that were skipped, abandoned, or failed  [Changed by Claude under the guidance of Michael McClennen: was 'notex']
 # failed       Return all actions that failed
 # skipped      Return all actions that were skipped
 # blocked      Return all actions that were blocked
 
 our (%STATUS_SELECTOR) = (all => 1, completed => 1, pending => 1, executed => 1,
-			  notex => 1, blocked => 1, failed => 1, skipped => 1);
+			  unexecuted => 1, blocked => 1, failed => 1, skipped => 1);  # [Changed by Claude under the guidance of Michael McClennen: was 'notex']
 
 our (%STATUS_LABEL) = (insert => 'inserted', update => 'updated',
 		       replace => 'replaced', delete => 'deleted');

@@ -589,10 +589,9 @@ sub has_condition {
 	# }
     }
     
-    else
-    {
-	croak "'$selector' is not a valid selector";
-    }
+    # No other selector is possible, because the arguments are only remapped above if the
+    # first one is 'main', 'all', or an action reference. [Changed by Claude under the
+    # guidance of Michael McClennen: removed an unreachable 'croak' for an invalid selector]
     
     # If we get here, we were either given a refstring that does not match any
     # action or else '&_' with no current action. In either case, return undef.
@@ -892,6 +891,11 @@ sub condition_nolabel {
     
     return unless $code;
     
+    # Restore demoted error codes to normal for reporting, as condition_string does.
+    # [Added by Claude under the guidance of Michael McClennen]
+    
+    $code =~ s/^D/E/;
+    
     if ( my $msg = $edt->condition_message($code, @params) )
     {
 	return "${code}: ${msg}";
@@ -1133,14 +1137,17 @@ sub get_condition_template {
     {
 	$template = $template->{$selector} || $template->{default};
 	
+	# If the subclass template has neither this selector nor a default, use the one
+	# from EditTransaction, falling back to its default. [Changed by Claude under the
+	# guidance of Michael McClennen: the default was not used before]
+	
 	unless ( $template )
 	{
-	    if ( $CONDITION_BY_CLASS{EditTransaction}{$code} &&
-		 ref $CONDITION_BY_CLASS{EditTransaction}{$code} eq 'HASH' &&
-		 $CONDITION_BY_CLASS{EditTransaction}{$code}{$selector} )
+	    my $base = $CONDITION_BY_CLASS{EditTransaction}{$code};
+	    
+	    if ( ref $base eq 'HASH' )
 	    {
-		$template = $CONDITION_BY_CLASS{EditTransaction}{$code}{$selector} ||
-		    $CONDITION_BY_CLASS{EditTransaction}{$code}{default};
+		$template = $base->{$selector} || $base->{default};
 	    }
 	    
 	    $template ||= $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};

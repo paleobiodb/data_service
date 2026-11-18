@@ -1269,13 +1269,17 @@ sub _commit_transaction {
 	    
 	    $dbh->do("ROLLBACK");
 	    
-	    eval {
-		$edt->{transaction} = 'failed';
-		$edt->{rollback_count}++;
-	    };
-	    
-	    return '';
+	    $edt->{rollback_count}++;
 	}
+	
+	# Either way the commit did not happen, so the transaction has failed. If no
+	# transaction was active, the database must already have rolled it back.
+	# [Changed by Claude under the guidance of Michael McClennen]
+	
+	$TRANSACTION_INTERLOCK{$dbh} = undef;
+	$edt->{transaction} = 'failed';
+	
+	return '';
     }
 
     # If we get here, we know that the commit succeeded.

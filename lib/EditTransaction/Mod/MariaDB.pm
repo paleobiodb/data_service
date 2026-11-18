@@ -298,7 +298,7 @@ sub db_count_matching_rows {
     
     if ( $@ )
     {
-	if ( $@ =~ /selectrow_array failed: (.*) at .* MariaDB.pm line/i )
+	if ( $@ =~ /selectrow_array failed: (.*) at .*MariaDB\.pm line/i )  # [Changed by Claude under the guidance of Michael McClennen: removed a stray space]
 	{
 	    return ['E_EXECUTE', $1];
 	}

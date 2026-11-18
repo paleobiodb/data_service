@@ -11,6 +11,7 @@ use strict;
 use Encode qw(encode FB_CROAK LEAVE_SRC);
 use DBI qw(:sql_types);
 use Carp qw(carp croak);
+use Math::BigInt;  # [Added by Claude under the guidance of Michael McClennen]
 use Permissions;
 
 use Role::Tiny;
@@ -872,6 +873,13 @@ sub validate_data_value {
 	return $edt->validate_integer_value($cr->{TypeParams}, $value, $fieldname);
     }
     
+    # [Added by Claude under the guidance of Michael McClennen]
+    
+    elsif ( $maintype eq 'bits' )
+    {
+	return $edt->validate_bits_value($cr->{TypeParams}, $value, $fieldname);
+    }
+    
     elsif ( $maintype eq 'fixed' )
     {
 	return $edt->validate_fixed_value($cr->{TypeParams}, $value, $fieldname,
@@ -1215,6 +1223,53 @@ sub validate_integer_value {
     # If the value is valid as-is, return the empty list.
 
     return;
+}
+
+
+# validate_bits_value ( type, value, fieldname )
+# 
+# Check that the specified value is suitable for storing into a bit column of the size given
+# by $type. The value may be a non-negative integer, or a binary literal of the form b'0101'
+# or 0b0101. If it is not, return an error condition. Otherwise, return the value as an
+# unquoted decimal integer, because a quoted value would be stored as a string of
+# characters. A value which is empty or contains only whitespace will be treated as a NULL.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub validate_bits_value {
+    
+    my ($edt, $type, $value, $fieldname) = @_;
+    
+    my ($size) = ref $type eq 'ARRAY' ? $type->@* : $type;
+    
+    my $number;
+    
+    if ( $value =~ qr{ ^ \s* $ }xs )
+    {
+	return ('clean', undef);
+    }
+    
+    elsif ( $value =~ qr{ ^ \s* (\d+) \s* $ }xs )
+    {
+	$number = Math::BigInt->new($1);
+    }
+    
+    elsif ( $value =~ qr{ ^ \s* (?: b ' ([01]+) ' | 0b ([01]+) ) \s* $ }xsi )
+    {
+	$number = Math::BigInt->from_bin($1 // $2);
+    }
+    
+    else
+    {
+	return [ 'E_FORMAT', $fieldname, "value must be a non-negative integer or a binary literal" ];
+    }
+    
+    if ( $size && length($number->as_bin) - 2 > $size )
+    {
+	return [ 'E_RANGE', $fieldname, "value must fit in $size bits" ];
+    }
+    
+    return ('unquoted', $number->bstr);
 }
 
 
