@@ -130,6 +130,9 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_REQUIRED => ["Field '&1': &2", "Field '&1': must have a non-empty value"],
 		E_NOT_NULL => ["Field '&1': &2", "Field '&1': must have a non-null value"],
 		E_RANGE => ["Field '&1': &2", "&2", "Field '&1'"],
+		# E_CHARSET was added by Claude under the guidance of Michael McClennen.
+		E_CHARSET => "Field '&1': the character '&2' (&3) cannot be stored " .
+		    "in a column with character set '&4'",
 		E_WIDTH => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_FORMAT => ["Field '&1': &2", "&2", "Field '&1'"],
 		E_EXTID => ["Field '&1': &2", "Field '&1': bad external identifier",

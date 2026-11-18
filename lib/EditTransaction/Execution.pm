@@ -887,7 +887,7 @@ sub execute_insert {
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
     
-    my ($new_keyval);
+    my ($new_keyval, $inserted);
     
     # Execute the statement inside an eval block, to catch any exceptions that might be thrown.
     
@@ -920,10 +920,14 @@ sub execute_insert {
 		}
 	    }
 	    
-	    # If we got a non-empty key value, then the insertion succeeded.
+	    # If we got a non-empty key value, then the insertion succeeded. For a table with no
+	    # primary key there is no key value, so the insertion succeeded if the statement did.
+	    # [Changed by Claude under the guidance of Michael McClennen]
 	    
-	    if ( $new_keyval )
+	    if ( $new_keyval || $result && ! $table_info->{PRIMARY_KEY} )
 	    {
+		$inserted = 1;
+		
 		# If changes to this table are to be logged, add the appropriate
 		# lines to the transaction log variable. They will be written to
 		# the log file when (if) the transaction commits.
@@ -981,7 +985,7 @@ sub execute_insert {
     
     # If the SQL statement succeeded, increment the executed count.
     
-    if ( $action->has_executed && $new_keyval )
+    if ( $action->has_executed && $inserted )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	$edt->{exec_count}++;
     }

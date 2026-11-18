@@ -7,7 +7,8 @@ package EditTransaction::Validation;
 
 use strict;
 
-use Encode qw(encode);
+# FB_CROAK and LEAVE_SRC were added by Claude under the guidance of Michael McClennen.
+use Encode qw(encode FB_CROAK LEAVE_SRC);
 use DBI qw(:sql_types);
 use Carp qw(carp croak);
 use Permissions;
@@ -917,6 +918,51 @@ sub validate_data_value {
 # warning condition as a listref. The third return value, if present, will indicate that the
 # returned value has already been quoted.
 
+# _charset_problem ( charset, value )
+# 
+# If the specified value contains a character that cannot be stored in a column with the
+# specified MariaDB character set, return the first such character. Otherwise, return
+# false. The utf8mb4 and binary character sets can store anything. For utf8mb3 (also called
+# utf8), any character outside the Basic Multilingual Plane is rejected. For the character
+# sets listed in %CHARSET_ENCODING, the value is checked using the corresponding Perl
+# encoding. MariaDB's latin1 is cp1252, not ISO-8859-1. Values for columns with any other
+# character set are not checked here, and are left to the database.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+our (%CHARSET_ENCODING) = ( latin1 => 'cp1252', latin2 => 'iso-8859-2', ascii => 'ascii',
+			    greek => 'iso-8859-7', hebrew => 'iso-8859-8', koi8r => 'koi8-r',
+			    cp1250 => 'cp1250', cp1251 => 'cp1251', cp1256 => 'cp1256',
+			    cp1257 => 'cp1257' );
+
+sub _charset_problem {
+    
+    my ($edt, $charset, $value) = @_;
+    
+    return '' unless defined $value && $value ne '' && $charset;
+    
+    if ( $charset eq 'utf8mb3' || $charset eq 'utf8' )
+    {
+	return $value =~ /([^\x{0}-\x{FFFF}])/ ? $1 : '';
+    }
+    
+    elsif ( my $encoding = $CHARSET_ENCODING{$charset} )
+    {
+	# Most values can be encoded, so check the whole value first. Only if that fails,
+	# look for the first character that cannot be encoded.
+	
+	return '' if eval { encode($encoding, $value, FB_CROAK | LEAVE_SRC); 1 };
+	
+	foreach my $char ( split //, $value )
+	{
+	    return $char unless eval { encode($encoding, $char, FB_CROAK | LEAVE_SRC); 1 };
+	}
+    }
+    
+    return '';
+}
+
+
 sub validate_char_value {
     
     my ($edt, $type, $value, $fieldname, $can_truncate) = @_;
@@ -925,7 +971,13 @@ sub validate_char_value {
     
     my ($value_size, $word, $dbh, $quoted);
     
-    # $$$ TODO: check for invalid characters.
+    # Reject the value if it contains a character that cannot be stored in the column's
+    # character set. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( my $bad_char = $edt->_charset_problem($charset, $value) )
+    {
+	return [ 'E_CHARSET', $fieldname, $bad_char, sprintf("U+%04X", ord $bad_char), $charset ];
+    }
     
     # If the column is a char/varchar, the declared size is the number of characters
     # that can be stored, regardless of character set.
