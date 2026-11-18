@@ -165,6 +165,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 			    "Field '&1': column does not accept external identifiers, value looks like one"],
 		W_LOCKED => "This record is locked, but you have permission to unlock it",  # [Changed by Claude under the guidance of Michael McClennen]
 		W_EMPTY_RECORD => "This action was skipped because no field values were specified",
+		W_REPLACED => ["&1 other record(s) with the same value for a unique key were also replaced",  # [Added by Claude under the guidance of Michael McClennen]
+			       "Other records with the same value for a unique key were also replaced"],
 		W_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		UNKNOWN_TEMPLATE => ["No template found for '&0' with '&1', '&2'",
 				     "No template found for '&0' with '&1'", 

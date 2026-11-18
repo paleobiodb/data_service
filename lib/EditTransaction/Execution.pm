@@ -131,14 +131,6 @@ sub execute_action_list {
 	}
     }
     
-    # # If this is the completion of the EditTransaction and no fatal errors have occurred, execute
-    # # any pending operations.
-    
-    # if ( $arg eq 'FINAL' && $edt->can_proceed )
-    # {
-    # 	$edt->_cleanup_pending_actions;
-    # }
-    
     # Update the count of completed actions. If this routine is called again, it will skip
     # over everything on the list as of now.
     
@@ -151,27 +143,6 @@ sub execute_action_list {
     if ( my $parent_action = $edt->{current_action} && $edt->{current_action}->parent )
     {
 	$edt->{current_action} = $parent_action;
-    }
-}
-
-
-# _cleanup_pending_actions ( )
-#
-# If there are any pending deletes, execute them now.
-
-sub _cleanup_pending_actions {
-
-    my ($edt) = @_;
-
-    if ( $edt->{pending_deletes} && $edt->{pending_deletes}->@* )
-    {
-	my $delete_action = pop $edt->{pending_deletes}->@*;
-	$delete_action->_coalesce($edt->{pending_deletes});
-	
-	delete $edt->{pending_deletes};
-	$edt->{current_action} = $delete_action;
-	
-	$edt->_execute_delete($delete_action);
     }
 }
 
@@ -323,7 +294,9 @@ sub _do_all_prechecks {
 	    my $checkval =  $vals->[$i];
 	    
 	    # If the column value is still a reference, substitute it with the keyval of the
-	    # corresponding action. If an error occurs, set the value to undef instead.
+	    # corresponding action. If an error occurs, report it and then set the value to
+	    # undef. [Changed by Claude under the guidance of Michael McClennen: the error is
+	    # reported before the value is cleared, so that the message names the reference]
 	    
 	    if ( $checkval =~ /^&./ )
 	    {
@@ -336,16 +309,16 @@ sub _do_all_prechecks {
 
 		    if ( ! $refkey )
 		    {
-			$checkval = undef;
 			$edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_',
 					    $fieldname, $checkval);
+			$checkval = undef;
 		    }
 		    
 		    elsif ( ref $refkey eq 'ARRAY' )
 		    {
-			$checkval = undef;
 			$edt->add_condition($action, 'E_BAD_REFERENCE', '_multiple_',
 					    $fieldname, $checkval);
+			$checkval = undef;
 		    }
 
 		    else
@@ -356,9 +329,9 @@ sub _do_all_prechecks {
 		
 		else
 		{
-		    $checkval = undef;
 		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_',
 					$fieldname, $checkval);
+		    $checkval = undef;
 		}
 	    }
 	    
@@ -376,9 +349,17 @@ sub _do_all_prechecks {
 	    else
 	    {
 		$vals->[$i] = '_INVALID_';
-		$checkval =~ s/^'//;
-		$checkval =~ s/'$//;
-		$edt->add_condition($action, 'E_BAD_REFERENCE', $fieldname, $checkval);
+		
+		# If the value was a reference that could not be resolved, that error has
+		# already been reported. [Changed by Claude under the guidance of Michael
+		# McClennen]
+		
+		if ( defined $checkval )
+		{
+		    $checkval =~ s/^'//;
+		    $checkval =~ s/'$//;
+		    $edt->add_condition($action, 'E_BAD_REFERENCE', $fieldname, $checkval);
+		}
 	    }
 	}
     }
@@ -1115,6 +1096,17 @@ sub execute_replace {
 	    $action->pin_errors;
 	    
 	    $action->set_result($result);
+	    
+	    # REPLACE deletes every existing record that has the same value as the new one for
+	    # the primary key or for any unique key, and the result counts the deleted records
+	    # plus the inserted one. The record selected by the primary key is expected to be
+	    # replaced, so if any others were deleted, warn the user. [Added by Claude under
+	    # the guidance of Michael McClennen]
+	    
+	    if ( $result && $result > 2 )
+	    {
+		$edt->add_condition($action, 'W_REPLACED', $result - 2);
+	    }
 	    
 	    # If changes to this table are to be logged, add the appropriate
 	    # lines to the transaction log variable. They will be written to the
