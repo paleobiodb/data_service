@@ -7,8 +7,8 @@
 #
 # edt-32-execution.t : Test the results of executing actions: duplicate keys, updates and
 #                      deletes that match fewer records than expected, the methods that
-#                      report the keys of executed actions, rollback, and the destruction
-#                      of an active transaction.
+#                      report the keys of executed actions and of the superior records they
+#                      affected, moving subordinate records, rollback, and the destruction of an active transaction.
 #
 # Added by Claude under the guidance of Michael McClennen.
 #
@@ -16,14 +16,14 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 9;
+use Test::More tests => 11;
 
 use ETBasicTest;
 use EditTester qw(ok_new_edt ok_commit ok_failed_commit ok_no_conditions ok_no_errors
 		  ok_has_condition ok_has_one_condition ok_exception
 		  clear_table sql_command ok_found_record ok_no_record ok_record_count);
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE set_table_property);
 
 
 # Establish an EditTester instance.
@@ -243,6 +243,191 @@ subtest 'result keys' => sub {
     ok_no_record('EDT_TEST', "string_req = 'rolled back'", "the first insert was rolled back");
     
     is_deeply( [ $edt->inserted_keys ], [ ], "inserted_keys is empty after a rollback" );
+};
+
+
+# Set the CAN_MOVE property of EDT_SUB, and clear the cached table information so that the
+# new value is used. [Added by Claude under the guidance of Michael McClennen]
+
+sub set_can_move {
+    
+    my ($value) = @_;
+    
+    set_table_property(EDT_SUB => CAN_MOVE => $value);
+    ETBasicTest->clear_table_cache('EDT_SUB');
+}
+
+
+# Check that a record in a subordinate table can be moved to a different superior record
+# only if the CAN_MOVE property allows it. [Added by Claude under the guidance of Michael
+# McClennen]
+
+subtest 'moving subordinate records' => sub {
+    
+    reset_tables();
+    
+    set_can_move(undef);
+    
+    my $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 6 });
+    
+    ok_failed_commit("a move fails if CAN_MOVE is not set");
+    
+    ok_has_one_condition('all', 'E_PERMISSION', qr/permission to move this record/,
+			 "the refused move is reported");
+    
+    ok_found_record('EDT_SUB', "aux_no = 1 and test_no = 5", "the record was not moved");
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 5, name => 'same parent' });
+    
+    ok_commit("an update that keeps the same parent does not need CAN_MOVE");
+    
+    $edt = ok_new_edt;
+    
+    $edt->replace_record('EDT_SUB', { aux_no => 1, test_no => 6, name => 'replaced' });
+    
+    ok_failed_commit("a replace that moves the record also fails");
+    
+    $edt = ok_new_edt('PROCEED');
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 6 });
+    $edt->update_record('EDT_TEST', { test_no => 5, string_req => 'proceeded' });
+    
+    ok_commit("with PROCEED, the transaction commits");
+    
+    is( $edt->action_status('&#1'), 'failed', "the move failed" );
+    
+    ok_found_record('EDT_TEST', "string_req = 'proceeded'", "the other action was executed");
+    
+    set_can_move('NONE');
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 6 });
+    
+    ok_failed_commit("a move fails if CAN_MOVE is 'NONE'");
+    
+    set_can_move('AUTHORIZED');
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 6 });
+    
+    ok_commit("a move succeeds if CAN_MOVE is set");
+    
+    ok_found_record('EDT_SUB', "aux_no = 1 and test_no = 6", "the record was moved");
+    
+    # If CAN_MOVE is set, the permission is requested from check_table_permission.
+    
+    no warnings 'redefine';
+    
+    my $orig = ETBasicTest->can('check_table_permission');
+    
+    {
+	local *ETBasicTest::check_table_permission = sub {
+	    return $_[2] eq 'move' ? 'none' : $orig->(@_);
+	};
+	
+	$edt = ok_new_edt;
+	
+	$edt->update_record('EDT_SUB', { aux_no => 1, test_no => 5 });
+	
+	ok_failed_commit("a move fails if check_table_permission refuses it");
+    }
+    
+    {
+	local *ETBasicTest::check_table_permission = sub {
+	    return $_[2] eq 'move' ? [ 'E_TEST', 'move error' ] : $orig->(@_);
+	};
+	
+	$edt = ok_new_edt;
+	
+	$edt->update_record('EDT_SUB', { aux_no => 1, test_no => 5 });
+	
+	ok_failed_commit("a move fails if check_table_permission returns an error");
+	
+	ok_has_one_condition('all', 'E_TEST', qr/move error/, "the error is reported");
+    }
+    
+    set_can_move(undef);
+};
+
+
+# Check that superior_keys reports the records in the superior table that were affected
+# by actions on a subordinate table. [Added by Claude under the guidance of Michael
+# McClennen]
+
+subtest 'superior keys' => sub {
+    
+    reset_tables();
+    
+    sql_command("INSERT INTO <<EDT_SUB>> (aux_no, test_no, name) VALUES (2, 6, 'two'),
+		 (3, 6, 'three'), (4, 5, 'four')");
+    
+    set_can_move('AUTHORIZED');
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { _label => 'p', string_req => 'new parent' });
+    $edt->insert_record('EDT_SUB', { _label => 'a', test_no => '&p', name => 'child of new' });
+    $edt->update_record('EDT_SUB', { _label => 'b', aux_no => 1, name => 'renamed' });
+    $edt->update_record('EDT_SUB', { _label => 'c', aux_no => 2, test_no => 5, name => 'moved' });
+    $edt->delete_record('EDT_SUB', 3);
+    $edt->update_record('EDT_SUB', { aux_no => 4, name => 'same parent again' });
+    
+    is_deeply( [ $edt->superior_keys ], [ ], "superior_keys is empty before execution" );
+    
+    ok_commit;
+    
+    my $new_key = $edt->action_keyval('&p');
+    
+    is_deeply( [ $edt->superior_keys('EDT_TEST') ], [ $new_key, 5, 6 ],
+	       "superior_keys lists each affected record in the superior table once" );
+    
+    is( scalar($edt->superior_keys('EDT_TEST')), 3, "superior_keys in scalar context returns the count" );
+    
+    is_deeply( [ $edt->superior_keys ], [ $new_key, 5, 6 ], "superior_keys with no table" );
+    
+    is_deeply( [ $edt->superior_keys('EDT_SUB') ], [ ], "superior_keys for a table that is not a superior table" );
+    
+    is_deeply( [ $edt->action_ref('&c')->old_linkvalues ], [ 6 ],
+	       "a record moved to another parent records its old parent" );
+    
+    is_deeply( [ $edt->action_ref('&b')->old_linkvalues ], [ ],
+	       "a record that keeps its parent records no old parent" );
+    
+    # The old parent is the one the record has when the action is executed, even if an
+    # earlier action in the same transaction moved it.
+    
+    reset_tables();
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, test_no => 6 });
+    $edt->update_record('EDT_SUB', { _label => 'back', aux_no => 1, test_no => 5 });
+    
+    ok_commit;
+    
+    is_deeply( [ $edt->action_ref('&back')->old_linkvalues ], [ 6 ],
+	       "the old parent is the one the record had when the action was executed" );
+    
+    is_deeply( [ $edt->superior_keys('EDT_TEST') ], [ 6, 5 ], "both parents are listed" );
+    
+    # If the transaction fails, nothing is reported.
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 1, name => 'not stored' });
+    $edt->update_record('EDT_TEST', { test_no => 5, signed_val => 'not a number' });
+    
+    ok_failed_commit;
+    
+    is_deeply( [ $edt->superior_keys ], [ ], "superior_keys is empty after a failed transaction" );
+    
+    set_can_move(undef);
 };
 
 
