@@ -15,10 +15,13 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 10;
 
 use ETBasicTest;
-use EditTester qw(ok_new_edt ok_exception clear_table sql_command);
+use EditTester qw(ok_new_edt ok_exception ok_commit clear_table sql_command
+		  ok_found_record ok_no_record capture_mode captured_output clear_captured_output);
+
+use File::Temp qw(tempdir);
 
 use TableDefs qw(%TABLE);
 
@@ -211,4 +214,158 @@ subtest 'bad arguments' => sub {
     
     ok_exception( sub { $edt->get_table_handling('EDT_TEST') }, qr/column name/,
 		  "get_table_handling requires a column name" );
+};
+
+
+# Check the debugging output of the DBStatements methods. This subtest was added by Claude
+# under the guidance of Michael McClennen.
+
+subtest 'DBStatements debug output' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five')");
+    
+    clear_captured_output();
+    capture_mode(1);
+    
+    my $edt = ok_new_edt('DEBUG_MODE');
+    
+    $edt->selectrow_array("SELECT string_req FROM $TABLE{EDT_TEST} WHERE test_no = ?", undef, 5);
+    
+    my $output = captured_output();
+    
+    like( $output, qr/SELECT string_req FROM \Q$TABLE{EDT_TEST}\E WHERE test_no = \?/,
+	  "selectrow_array writes the statement" );
+    like( $output, qr/\['5'\]/, "selectrow_array writes the bind values" );
+    
+    clear_captured_output();
+    
+    $edt->do_stmt("UPDATE $TABLE{EDT_TEST} SET string_val = ? WHERE test_no = ?", undef, 'x', 5);
+    
+    $output = captured_output();
+    
+    like( $output, qr/UPDATE \Q$TABLE{EDT_TEST}\E SET string_val = \?/, "do_stmt writes the statement" );
+    like( $output, qr/\['x', '5'\]/, "do_stmt writes the bind values" );
+    like( $output, qr/This statement affected 1 rows/, "do_stmt writes the number of rows affected" );
+    
+    clear_captured_output();
+    
+    $edt = ok_new_edt;
+    
+    $edt->do_stmt("UPDATE $TABLE{EDT_TEST} SET string_val = 'y' WHERE test_no = ?", undef, 5);
+    
+    is( captured_output(), '', "nothing is written without debug mode" );
+    
+    capture_mode(0);
+    clear_captured_output();
+};
+
+
+# Check that selectrow_array throws an exception if its statement fails. This subtest was
+# added by Claude under the guidance of Michael McClennen.
+
+subtest 'DBStatements selectrow_array failure' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    ok_exception( sub { $edt->selectrow_array("SELECT x FROM no_such_table") }, qr/no_such_table/,
+		  "selectrow_array throws an exception if the statement fails" );
+};
+
+
+# Check do_logged_stmt, which executes a statement and logs it. It is meant to be called
+# while a transaction is active, for example from 'after_action', and the log is written
+# when the transaction commits. This subtest was added by Claude under the guidance of
+# Michael McClennen.
+
+subtest 'do_logged_stmt' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five'), (6, 'six')");
+    
+    my $logdir = tempdir(CLEANUP => 1);
+    my $logfile = "$logdir/edt-34.log";
+    
+    my $save_filename = ETBasicTest->log_filename;
+    
+    ETBasicTest->log_filename($logfile);
+    
+    my $edt = ok_new_edt;
+    
+    $edt->start_execution;
+    
+    is( $edt->do_logged_stmt('update', 'EDT_TEST',
+			     "UPDATE $TABLE{EDT_TEST} SET string_val = 'logged' WHERE test_no = 5",
+			     "test_no = 5"), 1, "do_logged_stmt returns the number of rows affected" );
+    
+    ok_commit;
+    
+    ok_found_record('EDT_TEST', "test_no = 5 and string_val = 'logged'", "the statement was executed");
+    
+    my $log = '';
+    
+    if ( open(my $fh, '<', $logfile) )
+    {
+	local $/;
+	$log = <$fh>;
+    }
+    
+    like( $log, qr/^# [^|]+ \| UPDATE \| \Q$TABLE{EDT_TEST}\E \| test_no = 5$/m,
+	  "the log header names the operation, table, and key expression" );
+    like( $log, qr/^UPDATE \Q$TABLE{EDT_TEST}\E SET string_val = 'logged' WHERE test_no = 5;$/m,
+	  "the statement is logged" );
+    
+    unlink $logfile;
+    
+    $edt = ok_new_edt;
+    
+    $edt->start_execution;
+    
+    $edt->do_logged_stmt('update', 'EDT_TEST',
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = 'rolled back' WHERE test_no = 6",
+			 "test_no = 6");
+    
+    $edt->rollback;
+    
+    ok_no_record('EDT_TEST', "string_val = 'rolled back'", "the statement is rolled back with the transaction");
+    ok( ! -e $logfile, "nothing is logged for a transaction that is rolled back" );
+    
+    $edt = ok_new_edt('NO_LOG_MODE');
+    
+    $edt->start_execution;
+    
+    $edt->do_logged_stmt('update', 'EDT_TEST',
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = 'not logged' WHERE test_no = 6",
+			 "test_no = 6");
+    
+    ok_commit;
+    
+    ok( ! -e $logfile, "with NO_LOG_MODE, the statement is not logged" );
+    
+    $edt = ok_new_edt('DEBUG_MODE');
+    
+    clear_captured_output();
+    capture_mode(1);
+    
+    $edt->start_execution;
+    
+    $edt->do_logged_stmt('update', 'EDT_TEST',
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = 'debugged' WHERE test_no = 6",
+			 "test_no = 6");
+    
+    like( captured_output(), qr/SET string_val = 'debugged'.*affected 1 rows/s,
+	  "do_logged_stmt writes debugging output" );
+    
+    capture_mode(0);
+    clear_captured_output();
+    
+    ok_exception( sub { $edt->do_logged_stmt('update', 'EDT_TEST', "UPDATE no_such_table SET x = 1",
+					      "x = 1") },
+		  qr/no_such_table/, "do_logged_stmt throws an exception if the statement fails" );
+    
+    $edt->rollback;
+    
+    ETBasicTest->log_filename($save_filename);
 };
