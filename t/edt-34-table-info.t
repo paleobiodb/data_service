@@ -319,6 +319,40 @@ subtest 'do_logged_stmt' => sub {
     
     unlink $logfile;
     
+    # A statement that reverses the change is written as a comment after the header.
+    # [Added by Claude under the guidance of Michael McClennen]
+    
+    $edt = ok_new_edt;
+    
+    $edt->start_execution;
+    
+    $edt->do_logged_stmt('update', 'EDT_TEST',
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = 'reversible' WHERE test_no = 6",
+			 "test_no = 6",
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = ''\nWHERE test_no = 6\n");
+    
+    $edt->do_logged_stmt('update', 'EDT_TEST',
+			 "UPDATE $TABLE{EDT_TEST} SET string_val = 'no reverse' WHERE test_no = 5",
+			 "test_no = 5", '');
+    
+    ok_commit;
+    
+    $log = '';
+    
+    if ( open(my $fh, '<', $logfile) )
+    {
+	local $/;
+	$log = <$fh>;
+    }
+    
+    like( $log, qr/^# [^|]+ \| UPDATE \| \Q$TABLE{EDT_TEST}\E \| test_no = 6\n#UPDATE \Q$TABLE{EDT_TEST}\E SET string_val = ''\n#WHERE test_no = 6\nUPDATE \Q$TABLE{EDT_TEST}\E SET string_val = 'reversible' WHERE test_no = 6;$/m,
+	  "the reversing statement is written as a comment after the header" );
+    
+    like( $log, qr/^# [^|]+ \| UPDATE \| \Q$TABLE{EDT_TEST}\E \| test_no = 5\nUPDATE /m,
+	  "an empty reversing statement is not written" );
+    
+    unlink $logfile;
+    
     $edt = ok_new_edt;
     
     $edt->start_execution;

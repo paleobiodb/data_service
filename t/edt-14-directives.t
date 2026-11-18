@@ -11,7 +11,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -336,3 +336,78 @@ subtest 'bad arguments for setting and retrieving' => sub {
     is( $edt->get_handling('&_', 'test_no'), undef, "no current action results undef" );
 };
 
+
+
+# Check ignore_field on a transaction, and the remaining cases of handle_column and
+# get_handling. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'more directive cases' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    # A field ignored for a table is accepted in a record for that table.
+    
+    is( $edt->ignore_field('EDT_TEST', 'extra_field'), 'ignore', "ignore_field returns the directive" );
+    
+    is( $edt->get_handling('EDT_TEST', 'FIELD:extra_field'), 'ignore', "ignore_field sets the directive" );
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'extra', extra_field => 'x' });
+    
+    ok( ! $edt->conditions('&_'), "an ignored field is not reported" );
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'other', other_field => 'x' });
+    
+    ok( (grep { /E_BAD_FIELD/ } $edt->conditions('&_')), "a field that is not ignored is reported" );
+    
+    # An action reference that does not match any action.
+    
+    is( $edt->handle_column('&nosuch', 'string_val', 'ignore'), undef,
+	"handle_column returns undef for an unknown action reference" );
+    
+    # A column that is not in the action's table.
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'column' });
+    
+    is( $edt->get_handling('&_', 'no_such_column'), undef,
+	"get_handling returns undef for a column that is not in the action's table" );
+    
+    my %directives = $edt->get_handling('&_', '*');
+    
+    is( $directives{'FIELD:extra_field'}, 'ignore', "the action's directives include those for its table" );
+    
+    ok( ! scalar($edt->get_handling('EDT_NOSUCH', 'string_val')),
+	"get_handling returns nothing for an unknown table" );
+    
+    is_deeply( [ $edt->get_handling('EDT_NOSUCH', '*') ], [ ],
+	       "get_handling with '*' returns the empty list for an unknown table" );
+    
+    # After the transaction has finished, no directives can be set.
+    
+    $edt->rollback;
+    
+    is( $edt->handle_column('EDT_TEST', 'string_val', 'ignore'), undef,
+	"handle_column on a table returns undef after the transaction has finished" );
+    
+    is( $edt->handle_column('&#1', 'string_val', 'ignore'), undef,
+	"handle_column on an action returns undef after the transaction has finished" );
+    
+    # Class-level directives.
+    
+    ETTrivialClass->handle_column('EDT_SUB', 'name', 'pass');
+    
+    is_deeply( { ETTrivialClass->get_handling('EDT_SUB', '*') }, { name => 'pass' },
+	       "get_handling with '*' lists the class-level directives for a table" );
+    
+    ok_exception( sub { ETTrivialClass->handle_column('&x', 'name', 'pass') },
+		  qr/not valid when this method is called on a class/,
+		  "handle_column rejects an action reference when called on a class" );
+    
+    ok_exception( sub { ETTrivialClass->get_handling('&x', 'name') },
+		  qr/not valid when this method is called on a class/,
+		  "get_handling rejects an action reference when called on a class" );
+    
+    ok( ! ETTrivialClass->copy_directives_from('ETTrivialClass'),
+	"copying directives from the same class does nothing" );
+    
+    ETTrivialClass->handle_column('EDT_SUB', 'name', 'none');
+};

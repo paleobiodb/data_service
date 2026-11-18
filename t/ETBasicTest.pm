@@ -69,7 +69,10 @@ use namespace::clean;
     set_table_property(EDT_SUB => PRIMARY_KEY => 'aux_no');
     set_table_property(EDT_SUB => PRIMARY_FIELD => 'aux_id');
     
-    set_column_property(EDT_SUB => test_no => FOREIGN_KEY => 'EDT_TEST');
+    # The column test_no is the link column for EDT_TEST, so it is treated as a foreign key
+    # automatically. [Changed by Claude under the guidance of Michael McClennen: its
+    # FOREIGN_KEY property was removed]
+    
     set_column_property(EDT_SUB => name => REQUIRED => 1);
     
     # Set properties for EDT_TYPES
