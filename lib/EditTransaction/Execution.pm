@@ -2018,14 +2018,17 @@ sub before_log_event {
 }
 
 
-# log_aux_event ( operation, table, sql, key_value )
+# log_aux_event ( operation, table, sql, key_value, [rev] )
 # 
 # This routine logs changes to auxiliary database tables that hold lists of
-# records relating to primary tables.
+# records relating to primary tables. If $rev is given and is not empty, it should be an
+# SQL statement that will reverse the change being logged. It is written as a comment
+# immediately after the header line. [Changed by Claude under the guidance of Michael
+# McClennen: added $rev]
 
 sub log_aux_event {
     
-    my ($edt, $op, $table_specifier, $sql, $key_expr) = @_;
+    my ($edt, $op, $table_specifier, $sql, $key_expr, $rev) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
     return if $edt->allows('NO_LOG_MODE');
@@ -2049,7 +2052,21 @@ sub log_aux_event {
 	. "\n";
     my $line2 = "$sql;\n";
     
-    $edt->{log_lines} .= $line1 . $line2;
+    # If a reversing statement was given, turn it into a comment by adding a hashmark at
+    # the beginning and after every newline. A final newline is removed first, so that
+    # it does not produce an empty comment line. [Added by Claude under the guidance of
+    # Michael McClennen]
+    
+    my $rev_lines = '';
+    
+    if ( defined $rev && $rev ne '' )
+    {
+	my $comment = $rev =~ s/\n$//r;
+	
+	$rev_lines = '#' . ($comment =~ s/\n/\n#/gr) . "\n";
+    }
+    
+    $edt->{log_lines} .= $line1 . $rev_lines . $line2;
     $edt->{log_date} = $datestr;
 }
 

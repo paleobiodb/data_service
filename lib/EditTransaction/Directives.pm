@@ -362,6 +362,11 @@ sub get_handling {
 		return undef;
 	    }
 	}
+	
+	# If the table is not known, return the empty list for '*' and undef otherwise.
+	# [Added by Claude under the guidance of Michael McClennen]
+	
+	return $colname eq '*' ? () : undef;
     }
     
     # Otherwise, assume it is an action reference. If it is valid, return
