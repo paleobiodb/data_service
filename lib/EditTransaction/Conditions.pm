@@ -120,6 +120,7 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 				  lock => "You do not have permission to lock this record",
 				  unlock => "You do not have permission to unlock this record",
 				  link => "You do not have permission to modify the linked record",
+				  move => "You do not have permission to move this record to a different linked record",  # [Added by Claude under the guidance of Michael McClennen]
 				  fixup_mode => "You do not have permission to use FIXUP_MODE",
 				  default => "You do not have permission for this operation" },
 		E_PERMISSION_COLUMN => "You do not have permission to set the value of '&1'",

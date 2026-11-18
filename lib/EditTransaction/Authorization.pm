@@ -79,6 +79,9 @@ sub validate_instance_permission {
 # 
 # modify         modify rows in this table
 # 
+# move           move rows in this subordinate table from one superior record to another
+#                [Added by Claude under the guidance of Michael McClennen]
+# 
 # admin          execute restricted actions on this table
 # 
 # The return value should be either a listref representing an error condition, or a string value
@@ -126,6 +129,14 @@ sub check_table_permission {
     elsif ( $requested eq 'modify' )
     {
 	return 'none' if $tableinfo->{CAN_MODIFY} eq 'none';
+    }
+    
+    # Moving records is refused unless the CAN_MOVE property is set to something other
+    # than 'none'. [Added by Claude under the guidance of Michael McClennen]
+    
+    elsif ( $requested eq 'move' )
+    {
+	return 'none' if ! $tableinfo->{CAN_MOVE} || $tableinfo->{CAN_MOVE} =~ /^none$/i;
     }
     
     return 'unrestricted';

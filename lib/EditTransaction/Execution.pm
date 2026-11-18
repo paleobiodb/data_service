@@ -193,6 +193,66 @@ sub _check_transaction_intact {
 }
 
 
+# _fetch_old_linkvalues ( action, table_specifier )
+# 
+# Fetch the link value(s) of the existing record(s) selected by the specified action, and
+# store any that differ from the action's new link value. If they cannot be fetched, store
+# nothing, because the action itself will report the problem.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _fetch_old_linkvalues {
+    
+    my ($edt, $action, $table_specifier) = @_;
+    
+    my $key_expr = $action->keyexpr;
+    my $link_col = $action->{linkcol};
+    
+    return unless $key_expr && $key_expr ne '0' && $link_col;
+    
+    my $quoted_table = $edt->quoted_table_name($table_specifier);
+    
+    my $sql = "SELECT distinct $link_col FROM $quoted_table WHERE $key_expr";
+    
+    $edt->debug_line("$sql\n") if $edt->debug_mode;
+    
+    my $old_values = eval { $edt->dbh->selectcol_arrayref($sql) } || return;
+    
+    my %new = map { $_ => 1 } $action->linkvalues;
+    
+    $action->set_old_linkvalues(grep { defined $_ && ! $new{$_} } @$old_values);
+}
+
+
+# _authorize_move ( action, table_specifier )
+# 
+# Add an error condition to the specified action, which moves a record in a subordinate
+# table to a different superior record, unless moving records in this table is allowed.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _authorize_move {
+    
+    my ($edt, $action, $table_specifier) = @_;
+    
+    my $tableinfo = $edt->table_info_ref($table_specifier);
+    my $can_move = $tableinfo && $tableinfo->{CAN_MOVE};
+    
+    my $permission = $can_move && $can_move !~ /^none$/i ?
+	$edt->check_table_permission($table_specifier, 'move') : 'none';
+    
+    if ( ref $permission eq 'ARRAY' )
+    {
+	$edt->add_condition($action, $permission->@*);
+    }
+    
+    elsif ( ! $permission || $permission eq 'none' )
+    {
+	$edt->add_condition($action, 'E_PERMISSION', 'move');
+    }
+}
+
+
 # pre_execution_check ( action, operation )
 #
 # This method is called immediately before each action is executed. It starts by doing any
@@ -259,6 +319,27 @@ sub pre_execution_check {
 	    my $vs = $action->validation_status;
 	    $edt->add_condition($action, 'E_EXECUTE', "An error occurred while checking validation");
 	    $edt->error_line("Validation for '$operation' was '$vs' at execution time");
+	}
+    }
+    
+    # If this is an update or replace on a subordinate table that gives a link value,
+    # record the link value(s) of the existing record, so that 'superior_keys' can report
+    # the superior record it is being moved from. This is done just before the action is
+    # executed, so that it reflects any earlier actions in the transaction. [Added by
+    # Claude under the guidance of Michael McClennen]
+    
+    if ( $operation =~ /^update|^replace/ && $action->linkvalues )
+    {
+	$edt->_fetch_old_linkvalues($action, $table_specifier);
+	
+	# If the record is being moved to a different superior record, the move must be
+	# allowed. It is refused if the table's CAN_MOVE property is not set or is 'none'.
+	# Otherwise, permission is requested from 'check_table_permission'. [Added by
+	# Claude under the guidance of Michael McClennen]
+	
+	if ( $action->old_linkvalues )
+	{
+	    $edt->_authorize_move($action, $table_specifier);
 	}
     }
     

@@ -1682,10 +1682,45 @@ sub other_keys {
 }
 
 
+# superior_keys ( [table] )
+# 
+# Return the keys of the records in superior tables that were affected by executed actions
+# on subordinate tables. If a table is given, return only the keys of records in that
+# superior table. Each key is returned once, even if several actions affected the same
+# record. A record that a subordinate record was moved away from by an update or replace
+# is included along with the one it was moved to. In scalar context, return the number of
+# keys. If the transaction failed or was rolled back, return nothing.
+# 
+# [Changed by Claude under the guidance of Michael McClennen: this method was a stub]
+
 sub superior_keys {
 
     my ($edt, $table_key) = @_;
-    # return $edt->_result_keys('superior_keys', $table_key);
+    
+    if ( $edt->status =~ /^failed|^aborted/ )
+    {
+	return wantarray ? () : 0;
+    }
+    
+    my (@result_list, %seen);
+    
+  ACTION:
+    foreach my $action ( $edt->{action_list}->@* )
+    {
+	next ACTION unless $action && $action->status eq 'executed';
+	
+	my $tableinfo = $edt->table_info_ref($action->table) || next ACTION;
+	my $auth_table = $tableinfo->{AUTH_TABLE} || next ACTION;
+	
+	next ACTION if $table_key && $table_key ne $auth_table;
+	
+	foreach my $key ( $action->linkvalues, $action->old_linkvalues )
+	{
+	    push @result_list, $key if defined $key && ! $seen{$auth_table}{$key}++;
+	}
+    }
+    
+    return wantarray ? @result_list : scalar(@result_list);
 }
 
 

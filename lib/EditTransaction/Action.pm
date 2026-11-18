@@ -424,6 +424,27 @@ sub linkexpr {
 }
 
 
+# set_old_linkvalues ( value... ) and old_linkvalues ( )
+# 
+# If an update or replace changes the link value of a record in a subordinate table, the
+# link value(s) the record had before the change are stored using 'set_old_linkvalues'.
+# They are returned by 'old_linkvalues', and are used by 'superior_keys'. [Added by Claude
+# under the guidance of Michael McClennen]
+
+sub set_old_linkvalues {
+    
+    my ($action, @values) = @_;
+    
+    $action->{old_linkval} = \@values;
+}
+
+
+sub old_linkvalues {
+    
+    return ref $_[0]{old_linkval} eq 'ARRAY' ? $_[0]{old_linkval}->@* : ();
+}
+
+
 # set_keyval ( new_value )
 # 
 # This is called after an insert operation, to store the new key value in the action record.
