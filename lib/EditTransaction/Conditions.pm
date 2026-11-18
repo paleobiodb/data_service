@@ -11,6 +11,7 @@ use strict;
 use EditTransaction;
 use Carp qw(croak);
 use Scalar::Util qw(reftype blessed);
+use List::Util qw(any);  # added by Claude under the guidance of Michael McClennen
 
 use Role::Tiny;
 
@@ -147,6 +148,8 @@ our (%CONDITION_BY_CLASS) = ( EditTransaction => {
 		E_UNRECOGNIZED => "This record not match any record type accepted by this operation",
 		E_IMPORTED => ["&1: Field '&2': &3", "&1: Field '&2'", "&1"],
 		W_BAD_ALLOWANCE => "Unknown allowance '&1'",
+		W_BAD_FIELD => ["Field '&1' does not correspond to any column in '&2'",  # [Changed by Claude under the guidance of Michael McClennen]
+				"Field '&1' does not correspond to any column in this table"],
 		W_EXECUTE => ["&1", "Unknown"],
 		W_UNCHANGED => ["&1", "The record was unchanged by the update"],  # [Changed by Claude under the guidance of Michael McClennen]
 		W_NOT_FOUND => ["&1", "The specified key value was not found"],  # [Changed by Claude under the guidance of Michael McClennen]
@@ -338,6 +341,16 @@ sub add_condition {
 	croak "you must specify a condition code";
     }
     
+    # The code must have a template, either for this class or for EditTransaction. A code
+    # without one is a programming error, and would only produce a useless message.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    unless ( defined($CONDITION_BY_CLASS{ref $edt || $edt}{$code} //
+		     $CONDITION_BY_CLASS{EditTransaction}{$code}) )
+    {
+	croak "no template for condition code '$code'";
+    }
+    
     # If this condition belongs to an action, add it to that action. Adjust the condition
     # counts for the transaction, but only if the action is not marked as skipped. If the
     # action already has this exact condition, return without doing anything.
@@ -497,6 +510,19 @@ sub has_condition {
     {
 	croak $code ? "'$code' is not a valid selector or condition code" :
 	    "you must specify a condition code";
+    }
+    
+    # An error attached to an action may have been demoted because of PROCEED, NOT_FOUND, or
+    # NOT_PERMITTED, in which case it is stored with the prefix 'D_'. A code given as 'E_...'
+    # matches both forms. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( ! ref $code && $code =~ /^E_(.+)$/ )
+    {
+	my $rest = $1;
+	
+	return '' unless $edt->{condition_code}{$code} || $edt->{condition_code}{"D_$rest"};
+	
+	$code = qr{ ^ [ED]_ \Q$rest\E $ }x;
     }
     
     # Return false if the code is not present in this transaction at all.
@@ -1008,6 +1034,14 @@ sub condition_message {
     
     my ($edt, @params) = @_;
     
+    # If the first parameter after the code is '_literal_', the next parameter is the
+    # complete message. Return it unchanged. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( defined $params[1] && $params[1] eq '_literal_' )
+    {
+	return $params[2] // '';
+    }
+    
     # If the code was altered because of the PROCEED allowance, change it back
     # so we can look up the proper template.
     
@@ -1047,17 +1081,17 @@ sub condition_message {
     }
     
     # If none of the templates are fulfilled, concatenate the parameters with a space
-    # between each one.
+    # between each one, leaving out the condition code. [Changed by Claude under the guidance of Michael McClennen]
     
-    return join(' ', @params);
+    return join(' ', @params[1..$#params]);
 }
 
 
 # _squash_param ( param )
 #
 # Return a value suitable for inclusion into a message template. If the parameter value is longer
-# than 40 characters, it is truncated and ellipses are appended. If the value is not defined, then
-# 'UNKNOWN' is returned.
+# than 100 characters, it is truncated and ellipses are appended. If the value is not defined,
+# then 'UNKNOWN' is returned. [Comment corrected by Claude under the guidance of Michael McClennen]
 
 sub _squash_param {
 
@@ -1193,11 +1227,19 @@ sub import_conditions {
     {
 	if ( ref $c eq 'ARRAY' )
 	{
-	    my $code = shift $c->@*;
+	    # Copy the list, so that the caller's data is not changed. A list containing only a
+	    # complete condition line is imported as text. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    my ($code, @params) = $c->@*;
 	    
 	    if ( $code && $code =~ $CONDITION_CODE_LOOSE )
 	    {
-		$edt->_import_condition($action, $code, $c->@*);
+		$edt->_import_condition($action, 'list', $code, @params);
+	    }
+	    
+	    elsif ( ! @params && $code && $code =~ $CONDITION_LINE_IMPORT )
+	    {
+		$edt->_import_condition($action, 'text', $1, $2);
 	    }
 	    
 	    else
@@ -1208,7 +1250,7 @@ sub import_conditions {
 	
 	elsif ( $c =~ $CONDITION_LINE_IMPORT )
 	{
-	    $edt->_import_condition($action, $1, $2);
+	    $edt->_import_condition($action, 'text', $1, $2);  # [Changed by Claude under the guidance of Michael McClennen]
 	}
 	
 	elsif ( $c )
@@ -1220,19 +1262,39 @@ sub import_conditions {
 }
 
 
+# _import_condition ( action, form, code, args... )
+# 
+# Add an imported condition to the specified action. The form is 'list' if the condition was
+# given as a list of a code and parameters, and 'text' if it was given as a string. The text
+# of a condition given as a string is kept unchanged, by giving it the parameters
+# '_literal_' and the text. A condition whose code has no template is added as 'E_IMPORTED'
+# or 'W_IMPORTED', with the original code in front of its text or parameters.
+# 
+# The form argument was added by Claude under the guidance of Michael McClennen.
+
 sub _import_condition {
 
-    my ($edt, $action, $code, @args) = @_;
+    my ($edt, $action, $form, $code, @args) = @_;
     
     # Return the code to its canonical version.
     
-    substr($code, 0, 1) =~ tr/DF/CE/;
+    substr($code, 0, 1) =~ tr/DF/EE/;  # [Changed by Claude under the guidance of Michael McClennen]
     
-    # If we have a template corresponding to that code, add the condition as is.
+    # If we have a template corresponding to that code, add the condition as is. The
+    # template is looked up directly, because 'get_condition_template' returns a
+    # placeholder template for unknown codes. [Changed by Claude under the guidance of Michael McClennen]
     
-    if ( $edt->get_condition_template($code) )
+    if ( defined($CONDITION_BY_CLASS{ref $edt}{$code} // $CONDITION_BY_CLASS{EditTransaction}{$code}) )
     {
-	$edt->add_condition($action, $code, @args);
+	if ( $form eq 'text' )
+	{
+	    $edt->add_condition($action, $code, '_literal_', $args[0]);  # [Changed by Claude under the guidance of Michael McClennen]
+	}
+	
+	else
+	{
+	    $edt->add_condition($action, $code, @args);
+	}
     }
     
     # Otherwise, change any warning condition to 'W_IMPORTED' and all other conditions to
@@ -1243,7 +1305,9 @@ sub _import_condition {
     {
 	my $newcode = $code =~ /^W/ ? 'W_IMPORTED' : 'E_IMPORTED';
 
-	$edt->add_condition($action, $newcode, $code, @args);
+	my $text = join(' ', grep { defined $_ && $_ ne '' } @args);  # [Changed by Claude under the guidance of Michael McClennen]
+	
+	$edt->add_condition($action, $newcode, '_literal_', $text ne '' ? "$code: $text" : $code);
     }
 }
 
