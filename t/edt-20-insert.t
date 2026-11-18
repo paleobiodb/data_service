@@ -328,19 +328,29 @@ subtest 'insert with non-auto-increment key' => sub {
 
 subtest 'insert into table with no primary key' => sub {
     
-  TODO: {
-	local $TODO = "inserts into a table with no primary key are counted as failures";
-	
-	clear_table('EDT_NOPRIM');
-	
-	my $edt = ok_new_edt;
-	
-	$edt->insert_record('EDT_NOPRIM', { name => 'abc', value => 'def' });
-	
-	ok_commit("insert into table with no primary key commits");
-	
-	ok_no_conditions('all', "no conditions from insert into table with no primary key");
-	
-	ok_found_record( 'EDT_NOPRIM', "name = 'abc' and value = 'def'", "record was stored" );
-    }
+    clear_table('EDT_NOPRIM');
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_NOPRIM', { name => 'abc', value => 'def' });
+    
+    ok_commit("insert into table with no primary key commits");
+    
+    ok_no_conditions('all', "no conditions from insert into table with no primary key");
+    
+    ok_found_record( 'EDT_NOPRIM', "name = 'abc' and value = 'def'", "record was stored" );
+    
+    # The following checks were added by Claude under the guidance of Michael McClennen.
+    
+    is( $edt->exec_count, 1, "insert into table with no primary key is counted as executed" );
+    
+    is_deeply( [ $edt->inserted_keys('EDT_NOPRIM') ], [ ], "there is no key to report" );
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_NOPRIM', { name => 'abc', value => 'def' });
+    
+    ok_failed_commit("duplicate insert into table with no primary key fails");
+    
+    ok_has_one_condition('all', 'E_DUPLICATE', "duplicate is reported by the unique key");
 };

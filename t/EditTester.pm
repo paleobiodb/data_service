@@ -174,8 +174,10 @@ sub connect_to_database {
     eval {
 	$dbh = connectDB("config.yml");
 	$dbh->do('SET @@SQL_MODE = CONCAT(@@SQL_MODE, ",STRICT_TRANS_TABLES")');
-	$dbh->do('SET CHARACTER SET utf8');
-	$dbh->do('SET NAMES utf8');
+	# The connection uses utf8mb4, as the application's connections do by default, so that
+	# four-byte characters can be tested. [Changed by Claude under the guidance of Michael McClennen]
+	$dbh->do('SET CHARACTER SET utf8mb4');
+	$dbh->do('SET NAMES utf8mb4');
 	init_table_names(configData, 1);
     };
     

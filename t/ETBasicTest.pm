@@ -633,6 +633,7 @@ sub establish_test_tables {
     # The columns tinytext_val, greek_text, bigint_val, and ubigint_val were added by Claude
     # under the guidance of Michael McClennen, for testing value validation (edt-18).
     # The columns latin1_text, date_val, and time_val were added for edt-19.
+    # The column mb4_val was added for testing E_CHARSET (edt-18).
     
     $dbh->do("CREATE TABLE $TABLE{EDT_TYPES} (
 		name varchar(40) not null primary key,
@@ -645,6 +646,7 @@ sub establish_test_tables {
 		tinytext_val tinytext,
 		greek_text tinytext charset greek,
 		latin1_text tinytext charset latin1,
+		mb4_val varchar(40) charset utf8mb4 not null default '',
 		blob_val blob,
 		signed_val mediumint,
 		unsigned_val mediumint unsigned not null default 0,

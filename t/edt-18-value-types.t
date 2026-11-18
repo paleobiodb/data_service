@@ -401,22 +401,38 @@ subtest 'column defaults' => sub {
 # should be rejected during validation, rather than by the database.
 
 subtest 'unrepresentable characters' => sub {
-  
-  TODO: {
-	local $TODO = "invalid characters are not yet checked during validation";
-	
-	my $edt = ok_new_edt;
-	
-	$edt->insert_record('EDT_TYPES', { name => 'charset1', latin1_val => $ALPHA });
-	
-	ok_has_one_condition('errors', qr/^E_(?!EXECUTE)/,
-			     "Greek character in latin1 column rejected during validation");
-	
-	$edt->insert_record('EDT_TYPES', { name => 'charset2', string_val => "\N{U+1F600}" });
-	
-	ok_has_one_condition('errors', qr/^E_(?!EXECUTE)/,
-			     "four-byte character in utf8mb3 column rejected during validation");
-    }
+    
+    # This subtest was rewritten by Claude under the guidance of Michael McClennen, when
+    # E_CHARSET was added. Values are checked against the character set of the column
+    # during validation, rather than being rejected by the database during execution.
+    
+    my $EMOJI = "\N{U+1F600}";		# four bytes in utf8mb4, not storable in utf8mb3
+    my $EURO = "\N{U+20AC}";		# in cp1252, which is what MariaDB calls latin1
+    
+    reject_ok('latin1_val', "ab$ALPHA", 'E_CHARSET',
+	      qr/Field 'latin1_val': the character '\x{3B1}' \(U\+03B1\) cannot be stored in a column with character set 'latin1'/,
+	      "Greek character in a latin1 column" );
+    
+    reject_ok('greek_val', $EACUTE, 'E_CHARSET', qr/\(U\+00E9\).*'greek'/,
+	      "accented Latin character in a greek column" );
+    
+    reject_ok('string_val', "a${EMOJI}b", 'E_CHARSET', qr/\(U\+1F600\).*'utf8mb3'/,
+	      "four-byte character in a utf8mb3 column" );
+    
+    reject_ok('latin1_text', $ALPHA, 'E_CHARSET', qr/\(U\+03B1\).*'latin1'/,
+	      "Greek character in a latin1 text column" );
+    
+    reject_ok('tinytext_val', $EMOJI, 'E_CHARSET', qr/\(U\+1F600\).*'utf8mb3'/,
+	      "four-byte character in a utf8mb3 text column" );
+    
+    reject_ok('latin1_val', "$ALPHA\N{U+03B2}", 'E_CHARSET', qr/\(U\+03B1\)/,
+	      "the first character that cannot be stored is reported" );
+    
+    store_ok('latin1_val', "${EACUTE}t${EACUTE}", "${EACUTE}t${EACUTE}", "accented characters in a latin1 column");
+    store_ok('latin1_val', "5 $EURO", "5 $EURO", "euro sign in a latin1 column");
+    store_ok('greek_val', $ALPHA, $ALPHA, "Greek character in a greek column");
+    store_ok('string_val', "$ALPHA$EACUTE", "$ALPHA$EACUTE", "two-byte characters in a utf8mb3 column");
+    store_ok('mb4_val', "a${EMOJI}b", "a${EMOJI}b", "four-byte character in a utf8mb4 column");
 };
 
 
