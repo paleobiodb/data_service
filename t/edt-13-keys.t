@@ -487,7 +487,13 @@ subtest 'link key values' => sub {
     
     $edt->update_record('EDT_TEST', { _where => 'test_no = 5', test_no => 5, string_req => 'w' });
     
-    ok_has_one_condition('&_', 'E_BAD_KEY', "_where together with a key value is rejected");
+    ok_has_one_condition('&_', 'E_BAD_KEY_FIELD', qr/_where.*test_no/,
+			 "_where together with a key value is rejected");  # [Changed by Claude under the guidance of Michael McClennen]
+    
+    $edt->update_record('EDT_TEST', { _where => 'test_no = 5', _primary => 5, string_req => 'w' });
+    
+    ok_has_one_condition('&_', 'E_BAD_KEY_FIELD', qr/_where.*_primary/,
+			 "_where together with _primary is rejected");  # [Added by Claude under the guidance of Michael McClennen]
     
     $edt->update_record('EDT_NOPRIM', { _primary => 5, name => 'np' });
     

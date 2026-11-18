@@ -15,7 +15,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 10;
+use Test::More tests => 14;
 
 use ETBasicTest;
 use EditTester qw(ok_new_edt ok_exception ok_commit clear_table sql_command
@@ -23,7 +23,7 @@ use EditTester qw(ok_new_edt ok_exception ok_commit clear_table sql_command
 
 use File::Temp qw(tempdir);
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE set_table_name set_table_property set_column_property);
 
 
 # Establish an EditTester instance.
@@ -368,4 +368,196 @@ subtest 'do_logged_stmt' => sub {
     $edt->rollback;
     
     ETBasicTest->log_filename($save_filename);
+};
+
+
+# The following subtests were added by Claude under the guidance of Michael McClennen, to
+# test how table descriptions are built from the database schema and the table definition
+# system. They use tables created here, in the same database as the other test tables.
+
+my ($TEST_DB) = $TABLE{EDT_TEST} =~ /^(\w+)\./;
+
+
+# Check composite primary keys.
+
+subtest 'composite primary keys' => sub {
+    
+    sql_command("DROP TABLE IF EXISTS $TEST_DB.edt_key2");
+    sql_command("CREATE TABLE $TEST_DB.edt_key2 (a int not null, b int not null, primary key (a, b))");
+    sql_command("DROP TABLE IF EXISTS $TEST_DB.edt_key3");
+    sql_command("CREATE TABLE $TEST_DB.edt_key3 (a int not null, b int not null, c int not null,
+		 primary key (a, b, c))");
+    
+    my $edt = ok_new_edt;
+    
+    # Multi-column primary keys are not yet supported, so these tables are treated as having
+    # no primary key and the key columns are listed in PRIMARY_KEY_COLS. [Changed by Claude
+    # under the guidance of Michael McClennen]
+    
+    foreach my $test ( [ edt_key2 => [ 'a', 'b' ] ], [ edt_key3 => [ 'a', 'b', 'c' ] ] )
+    {
+	my ($table, $cols) = $test->@*;
+	my $info = $edt->table_info_ref("$TEST_DB.$table");
+	
+	ok( ! defined $info->{PRIMARY_KEY}, "$table has no PRIMARY_KEY" );
+	
+	is_deeply( $info->{PRIMARY_KEY_COLS}, $cols, "$table lists its key columns in PRIMARY_KEY_COLS" );
+    }
+    
+    # A table with no declared primary key, whose first unique NOT NULL key InnoDB uses
+    # instead, is treated the same way.
+    
+    my $noprim = $edt->table_info_ref('EDT_NOPRIM');
+    
+    ok( ! defined $noprim->{PRIMARY_KEY}, "EDT_NOPRIM has no PRIMARY_KEY" );
+    
+    is_deeply( $noprim->{PRIMARY_KEY_COLS}, [ 'name', 'value' ],
+	       "EDT_NOPRIM lists its unique key columns in PRIMARY_KEY_COLS" );
+    
+    sql_command("DROP TABLE $TEST_DB.edt_key2");
+    sql_command("DROP TABLE $TEST_DB.edt_key3");
+};
+
+
+# Check how table and column properties from the table definition system are applied.
+
+subtest 'table and column properties' => sub {
+    
+    sql_command("DROP TABLE IF EXISTS $TEST_DB.edt_schema");
+    sql_command("CREATE TABLE $TEST_DB.edt_schema (schema_no int unsigned not null auto_increment primary key,
+		 test_no int unsigned not null default 0, req_a varchar(10) not null,
+		 req_b varchar(10), dir_col varchar(10), ignored_col varchar(10))");
+    
+    set_table_name(EDT_SCHEMA => "$TEST_DB.edt_schema");
+    set_table_property(EDT_SCHEMA => REQUIRED_COLS => 'req_a, req_b');
+    set_column_property(EDT_SCHEMA => test_no => FOREIGN_KEY => 'EDT_TEST/test_no');
+    set_column_property(EDT_SCHEMA => ignored_col => IGNORE => 1);
+    set_column_property(EDT_SCHEMA => dir_col => DIRECTIVE => 'ignore');
+    set_column_property(EDT_SCHEMA => req_b => DIRECTIVE => 'validate');
+    
+    my $edt = ok_new_edt;
+    
+    is_deeply( [ $edt->table_column_list('EDT_SCHEMA') ],
+	       [ 'schema_no', 'test_no', 'req_a', 'req_b', 'dir_col' ],
+	       "a column with IGNORE is left out" );
+    
+    is( $edt->get_column_property('EDT_SCHEMA', 'test_no', 'FOREIGN_KEY'), 'EDT_TEST',
+	"a FOREIGN_KEY of the form 'table/column' gives the table" );
+    is( $edt->table_column_ref('EDT_SCHEMA', 'test_no')->{FOREIGN_COL}, 'test_no',
+	"and the column" );
+    
+    ok( $edt->table_column_ref('EDT_SCHEMA', 'req_a')->{REQUIRED}, "REQUIRED_COLS marks the first column" );
+    ok( $edt->table_column_ref('EDT_SCHEMA', 'req_b')->{REQUIRED}, "REQUIRED_COLS marks the second column" );
+    
+    ok( $edt->table_column_ref('EDT_SCHEMA', 'req_a')->{NOT_NULL},
+	"a not-null column with no default is marked NOT_NULL" );
+    ok( ! $edt->table_column_ref('EDT_SCHEMA', 'schema_no')->{NOT_NULL},
+	"an auto_increment column is not marked NOT_NULL" );
+    
+    is_deeply( { $edt->table_directives_list('EDT_SCHEMA') }, { dir_col => 'ignore' },
+	       "column directives are collected, except 'validate'" );
+    
+    is_deeply( { $edt->get_table_handling('EDT_SCHEMA', '*') }, { dir_col => 'ignore' },
+	       "get_table_handling with '*' returns all directives" );
+    
+    # REQUIRED_COLS can also be a list, and an unknown column in it produces an error message.
+    
+    set_table_property(EDT_SCHEMA => REQUIRED_COLS => [ 'req_b', 'no_such_column' ]);
+    ETBasicTest->clear_table_cache('EDT_SCHEMA');
+    
+    my $stderr = '';
+    
+    {
+	local *STDERR;
+	open(STDERR, '>', \$stderr);
+	$edt->table_info_ref('EDT_SCHEMA');
+    }
+    
+    ok( $edt->table_column_ref('EDT_SCHEMA', 'req_b')->{REQUIRED}, "REQUIRED_COLS as a list" );
+    like( $stderr, qr/unknown column 'no_such_column' in REQUIRED_COLS/,
+	  "an unknown column in REQUIRED_COLS is reported" );
+    
+    # A subclass method 'finish_table_definition' is called with the new description.
+    
+    my @args;
+    
+    no warnings 'once';
+    
+    local *ETBasicTest::finish_table_definition = sub {
+	my ($edt, $table, $columns, $column_list) = @_;
+	@args = ($table->{TABLE_NAME}, scalar(@$column_list));
+	$table->{FINISHED} = 1;
+    };
+    
+    ETBasicTest->clear_table_cache('EDT_SCHEMA');
+    
+    ok( $edt->table_info_ref('EDT_SCHEMA')->{FINISHED}, "finish_table_definition can change the description" );
+    is_deeply( \@args, [ "$TEST_DB.edt_schema", 5 ], "finish_table_definition is passed the description" );
+    
+    sql_command("DROP TABLE $TEST_DB.edt_schema");
+};
+
+
+# Check the cache operations that the earlier subtests did not use.
+
+subtest 'more cache operations' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    $edt->table_info_ref('EDT_TEST');
+    $edt->table_info_ref('EDT_SUB');
+    
+    ETBasicTest->clear_table_cache('*');
+    
+    ok( ! $edt->table_info_present('EDT_TEST') && ! $edt->table_info_present('EDT_SUB'),
+	"clear_table_cache with '*' clears every table" );
+    
+    ok_exception( sub { ETBasicTest->clear_table_cache() }, qr/table specifier or '\*'/,
+		  "clear_table_cache requires an argument" );
+    
+    is( $edt->table_info_present(), undef, "table_info_present with no table returns undef" );
+    
+    ETBasicTest->clear_table_cache('EDT_TEST');
+    
+    is_deeply( { $edt->table_directives_list('EDT_TEST') }, { },
+	       "table_directives_list fetches the table if it is not cached" );
+    ok( $edt->table_info_present('EDT_TEST'), "and caches it" );
+    
+    ETBasicTest->alter_column_property('EDT_TEST', 'string_val', 'TEST_HASH', { a => 1 });
+    
+    my $value = $edt->table_column_ref('EDT_TEST', 'string_val')->{TEST_HASH};
+    my $copy = EditTransaction::TableInfo::copy_property_value($value);
+    
+    $copy->{a} = 2;
+    
+    is( $value->{a}, 1, "copy_property_value copies a hash value" );
+    
+    ok_exception( sub { $edt->get_column_type('NO_SUCH_TABLE', 'x') }, qr/unknown table name/,
+		  "get_column_type of an unknown table" );
+};
+
+
+# Check fetch_table_schema called as a class method, and register_database_module.
+
+subtest 'class methods' => sub {
+    
+    ETBasicTest->clear_table_cache('EDT_TEST');
+    
+    my $info = ETBasicTest->fetch_table_schema('EDT_TEST', $T->dbh);
+    
+    is( $info->{PRIMARY_KEY}, 'test_no', "fetch_table_schema as a class method with a handle" );
+    
+    ok_exception( sub { ETBasicTest->fetch_table_schema('EDT_TEST') }, qr/database handle/,
+		  "fetch_table_schema as a class method requires a handle" );
+    
+    ok_exception( sub { ETBasicTest->fetch_table_schema('EDT_TEST', 'not a handle') },
+		  qr/database handle/, "fetch_table_schema rejects a value that is not a handle" );
+    
+    is( ETBasicTest->fetch_table_schema('NO_SUCH_TABLE', $T->dbh), undef,
+	"fetch_table_schema returns undef for an unknown table" );
+    
+    ETBasicTest->register_database_module;
+    
+    is( $EditTransaction::TableInfo::DB_CONSTANTS{ETBasicTest}{colname_field}, 'Field',
+	"register_database_module fills in the database constants" );
 };
