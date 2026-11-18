@@ -20,7 +20,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 12;
+use Test::More tests => 15;
 
 use TableDefs qw(%TABLE);
 
@@ -537,6 +537,116 @@ subtest 'link references' => sub {
     ok_commit;
     
     ok_found_record('EDT_SUB', "name = 'child' and test_no > 0", "child record stored with link to parent");
+};
+
+
+# Check that a replace under FIXUP_MODE leaves a ts_modified column with its existing
+# value. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'special columns: replace under FIXUP_MODE' => sub {
+    
+    clear_table('EDT_TYPES');
+    
+    sql_command("INSERT INTO <<EDT_TYPES>> (name, signed_val, dcr, dmd)
+		 VALUES ('old', 5, '2020-01-01 00:00:00', '2020-02-02 00:00:00')");
+    
+    my $edt = ok_new_edt('FIXUP_MODE');
+    
+    $edt->handle_column('EDT_TYPES', 'dmd', 'ts_modified');
+    
+    $edt->replace_record('EDT_TYPES', { name => 'old', signed_val => 9 });
+    
+    ok_commit;
+    
+    is( stored_row('old')->{dmd}, '2020-02-02 00:00:00', "ts_modified unchanged by replace under FIXUP_MODE" );
+    is( stored_row('old')->{signed_val}, '9', "other column replaced under FIXUP_MODE" );
+};
+
+
+# Check bit columns, and columns whose types have no specific validation. [Added by Claude
+# under the guidance of Michael McClennen]
+
+subtest 'other column types' => sub {
+    
+    my ($test_db) = $TABLE{EDT_TEST} =~ /^(\w+)\./;
+    
+    sql_command("DROP TABLE IF EXISTS $test_db.edt_other_types");
+    sql_command("CREATE TABLE $test_db.edt_other_types (other_no int unsigned primary key auto_increment,
+		 bit_val bit(8), year_val year)");
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => 5, year_val => 2024 });
+    
+    ok_no_conditions("values for bit and year columns are accepted");
+    
+    is( cvalue('bit_val'), "5", "the value for a bit column is not quoted" );
+    
+    is( cvalue('year_val'), "'2024'", "the value for a year column is stored as a string" );
+    
+    ok_commit;
+    
+    my ($bits, $year) = $dbh->selectrow_array("SELECT bit_val + 0, year_val FROM $test_db.edt_other_types");
+    
+    is( $year, 2024, "the year value was stored" );
+    
+    is( $bits, 5, "the bit value was stored" );
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => "b'1010'" });
+    
+    is( cvalue('bit_val'), "10", "a binary literal is converted to a number" );
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => "0b11" });
+    
+    is( cvalue('bit_val'), "3", "a binary literal with the prefix 0b is accepted" );
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => "256" });
+    
+    ok_has_one_condition('&_', 'E_RANGE', qr/8 bits/, "a value too large for the column is rejected");
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => "-1" });
+    
+    ok_has_one_condition('&_', 'E_FORMAT', qr/bit_val/, "a negative value is rejected");
+    
+    $edt->insert_record("$test_db.edt_other_types", { bit_val => " " });
+    
+    is( cvalue('bit_val'), 'NULL', "an empty value is treated as null" );
+    
+    sql_command("DROP TABLE $test_db.edt_other_types");
+};
+
+
+# Check the cases that validate_against_schema and validate_data_column handle without
+# validating anything. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'validation shortcuts' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    # If the table schema cannot be found, an error condition is added.
+    
+    my $action = $edt->_new_action('insert', 'EDT_TYPES', { name => 'no schema' });
+    
+    $edt->validate_against_schema($action, 'insert', 'EDT_NOSUCH');
+    
+    ok_has_one_condition('&_', 'E_EXECUTE', qr/table schema/, "a missing table schema is reported");
+    
+    is( $action->validation_status, '', "the validation is not marked as complete" );
+    
+    # validate_data_column returns any directive other than 'validate' unchanged, since
+    # it means that the disposition of the value has already been decided.
+    
+    $action = $edt->_new_action('insert', 'EDT_TYPES', { name => 'directive' });
+    
+    my $cr = $edt->table_column_ref('EDT_TYPES', 'signed_val');
+    
+    is_deeply( [ $edt->validate_data_column($action, 'signed_val', $cr, 'pass', 'not a number') ],
+	       [ 'pass', 'not a number' ], "a directive other than 'validate' is returned unchanged" );
+    
+    is_deeply( [ $edt->validate_special_column($action, 'signed_val', $cr, 'ignore', 5) ],
+	       [ 'ignore', 5 ], "validate_special_column also returns such a directive unchanged" );
 };
 
 
