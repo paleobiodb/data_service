@@ -11,19 +11,18 @@
 #                immediate mode 'do_sql' returns the result of executing the statement
 #                while in regular mode it returns nothing.
 #
-# Added by Claude under the guidance of Michael McClennen. The 'do_sql' method has
-# not yet been implemented, so most of these tests are in TODO blocks.
+# Added by Claude under the guidance of Michael McClennen.
 #
 
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 8;
+use Test::More tests => 10;
 
 use File::Temp qw(tempdir);
 
 use ETBasicTest;
-use EditTester qw(ok_eval ok_exception ok_new_edt ok_no_errors ok_has_condition
+use EditTester qw(ok_eval ok_exception ok_new_edt ok_no_errors ok_has_condition ok_has_one_condition
 		  ok_commit ok_failed_commit clear_table sql_command
 		  ok_found_record ok_no_record);
 
@@ -63,31 +62,27 @@ subtest 'do_sql in regular mode' => sub {
     reset_test_record();
     
     my $edt = ok_new_edt;
-  
-  TODO: {
-	local $TODO = "do_sql is not yet implemented";
-	
-	my @result;
-	
-	ok_eval( sub { @result = $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'by sql'
-					       WHERE test_no = 5") },
-		 'IGNORE', "do_sql does not throw an exception" );
-	
-	is( scalar(@result), 0, "do_sql returns nothing in regular mode" );
-	
-	is( $edt->action_operation('&_'), 'sql', "do_sql creates an action with operation 'sql'" );
-	
-	ok_no_errors('all', "do_sql adds no error conditions");
-	
-	ok_no_record('EDT_TEST', "string_req = 'by sql'", "statement is not executed before commit");
-	
-	ok_commit;
-	
-	ok_found_record('EDT_TEST', "test_no = 5 and string_req = 'by sql'",
-			"statement was executed at commit");
-	
-	is( $edt->action_status('&#1'), 'executed', "action status is 'executed'" );
-    }
+    
+    my @result;
+    
+    ok_eval( sub { @result = $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'by sql'
+					   WHERE test_no = 5") },
+	     'IGNORE', "do_sql does not throw an exception" );
+    
+    is( scalar(@result), 0, "do_sql returns nothing in regular mode" );
+    
+    is( $edt->action_operation('&_'), 'sql', "do_sql creates an action with operation 'sql'" );
+    
+    ok_no_errors('all', "do_sql adds no error conditions");
+    
+    ok_no_record('EDT_TEST', "string_req = 'by sql'", "statement is not executed before commit");
+    
+    ok_commit;
+    
+    ok_found_record('EDT_TEST', "test_no = 5 and string_req = 'by sql'",
+		    "statement was executed at commit");
+    
+    is( $edt->action_status('&#1'), 'executed', "action status is 'executed'" );
 };
 
 
@@ -99,20 +94,16 @@ subtest 'do_sql in immediate mode' => sub {
     reset_test_record();
     
     my $edt = ok_new_edt('IMMEDIATE_MODE');
-  
-  TODO: {
-	local $TODO = "do_sql is not yet implemented";
-	
-	my $result = $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'immediate'
-				   WHERE test_no = 5");
-	
-	is( $result, 1, "do_sql returns the result of the statement in immediate mode" );
-	
-	ok_found_record('EDT_TEST', "test_no = 5 and string_req = 'immediate'",
-			"statement was executed immediately");
-	
-	ok_commit;
-    }
+    
+    my $result = $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'immediate'
+			       WHERE test_no = 5");
+    
+    is( $result, 1, "do_sql returns the result of the statement in immediate mode" );
+    
+    ok_found_record('EDT_TEST', "test_no = 5 and string_req = 'immediate'",
+		    "statement was executed immediately");
+    
+    ok_commit;
 };
 
 
@@ -123,25 +114,21 @@ subtest 'do_sql action order' => sub {
     clear_table('EDT_TEST');
     
     my $edt = ok_new_edt;
-  
-  TODO: {
-	local $TODO = "do_sql is not yet implemented";
-	
-	$edt->insert_record('EDT_TEST', { string_req => 'before sql' });
-	
-	$edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_val = 'updated'
-		      WHERE string_req = 'before sql'");
-	
-	$edt->insert_record('EDT_TEST', { string_req => 'after sql' });
-	
-	ok_commit;
-	
-	ok_found_record('EDT_TEST', "string_req = 'before sql' and string_val = 'updated'",
-			"statement affected the record inserted before it");
-	
-	ok_found_record('EDT_TEST', "string_req = 'after sql' and string_val = ''",
-			"statement did not affect the record inserted after it");
-    }
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'before sql' });
+    
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_val = 'updated'
+		  WHERE string_req = 'before sql'");
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'after sql' });
+    
+    ok_commit;
+    
+    ok_found_record('EDT_TEST', "string_req = 'before sql' and string_val = 'updated'",
+		    "statement affected the record inserted before it");
+    
+    ok_found_record('EDT_TEST', "string_req = 'after sql' and string_val = ''",
+		    "statement did not affect the record inserted after it");
 };
 
 
@@ -152,26 +139,23 @@ subtest 'do_sql with a bad statement' => sub {
     clear_table('EDT_TEST');
     
     my $edt = ok_new_edt;
-  
-  TODO: {
-	local $TODO = "do_sql is not yet implemented";
-	
-	$edt->insert_record('EDT_TEST', { string_req => 'rolled back' });
-	
-	ok_eval( sub { $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET no_such_column = 1") },
-		 'IGNORE', "bad statement does not throw an exception" );
-	
-	ok_failed_commit("transaction with a bad statement is not committed");
-	
-	ok_has_condition('all', 'E_EXECUTE', "bad statement is reported as E_EXECUTE");
-	
-	ok_no_record('EDT_TEST', "string_req = 'rolled back'", "other actions were rolled back");
-    }
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'rolled back' });
+    
+    ok_eval( sub { $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET no_such_column = 1") },
+	     'IGNORE', "bad statement does not throw an exception" );
+    
+    ok_failed_commit("transaction with a bad statement is not committed");
+    
+    ok_has_condition('all', 'E_EXECUTE', "bad statement is reported as E_EXECUTE");
+    
+    ok_no_record('EDT_TEST', "string_req = 'rolled back'", "other actions were rolled back");
 };
 
 
-# The statement is written to the log. The log format for 'sql' actions has not yet
-# been decided, so this only checks that the statement text appears in the log.
+# The statement is written to the log, with a header line that has '-' in place of the
+# table and key. Because a statement is not tied to any table, it is logged whenever a log
+# file is set, even without LOG_ALL_TABLES.
 
 subtest 'do_sql logging' => sub {
     
@@ -184,27 +168,36 @@ subtest 'do_sql logging' => sub {
     my $save_all = ETBasicTest->log_all_tables;
     
     ETBasicTest->log_filename($logfile);
-    ETBasicTest->log_all_tables(1);
+    ETBasicTest->log_all_tables(0);
     
     my $edt = ok_new_edt;
-  
-  TODO: {
-	local $TODO = "do_sql is not yet implemented";
-	
-	$edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'logged' WHERE test_no = 5");
-	
-	ok_commit;
-	
-	my $log = '';
-	
-	if ( open(my $fh, '<', $logfile) )
-	{
-	    local $/;
-	    $log = <$fh>;
-	}
-	
-	like( $log, qr/SET string_req = 'logged' WHERE test_no = 5/, "statement was logged" );
+    
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'logged' WHERE test_no = 5");
+    
+    ok_commit;
+    
+    my $log = '';
+    
+    if ( open(my $fh, '<', $logfile) )
+    {
+	local $/;
+	$log = <$fh>;
     }
+    
+    like( $log, qr/SET string_req = 'logged' WHERE test_no = 5/, "statement was logged" );
+    
+    like( $log, qr/^# [^|]+ \| SQL \| - \| -\n\QUPDATE $TABLE{EDT_TEST} SET\E/m,
+	  "header line has '-' for the table and key" );
+    
+    unlink $logfile;
+    
+    $edt = ok_new_edt('NO_LOG_MODE');
+    
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'not logged' WHERE test_no = 5");
+    
+    ok_commit;
+    
+    ok( ! -e $logfile, "with NO_LOG_MODE, the statement is not logged" );
     
     ETBasicTest->log_filename($save_filename);
     ETBasicTest->log_all_tables($save_all);
@@ -296,4 +289,125 @@ subtest 'quoted_table_name' => sub {
     is( ETBasicTest->quoted_table_name('NO_SUCH_TABLE'), undef, "unknown specifier returns undef" );
     
     is( ETBasicTest->quoted_table_name(''), undef, "empty specifier returns undef" );
+};
+
+
+# Check the decisions about do_sql that were made after the tests above were written:
+# the store_result option, the results in immediate mode, and the hooks that are not
+# called. This subtest was added by Claude under the guidance of Michael McClennen.
+
+subtest 'do_sql results and hooks' => sub {
+    
+    reset_test_record();
+    
+    my ($scalar_result, @array_result, $code_result);
+    
+    my $edt = ok_new_edt;
+    
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'a' WHERE test_no = 5",
+		 { store_result => \$scalar_result });
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'b' WHERE test_no = 5",
+		 { store_result => \@array_result });
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'c' WHERE test_no = 5",
+		 { store_result => sub { $code_result = shift } });
+    
+    ok( ! defined $scalar_result, "store_result is not set before execution" );
+    
+    ok_commit;
+    
+    is( $scalar_result, 1, "store_result with a scalar reference" );
+    is_deeply( \@array_result, [ 1 ], "store_result with an array reference" );
+    is( $code_result, 1, "store_result with a code reference" );
+    
+    ok_exception( sub { $edt = ok_new_edt; $edt->do_sql("SELECT 1", { store_result => { } }) },
+		  qr/store_result/, "store_result with a hash reference is rejected" );
+    
+    $edt = ok_new_edt('IMMEDIATE_MODE');
+    
+    is( $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'd' WHERE test_no = 999"), '0E0',
+	"in immediate mode, a statement that changes no rows returns '0E0'" );
+    
+    is( $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET no_such_column = 1"), undef,
+	"in immediate mode, a statement that fails returns undef" );
+    
+    ok_has_condition('all', 'E_EXECUTE', "the failed statement is reported");
+    
+    $edt->rollback;
+    
+    $edt = ok_new_edt;
+    
+    $edt->do_sql("UPDATE $TABLE{EDT_TEST} SET string_req = 'e' WHERE test_no = 5");
+    
+    ok_commit;
+    
+    is( $edt->{save_before_count}, 0, "before_action is not called for do_sql" );
+    is( $edt->{save_after_count}, 0, "after_action is not called for do_sql" );
+    
+    is( $edt->exec_count, 1, "the statement is counted as executed" );
+    is_deeply( [ $edt->tables ], [ ], "the statement adds no table to the list of tables" );
+};
+
+
+# Check statements that MariaDB would implicitly commit the transaction for (ALTER,
+# CREATE, DROP, TRUNCATE, and RENAME). do_sql holds these until the transaction has been
+# committed, so that they cannot commit part of it early. This subtest was added by Claude
+# under the guidance of Michael McClennen.
+
+subtest 'DDL statements' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'before ddl' });
+    $edt->do_sql("ALTER TABLE <<EDT_TEST>> auto_increment=1");
+    $edt->insert_record('EDT_TEST', { string_req => 'before error' });
+    
+    $edt->start_execution;
+    
+    ok_failed_commit("transaction with an error during execution fails");
+    
+    ok_no_record('EDT_TEST', "string_req = 'before ddl'", "the earlier insert was rolled back");
+    
+    is( $edt->action_status('&#2'), 'skipped', "the held statement was skipped" );
+    
+    $edt = ok_new_edt('IMMEDIATE_MODE');
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'before ddl' });
+    
+    my @result = $edt->do_sql("ALTER TABLE <<EDT_TEST>> auto_increment=1");
+    
+    is( scalar(@result), 0, "in immediate mode, a held statement returns nothing" );
+    
+    is( $edt->action_status('&#2'), 'pending', "the held statement has not been executed" );
+    
+    ok( $edt->rollback, "rollback" );
+    
+    ok_no_record('EDT_TEST', "string_req = 'before ddl'", "rollback undoes the earlier insert");
+    
+    is( $edt->action_status('&#2'), 'skipped', "the held statement was skipped by the rollback" );
+    
+    my ($stored, @order);
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'kept' });
+    $edt->do_sql("  /* comment */ alter table <<EDT_TEST>> auto_increment=1", { store_result => \$stored });
+    $edt->do_sql("ALTER TABLE <<EDT_TEST>> DROP COLUMN no_such_column");
+    
+    ok_commit("transaction with held statements commits");
+    
+    ok_found_record('EDT_TEST', "string_req = 'kept'", "the insert was committed");
+    
+    is( $edt->action_status('&#2'), 'executed', "a held statement is executed after the commit" );
+    ok( defined $stored, "store_result receives the result of a held statement" );
+    
+    is( $edt->action_status('&#3'), 'failed', "a held statement that fails is marked as failed" );
+    
+    ok_has_one_condition('&#3', 'W_EXECUTE', "a held statement that fails adds W_EXECUTE");
+    
+    is( $edt->status, 'committed', "the transaction remains committed" );
+    
+    is( $edt->exec_count, 2, "the executed statement is counted" );
+    is( $edt->fail_count, 1, "the failed statement is counted" );
 };
