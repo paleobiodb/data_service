@@ -252,7 +252,7 @@ sub fetch_table_schema {
     # If called as a class method, we require a database handle as the second argument. Debug mode
     # is always off in this situation.
     
-    elsif ( $dbh_arg && ref($dbh_arg) =~ /DB||Database/ )
+    elsif ( $dbh_arg && ref($dbh_arg) =~ /DBI|Database/ )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	$dbh = $dbh_arg;
 	$debug_mode = $debug_flag;
@@ -400,16 +400,28 @@ sub fetch_table_schema {
 	}
     }
     
-    # If we found any primary key columns, set the table's PRIMARY_KEY attribute.
+    # If we found exactly one primary key column, set the table's PRIMARY_KEY attribute.
+    # If we found more than one, the key is composite. Multi-column keys are not yet
+    # supported, so the table is treated as having no primary key and the columns are
+    # listed in PRIMARY_KEY_COLS. This also covers tables with no declared primary key,
+    # where InnoDB uses the first unique NOT NULL key instead and the database reports
+    # its columns as PRI. [Changed by Claude under the guidance of Michael McClennen]
     
     if ( @primary_keys == 1 )
     {
 	$table_definition{PRIMARY_KEY} = $primary_keys[0];
+	
+	# If the primary key column is not auto_increment, an insert must specify a value
+	# for it. [Added by Claude under the guidance of Michael McClennen]
+	
+	my $extra = $column_definition{$primary_keys[0]}{Extra};
+	
+	$table_definition{PRIMARY_REQUIRED} = 1 unless $extra && $extra =~ /auto_increment/i;
     }
     
-    elsif ( @primary_keys > 2 )
+    elsif ( @primary_keys > 1 )
     {
-	$table_definition{PRIMARY_KEY} = \@primary_keys;
+	$table_definition{PRIMARY_KEY_COLS} = \@primary_keys;
     }
     
     # If any required columns were specified, set the REQUIRED attribute on each
@@ -481,6 +493,19 @@ sub fetch_table_schema {
 	if ( $auth_table_info )
 	{
 	    $table_definition{AUTH_KEY} ||= $auth_table_info->{PRIMARY_KEY};
+	    
+	    # The link column refers to the superior table, so treat it as a foreign key
+	    # unless it has a FOREIGN_KEY property of its own. This allows a link value to
+	    # refer to a new superior record inserted by an earlier action. [Added by Claude
+	    # under the guidance of Michael McClennen]
+	    
+	    my $link_cr = $table_definition{AUTH_KEY} && $column_definition{$table_definition{AUTH_KEY}};
+	    
+	    if ( $link_cr && ! $link_cr->{FOREIGN_KEY} )
+	    {
+		$link_cr->{FOREIGN_KEY} = $auth_table_specifier;
+		$link_cr->{FOREIGN_COL} ||= $auth_table_info->{PRIMARY_KEY};
+	    }
 	}
     }
     

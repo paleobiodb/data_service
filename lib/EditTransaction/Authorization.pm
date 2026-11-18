@@ -221,29 +221,6 @@ sub check_row_permission {
 }
 
 
-sub check_superior_permission {
-    
-    my ($edt, $superior_table, $requested, $subordinate_table, $key_expr);
-    
-    my $count = $edt->db_count_matching_rows($subordinate_table, $key_expr);
-    
-    if ( ref $count eq 'ARRAY' )
-    {
-	return $count;
-    }
-    
-    elsif ( $count )
-    {
-	return ('unrestricted', $count);
-    }
-    
-    else
-    {
-	return 'notfound';
-    }
-}
-
-
 sub authorize_insert_key {
     
     return 'unrestricted';
@@ -297,29 +274,27 @@ sub authorize_against_table {
     # If the table corresponding to $table_specifier is subordinate to another table,
     # any action requires 'modify' permission on the linked records in that table.
     
+    # The superior table and the link column were checked by unpack_key_values when the
+    # action was created, and the action's permission was set to 'none' if either was
+    # missing. [Changed by Claude under the guidance of Michael McClennen]
+    
     if ( $auth_table )
     {
 	my $auth_tableinfo = $edt->table_info_ref($auth_table);
 	
-	unless ( $auth_tableinfo )
-	{
-	    $edt->add_condition('E_BAD_TABLE', $auth_table);
-	    return;
-	}
-	
 	my $link_col = $tableinfo->{AUTH_KEY};
 	my $auth_col = $auth_tableinfo->{PRIMARY_KEY} || $link_col;
-	
-	unless ( $link_col )
-	{
-	    $edt->add_condition('E_EXECUTE', 'no linking column was found');
-	}
 	
 	# If any of the link values is a reference to another action, the key value of the
 	# referenced record will not be known until that action has been executed. Before
 	# execution time, leave the permission as 'PENDING' and return. At execution time,
 	# substitute the key value(s) of the referenced action and recompute the link
 	# expression. [Added by Claude under the guidance of Michael McClennen]
+	# 
+	# An action can have only one link value, and check_key_values only accepts a
+	# reference to an action on the superior table, so each value checked here is a
+	# reference to such an action. [Changed by Claude under the guidance of Michael
+	# McClennen]
 	
 	if ( grep { /^&./ } $action->linkvalues )
 	{
@@ -330,22 +305,10 @@ sub authorize_against_table {
 	    
 	    foreach my $v ( $action->linkvalues )
 	    {
-		unless ( $v =~ /^&./ )
-		{
-		    push @link_values, $v;
-		    next;
-		}
-		
 		my $ref_action = $edt->{action_ref}{$v};
 		my @ref_keys = $ref_action ? $ref_action->keyvalues : ();
 		
-		if ( $ref_action && $ref_action->table ne $auth_table )
-		{
-		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_mismatch_', $link_field, $v);
-		    $bad_reference = 1;
-		}
-		
-		elsif ( ! @ref_keys )
+		if ( ! @ref_keys )
 		{
 		    $edt->add_condition($action, 'E_BAD_REFERENCE', '_unresolved_', $link_field, $v);
 		    $bad_reference = 1;
@@ -627,13 +590,9 @@ sub authorize_against_table {
 	    }
 	}
 	
-	# Otherwise, no insertion is taking place. Change 'insreplace' and 'insupdate' to
-	# 'replace' and 'update' respectively.
-	
-	elsif ( $operation eq 'insreplace' )
-	{
-	    $operation = $action->set_operation('replace');
-	}
+	# Otherwise, no insertion is taking place. Change 'insupdate' to 'update'. [Changed
+	# by Claude under the guidance of Michael McClennen: removed 'insreplace', which is
+	# not an operation]
 	
 	elsif ( $operation eq 'insupdate' )
 	{
@@ -666,17 +625,14 @@ sub authorize_against_table {
     if ( $primary eq 'notfound' )
     {
 	# If the operation started out as 'insupdate', the key value does not match any
-	# existing record. [Changed by Claude under the guidance of Michael McClennen]
+	# existing record. A linked record that was not found has already been reported
+	# above, so a link value is irrelevant here. [Changed by Claude under the guidance
+	# of Michael McClennen]
 	
 	if ( $action->{insupdate} )
 	{
 	    $edt->add_condition($action, 'E_BAD_KEY', $action->keyfield,
 				join(',', $action->keyvalues));
-	}
-	
-	elsif ( $link_permission )
-	{
-	    $edt->add_condition($action, 'E_NOT_FOUND', 'link');
 	}
 	
 	else
@@ -786,20 +742,58 @@ sub unpack_key_values {
     
     my $tableinfo = $edt->table_info_ref($table_specifier) || return;
     
+    # Check if this table is marked as being subordinate to another table. If so, make
+    # sure that table and the necessary attributes exist. This is done first, so that it
+    # is checked for every action, including actions that specify _where and actions on
+    # tables with no primary key. [Changed by Claude under the guidance of Michael
+    # McClennen]
+    
+    my $auth_table = $tableinfo->{AUTH_TABLE};
+    my ($auth_tableinfo, $link_column, $link_columninfo, $abort);
+    
+    if ( $auth_table )
+    {
+	# The messages for these conditions name the table at fault. The link column is
+	# checked only if the superior table was found, since its primary key is the
+	# default link column. [Changed by Claude under the guidance of Michael McClennen]
+	
+	unless ( $auth_tableinfo = $edt->table_info_ref($auth_table) )
+	{
+	    $edt->add_condition('E_BAD_TABLE', $auth_table, "is listed as the superior table " .
+				"for '$table_specifier' but does not correspond to any known database table");
+	    $abort = 1;
+	}
+	
+	elsif ( ! ( ( $link_column = $tableinfo->{AUTH_KEY} ) &&
+		    ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) ) )
+	{
+	    $edt->add_condition('E_BAD_TABLE', $table_specifier, "has no column linking it to " .
+				"the superior table '$auth_table'");
+	    $abort = 1;
+	}
+    }
+    
+    if ( $abort )
+    {
+	return $action->set_permission('none');
+    }
+    
     # If the parameters include a non-empty value for _where and no primary key
     # information, set the key expression to the value of _where. But if both 'where' and
-    # a primary key value are given, add an error condition.
+    # a primary key value are given, add an E_BAD_KEY_FIELD condition naming the key field.
+    # An E_HAS_WHERE condition for 'insert' and 'replace' operations is added by
+    # record_operation. [Changed by Claude under the guidance of Michael McClennen]
     
     if ( $params->{_where} )
     {
 	my $primary_key = $tableinfo->{PRIMARY_KEY};
 	my $primary_field = $tableinfo->{PRIMARY_FIELD};
 	
-	if ( $params->{_primary} ||
-	     ($primary_key && $params->{$primary_key}) ||
-	     ($primary_field && $params->{$primary_field}) )
+	my ($key_field) = grep { $_ && $params->{$_} } '_primary', $primary_key, $primary_field;
+	
+	if ( $key_field )
 	{
-	    $edt->add_condition('E_BAD_KEY', '_where');
+	    $edt->add_condition('E_BAD_KEY_FIELD', '_where', $key_field);
 	    return $action->set_permission('none');
 	}
 	
@@ -808,55 +802,25 @@ sub unpack_key_values {
 	    $action->set_keyinfo('', '', undef, $params->{_where});
 	    return;
 	}
-	
-	# Also add an error condition if this is an 'insert' or 'replace'
-	# operation, as neither of those can take a 'where' clause.
-	
-	if ( $operation =~ /^ins|^rep/ )
-	{
-	    $edt->add_condition('E_HAS_WHERE', $operation);
-	}
     }
     
-    # Otherwise, look for a primary key. If none is defined for this table, return without
-    # doing anything.
+    # Otherwise, look for a primary key. If none is defined for this table, no key values
+    # are set, but any link values are still checked below. [Changed by Claude under the
+    # guidance of Michael McClennen]
     
-    my ($key_column, $link_column, $abort);
+    my $key_column = $tableinfo->{PRIMARY_KEY};
+    my $columninfo;
     
-    unless ( $key_column = $tableinfo->{PRIMARY_KEY} )
+    if ( $key_column )
     {
-	# If the action parameters include _primary, add an error condition.
-	
-	$edt->add_condition('E_BAD_KEY', "table '$table_specifier' has no primary key")
-	    if $params->{_primary};
-	
-	# Return without setting any key values.
-	
-	return;
+	$columninfo = $edt->table_column_ref($table_specifier, $key_column);
     }
     
-    my $columninfo = $edt->table_column_ref($table_specifier, $key_column);
+    # If the action parameters include _primary, add an error condition.
     
-    # Check if this table is marked as being subordinate to another table. If so, make
-    # sure that table and the necessary attributes exist.
-    
-    my $auth_table = $tableinfo->{AUTH_TABLE};
-    my ($auth_tableinfo, $link_columninfo);
-    
-    if ( $auth_table )
+    elsif ( ref $params && $params->{_primary} )
     {
-	unless ( $auth_tableinfo = $edt->table_info_ref($auth_table) )
-	{
-	    $edt->add_condition('E_BAD_TABLE', 'superior', $auth_table);
-	    $abort = 1;
-	}
-	
-	unless ( ( $link_column = $tableinfo->{AUTH_KEY} ) &&
-		 ( $link_columninfo = $edt->table_column_ref($table_specifier, $link_column) ) )
-	{
-	    $edt->add_condition('E_BAD_TABLE', $table_specifier);
-	    $abort = 1;
-	}
+	$edt->add_condition('E_BAD_KEY', "table '$table_specifier' has no primary key");
     }
     
 # [delete_cleanup commented out by Claude under the guidance of Michael McClennen]
@@ -876,11 +840,6 @@ sub unpack_key_values {
 # 	$tableinfo = $auth_tableinfo;
 #     }
     
-    if ( $abort )
-    {
-	return $action->set_permission('none');
-    }
-    
     # Now look for key values. Unless we have a hashref of action parameters, return
     # immediately.
     
@@ -888,11 +847,12 @@ sub unpack_key_values {
     
     # Check for key values under any of the following parameters: _primary, the primary
     # key, and the field named by PRIMARY_FIELD if any. Add an error condition if more
-    # than one of these has a value.
+    # than one of these has a value. If the table has no primary key, there are no key
+    # values. [Changed by Claude under the guidance of Michael McClennen]
     
     my ($key_field, $raw_values, $ref_type);
     
-    foreach my $p ( $key_column, '_primary', $tableinfo->{PRIMARY_FIELD} )
+    foreach my $p ( $key_column ? ($key_column, '_primary', $tableinfo->{PRIMARY_FIELD}) : () )
     {
 	if ( $p && $params->{$p} )
 	{
@@ -948,7 +908,7 @@ sub unpack_key_values {
 	}
     }
     
-    else
+    elsif ( $key_column )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	$action->set_keyinfo($key_column, $key_field, undef, "0");
     }
@@ -1100,10 +1060,19 @@ sub check_key_values {
 	    my ($result, $clean_value, $additional) =
 		$edt->before_key_column($columninfo, $action->operation, $v, $field);
 	    
-	    if ( ref $result eq 'ARRAY' || ref $additional eq 'ARRAY' )
+	    # The hook may return an additional condition as its third value, either along
+	    # with an error condition or with a cleaned value. Add each condition separately.
+	    # [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    if ( ref $additional eq 'ARRAY' )
 	    {
-		$edt->add_condition($action, $result->@*, $additional);
-		next VALUE if ref $result;
+		$edt->add_condition($action, $additional->@*);
+	    }
+	    
+	    if ( ref $result eq 'ARRAY' )
+	    {
+		$edt->add_condition($action, $result->@*);
+		next VALUE;
 	    }
 	    
 	    elsif ( $result )
