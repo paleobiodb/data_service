@@ -1,0 +1,214 @@
+#
+# EditTransaction project
+# -----------------------
+#
+# This file contains unit tests for the ETBasicTest class, a subclass of EditTransaction whose
+# purpose is to implement these tests.
+#
+# edt-34-table-info.t : Test the methods that report information about database tables,
+#                       and the methods from EditTransaction::DBStatements that execute
+#                       SQL statements directly.
+#
+# Added by Claude under the guidance of Michael McClennen.
+#
+
+use strict;
+
+use lib 't', '../lib', 'lib';
+use Test::More tests => 7;
+
+use ETBasicTest;
+use EditTester qw(ok_new_edt ok_exception clear_table sql_command);
+
+use TableDefs qw(%TABLE);
+
+
+# Establish an EditTester instance.
+
+my $T = EditTester->new('ETBasicTest');
+
+
+# Check that the necessary methods are defined.
+
+subtest 'required methods' => sub {
+    
+    can_ok('ETBasicTest', 'table_exists', 'table_column_list', 'table_has_column',
+	   'get_table_property', 'get_column_property', 'get_column_type',
+	   'get_table_description', 'table_info_present', 'clear_table_cache',
+	   'selectrow_array', 'do_stmt')
+	
+	|| BAIL_OUT "EditTransaction and related modules are missing some required methods";
+};
+
+
+# Check table_exists, table_column_list, and table_has_column.
+
+subtest 'tables and columns' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    is( $edt->table_exists('EDT_TEST'), $TABLE{EDT_TEST}, "table_exists returns the table name" );
+    is( ETBasicTest->table_exists('EDT_TEST'), $TABLE{EDT_TEST}, "table_exists works as a class method" );
+    is( $edt->table_exists($TABLE{EDT_TEST}), $TABLE{EDT_TEST}, "table_exists accepts a table name" );
+    is( $edt->table_exists('NO_SUCH_TABLE'), '', "table_exists returns '' for an unknown table" );
+    
+    ok_exception( sub { $edt->table_exists() }, qr/table name/, "table_exists requires an argument" );
+    
+    is_deeply( [ $edt->table_column_list('EDT_TEST') ],
+	       [ 'test_no', 'string_val', 'string_req', 'signed_val' ],
+	       "table_column_list returns the columns in order" );
+    
+    is_deeply( [ $edt->table_column_list('NO_SUCH_TABLE') ], [ ],
+	       "table_column_list returns nothing for an unknown table" );
+    
+    is( $edt->table_has_column('EDT_TEST', 'string_req'), 'string_req',
+	"table_has_column returns the column name" );
+    is( $edt->table_has_column('EDT_TEST', 'no_such_column'), '',
+	"table_has_column returns '' for an unknown column" );
+    
+    ok_exception( sub { $edt->table_has_column('EDT_TEST') }, qr/column name/,
+		  "table_has_column requires a column name" );
+};
+
+
+# Check get_table_property, get_column_property, and get_column_type.
+
+subtest 'properties and types' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    is( $edt->get_table_property('EDT_TEST', 'PRIMARY_KEY'), 'test_no', "table property PRIMARY_KEY" );
+    is( $edt->get_table_property('EDT_SUB', 'AUTH_TABLE'), 'EDT_TEST', "table property AUTH_TABLE" );
+    
+    ok_exception( sub { $edt->get_table_property('EDT_TEST', 'NO_SUCH_PROPERTY') },
+		  qr/invalid property name/, "unknown table property" );
+    
+    ok_exception( sub { $edt->get_table_property('NO_SUCH_TABLE', 'PRIMARY_KEY') },
+		  qr/unknown table name/, "table property of an unknown table" );
+    
+    is( $edt->get_column_property('EDT_SUB', 'name', 'REQUIRED'), 1, "column property REQUIRED" );
+    is( $edt->get_column_property('EDT_SUB', 'test_no', 'FOREIGN_KEY'), 'EDT_TEST',
+	"column property FOREIGN_KEY" );
+    
+    ok_exception( sub { $edt->get_column_property('EDT_SUB', 'name', 'NO_SUCH_PROPERTY') },
+		  qr/invalid property name/, "unknown column property" );
+    
+    ok_exception( sub { $edt->get_column_property('EDT_SUB', 'no_such_column', 'REQUIRED') },
+		  qr/does not exist/, "property of an unknown column" );
+    
+    ok_exception( sub { $edt->get_column_property('NO_SUCH_TABLE', 'name', 'REQUIRED') },
+		  qr/unknown table name/, "column property of an unknown table" );
+    
+    is_deeply( [ map { $edt->get_column_type('EDT_TYPES', $_) }
+		 qw(signed_val decimal_val string_val dcr enum_val) ],
+	       [ 'integer', 'fixed', 'char', 'datetime', 'enum' ],
+	       "get_column_type returns the main type of each column" );
+    
+    ok_exception( sub { $edt->get_column_type('EDT_TYPES', 'no_such_column') },
+		  qr/does not exist/, "type of an unknown column" );
+};
+
+
+# Check get_table_description, which returns a copy of the cached table information.
+
+subtest 'get_table_description' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    my $description = $edt->get_table_description('EDT_TEST');
+    
+    is( $description->{TABLE_NAME}, $TABLE{EDT_TEST}, "description includes the table name" );
+    is( $description->{PRIMARY_KEY}, 'test_no', "description includes the primary key" );
+    
+    push $description->{COLUMN_LIST}->@*, 'added_column';
+    
+    is( scalar(grep { $_ eq 'added_column' } $edt->table_column_list('EDT_TEST')), 0,
+	"changing the description does not change the cached information" );
+    
+    ok_exception( sub { $edt->get_table_description('NO_SUCH_TABLE') },
+		  qr/unknown table name/, "description of an unknown table" );
+};
+
+
+# Check the table information cache.
+
+subtest 'table information cache' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    $edt->table_info_ref('EDT_TEST');
+    
+    ok( $edt->table_info_present('EDT_TEST'), "table information is cached once fetched" );
+    ok( $edt->table_info_present('EDT_TEST', 'string_req'), "a column of a cached table is present" );
+    ok( ! $edt->table_info_present('EDT_TEST', 'no_such_column'), "an unknown column is not present" );
+    
+    ETBasicTest->clear_table_cache('EDT_TEST');
+    
+    ok( ! $edt->table_info_present('EDT_TEST'), "clear_table_cache removes the table information" );
+    
+    ok( $edt->table_exists('EDT_TEST'), "the table information is fetched again when needed" );
+    
+    ok( $edt->table_info_present('EDT_TEST'), "and is cached again" );
+    
+    ok( ETBasicTest->alter_column_property('EDT_TEST', 'string_val', 'REQUIRED', 1),
+	"alter_column_property returns true for a known column" );
+    
+    is( $edt->get_column_property('EDT_TEST', 'string_val', 'REQUIRED'), 1,
+	"alter_column_property changes the cached property" );
+    
+    ETBasicTest->alter_column_property('EDT_TEST', 'string_val', 'REQUIRED', undef);
+    
+    ok( ! defined ETBasicTest->alter_column_property('EDT_TEST', 'no_such_column', 'REQUIRED', 1),
+	"alter_column_property returns undef for an unknown column" );
+    
+    is( $edt->get_table_handling('EDT_TEST', 'string_req'), '',
+	"get_table_handling returns '' for a column with no directive" );
+    
+    is( $edt->get_table_handling('EDT_TEST', 'no_such_column'), undef,
+	"get_table_handling returns undef for an unknown column" );
+};
+
+
+# Check the methods from EditTransaction::DBStatements.
+
+subtest 'DBStatements' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five')");
+    
+    my $edt = ok_new_edt;
+    
+    is_deeply( [ $edt->selectrow_array("SELECT test_no, string_req FROM $TABLE{EDT_TEST}
+					WHERE test_no = ?", undef, 5) ],
+	       [ 5, 'five' ], "selectrow_array returns the selected row" );
+    
+    is( $edt->do_stmt("UPDATE $TABLE{EDT_TEST} SET string_val = 'changed' WHERE test_no = ?",
+		      undef, 5), 1, "do_stmt returns the number of rows affected" );
+    
+    ok_exception( sub { $edt->do_stmt("UPDATE no_such_table SET x = 1") }, qr/no_such_table/,
+		  "do_stmt throws an exception if the statement fails" );
+};
+
+
+# Check that the table information methods require their arguments.
+
+subtest 'bad arguments' => sub {
+    
+    my $edt = ok_new_edt;
+    
+    ok_exception( sub { $edt->get_table_property('EDT_TEST') }, qr/property name/,
+		  "get_table_property requires a property name" );
+    
+    ok_exception( sub { $edt->get_column_property('EDT_TEST', 'string_req') }, qr/property name/,
+		  "get_column_property requires a property name" );
+    
+    ok_exception( sub { $edt->get_column_type('EDT_TEST') }, qr/column name/,
+		  "get_column_type requires a column name" );
+    
+    ok_exception( sub { $edt->get_table_description() }, qr/table name/,
+		  "get_table_description requires a table name" );
+    
+    ok_exception( sub { $edt->get_table_handling('EDT_TEST') }, qr/column name/,
+		  "get_table_handling requires a column name" );
+};

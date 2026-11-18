@@ -97,6 +97,14 @@ use namespace::clean;
     __PACKAGE__->register_conditions(E_TEST => ["TEST ERROR '&1'", "TEST ERROR"],
 				     W_TEST => ["TEST WARNING '&1'", "TEST WARNING"]);
     
+    # The following codes are used by tests as arbitrary conditions. They must be registered,
+    # because add_condition rejects codes that have no template. Added by Claude under the
+    # guidance of Michael McClennen.
+    
+    __PACKAGE__->register_conditions(C_CREATE => ["TEST CAUTION '&1'", "TEST CAUTION"],
+				     W_FORMAT => ["TEST WARNING '&1'", "TEST WARNING"],
+				     W_WIDTH => ["TEST WARNING '&1'", "TEST WARNING"]);
+    
     # __PACKAGE__->register_database_module();
 }
 
