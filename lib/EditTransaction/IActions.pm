@@ -382,7 +382,7 @@ sub add_child_action {
 	eval {
 	    $edt->validate_action($child, $op, $table_specifier);
 	    
-	    if ( $child->can_proceed )
+	    if ( $child->can_proceed && $child->validation_status ne 'PENDING' )  # [Changed by Claude under the guidance of Michael McClennen]
 	    {
 		$edt->validate_against_schema($child, $op, $table_specifier);
 	    }

@@ -366,7 +366,10 @@ sub add_condition {
 	# If this transaction allows NOT_PERMITTED, then an E_PERMISSION error is demoted to a
 	# warning but others are not.
 	
-	if ( $action && $code =~ /^E/ && ref $edt->{allows} eq 'HASH' )
+	# An error is not demoted if the action's errors have been pinned, which happens once
+	# its statement has been executed. [Changed by Claude under the guidance of Michael McClennen]
+	
+	if ( $action && $code =~ /^E/ && ref $edt->{allows} eq 'HASH' && ! $action->{pin_errors} )
 	{
 	    if ( $edt->{allows}{PROCEED} ||
 		 $edt->{allows}{NOT_FOUND} && $code eq 'E_NOT_FOUND' ||

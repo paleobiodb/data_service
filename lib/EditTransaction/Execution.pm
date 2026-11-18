@@ -902,6 +902,11 @@ sub execute_insert {
 	{
 	    my $result = $dbh->do($sql);
 	    
+	    # Once the statement has been executed, any error added to this action is fatal even
+	    # with PROCEED, because the statement cannot be undone on its own. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    $action->pin_errors;
+	    
 	    # If the insert succeeded, get and store the new primary key value. Otherwise, add an
 	    # error condition. Unlike update, replace, and delete, if an insert statement fails
 	    # that counts as a failure of the action.
@@ -1104,6 +1109,11 @@ sub execute_replace {
 	{
 	    my $result = $dbh->do($sql);
 	    
+	    # Once the statement has been executed, any error added to this action is fatal even
+	    # with PROCEED, because the statement cannot be undone on its own. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    $action->pin_errors;
+	    
 	    $action->set_result($result);
 	    
 	    # If changes to this table are to be logged, add the appropriate
@@ -1255,6 +1265,11 @@ sub execute_update {
 	    }
 	    
 	    my $result = $dbh->do($sql);
+	    
+	    # Once the statement has been executed, any error added to this action is fatal even
+	    # with PROCEED, because the statement cannot be undone on its own. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    $action->pin_errors;
 	    
 	    $result = 0 if $result eq '0E0';
 	    
@@ -1410,6 +1425,11 @@ sub execute_delete {
 	if ( $action->can_proceed )
 	{
 	    my $result = $dbh->do($sql);
+	    
+	    # Once the statement has been executed, any error added to this action is fatal even
+	    # with PROCEED, because the statement cannot be undone on its own. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    $action->pin_errors;
 	    
 	    $action->set_resultinfo($result, $result);
 	    
@@ -1615,6 +1635,11 @@ sub execute_other {
 	if ( $action->can_proceed )
 	{
 	    my $result = $edt->$method($action, $table_specifier, $action->record);
+	    
+	    # Once the statement has been executed, any error added to this action is fatal even
+	    # with PROCEED, because the statement cannot be undone on its own. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    $action->pin_errors;
 	    
 	    $action->set_result($result);
 	    

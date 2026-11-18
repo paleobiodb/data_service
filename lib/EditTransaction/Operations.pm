@@ -167,7 +167,10 @@ sub record_operation {
 	    # the criteria for this table.  Any discrepancies will cause error
 	    # and/or warning conditions to be added.
 	    
-	    if ( $operation !~ /^delete/ )
+	    # If validate_action called 'validate_later', the rest of the validation is done
+	    # when the action is executed. [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    if ( $operation !~ /^delete/ && $action->validation_status ne 'PENDING' )
 	    {
 		$edt->validate_against_schema($action, $operation, $table_specifier);
 	    }

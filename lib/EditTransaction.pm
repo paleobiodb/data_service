@@ -1881,7 +1881,7 @@ sub set_attr_key {
     croak "you must specify an attribute name" unless $attr;
     croak "you must specify a key" unless $key;
     croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
-	! ref $edt->{attrs}{$attr} eq 'HASH';
+	ref $edt->{attrs}{$attr} ne 'HASH';  # [Changed by Claude under the guidance of Michael McClennen]
     
     $edt->{attrs}{$attr}{$key} = $value;
 }
@@ -1894,7 +1894,7 @@ sub set_attr_2key {
     croak "you must specify an attribute name" unless $attr;
     croak "you must specify two keys" unless $key && $key2;
     croak "attribute '$attr' is not a hash" if exists $edt->{attrs}{$attr} &&
-	! ref $edt->{attrs}{$attr} eq 'HASH';
+	ref $edt->{attrs}{$attr} ne 'HASH';  # [Changed by Claude under the guidance of Michael McClennen]
     
     $edt->{attrs}{$attr}{$key}{$key2} = $value;
 }

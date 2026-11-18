@@ -1036,7 +1036,7 @@ sub set_attr_key {
     croak "you must specify an attribute name" unless $attr;
     croak "you must specify a key" unless $key;
     croak "attribute '$attr' is not a hash" if exists $action->{attrs}{$attr} &&
-	! ref $action->{attrs}{$attr} eq 'HASH';
+	ref $action->{attrs}{$attr} ne 'HASH';  # [Changed by Claude under the guidance of Michael McClennen]
     
     $action->{attrs}{$attr}{$key} = $value;
 }
