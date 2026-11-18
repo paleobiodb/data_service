@@ -112,6 +112,10 @@ sub execute_action_list {
 		$edt->pre_execution_check($action) && $edt->execute_other($action);
 	    }
 	    
+	    case 'sql': {
+		$edt->execute_sql($action);  # [Changed by Claude under the guidance of Michael McClennen]
+	    }
+	    
 	    case 'null': {
 		# A null action does nothing to the database, but it is marked as executed
 		# and counted. [Changed by Claude under the guidance of Michael McClennen]
@@ -1644,6 +1648,126 @@ sub execute_other {
 }
 
 
+# execute_sql ( action )
+# 
+# Execute an 'sql' action, created by 'do_sql'. The statement is executed by
+# '_execute_sql_action', which also stores the result if 'store_result' was given. The
+# statement is logged whenever a log file is set, because it is not tied to any table. The
+# methods 'before_action', 'after_action', and 'cleanup_action' are not called.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub execute_sql {
+    
+    my ($edt, $action) = @_;
+    
+    # A statement that MariaDB would implicitly commit the transaction for is held until
+    # the transaction has been committed. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( $action->{post_commit} )
+    {
+	push $edt->{post_commit_sql}->@*, $action;
+	return;
+    }
+    
+    my $record = $action->record;
+    my $result;
+    
+    eval {
+	$result = $edt->_execute_sql_action($action, undef, $record);
+    };
+    
+    if ( $@ )
+    {
+	$edt->error_line($@);
+	$edt->add_condition($action, 'E_EXECUTE', 'an exception occurred during execution');
+    }
+    
+    if ( defined $result && ! $@ )
+    {
+	$action->set_result($result);
+	$action->set_status('executed');
+	$edt->{exec_count}++;
+	
+	$edt->log_event($action, 'sql', undef, $record->{sql}, '-');
+    }
+    
+    else
+    {
+	$action->set_status('failed');
+	$edt->{fail_count}++;
+    }
+    
+    return;
+}
+
+
+# _execute_post_commit_sql ( )
+# 
+# Execute the statements from 'do_sql' that were held until the transaction was committed.
+# This is called by 'commit' after a successful commit. Because the transaction has already
+# been committed, a statement that fails adds a W_EXECUTE warning rather than an error.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _execute_post_commit_sql {
+    
+    my ($edt) = @_;
+    
+    my $held = delete $edt->{post_commit_sql} || return;
+    
+    foreach my $action ( @$held )
+    {
+	my $record = $action->record;
+	my $result;
+	
+	eval {
+	    $result = $edt->_execute_sql_action($action, undef, $record);
+	};
+	
+	if ( defined $result && ! $@ )
+	{
+	    $action->set_result($result);
+	    $action->set_status('executed');
+	    $edt->{exec_count}++;
+	    
+	    $edt->log_event($action, 'sql', undef, $record->{sql}, '-');
+	}
+	
+	else
+	{
+	    $edt->error_line($@) if $@;
+	    $edt->add_condition($action, 'W_EXECUTE',
+				'the statement failed after the transaction was committed');
+	    $action->set_status('failed');
+	    $edt->{fail_count}++;
+	}
+    }
+}
+
+
+# _skip_post_commit_sql ( )
+# 
+# Mark the statements from 'do_sql' that were held until the transaction was committed as
+# skipped. This is called when the transaction fails or is rolled back, in which case they
+# are never executed.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _skip_post_commit_sql {
+    
+    my ($edt) = @_;
+    
+    my $held = delete $edt->{post_commit_sql} || return;
+    
+    foreach my $action ( @$held )
+    {
+	$action->set_status('skipped');
+	$edt->{skip_count}++;
+    }
+}
+
+
 # _execute_sql_action ( action, table, record )
 #
 # Execute the specified SQL statement.
@@ -1716,6 +1840,11 @@ sub log_event {
     
     my $table_name = $table_specifier ne '' && exists $TABLE{$table_specifier} ?
 	$TABLE{$table_specifier} : $table_specifier;
+    
+    # An action with no table, such as one created by 'do_sql', is logged with '-' in
+    # place of the table name. [Changed by Claude under the guidance of Michael McClennen]
+    
+    $table_name = '-' unless defined $table_name && $table_name ne '';
     
     my $line1 = "# " . join(' | ', "$datestr $timestr", uc $op, $table_name, $key_value) 
 	. "\n";

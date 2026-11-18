@@ -40,10 +40,10 @@ sub new {
     die "unknown operation '$operation'" unless $operation && $OPERATION_TYPE{$operation};
     die "missing action label" unless $label;
     
-    # A valid table name is not required for a skipped action, but is required for every other
-    # kind of action.
+    # A valid table name is not required for a skipped action or an 'sql' action, but is
+    # required for every other kind of action. [Changed by Claude under the guidance of Michael McClennen]
     
-    die "missing tablename" unless $table_specifier || $operation eq 'skip';
+    die "missing tablename" unless $table_specifier || $operation eq 'skip' || $operation eq 'sql';
     
     # Create a basic object to represent this action.
     

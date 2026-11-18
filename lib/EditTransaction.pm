@@ -1062,6 +1062,19 @@ sub commit {
 	$edt->{has_finished} = 1;
 	my $result = $edt->_commit_transaction;
 	
+	# Execute any statements from 'do_sql' that were held until the commit, or skip them
+	# if the commit failed. [Changed by Claude under the guidance of Michael McClennen]
+	
+	if ( $result )
+	{
+	    $edt->_execute_post_commit_sql;
+	}
+	
+	else
+	{
+	    $edt->_skip_post_commit_sql;
+	}
+	
 	if ( $edt->{log_lines} && $LOG_FILENAME )
 	{
 	    $edt->write_log;
@@ -1075,6 +1088,7 @@ sub commit {
     else
     {
 	$edt->_rollback_transaction('errors') if $edt->has_started;
+	$edt->_skip_post_commit_sql;  # [Changed by Claude under the guidance of Michael McClennen]
 	$edt->{has_finished} = 1;
 	$edt->{transaction} = 'failed';
 	return '';
@@ -1107,6 +1121,7 @@ sub rollback {
     {
 	$edt->_call_cleanup('call');
 	$edt->_rollback_transaction('call');
+	$edt->_skip_post_commit_sql;  # [Changed by Claude under the guidance of Michael McClennen]
 	$edt->{has_finished} = 1;
 	return 1;
     }

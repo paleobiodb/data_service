@@ -615,6 +615,24 @@ sub process_record {
 }
 
 
+# _is_ddl_statement ( sql )
+# 
+# Return true if the specified SQL statement is one that MariaDB implicitly commits the
+# current transaction for: one starting with ALTER, CREATE, DROP, TRUNCATE, or RENAME. Leading
+# whitespace and comments are skipped.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _is_ddl_statement {
+    
+    my ($edt, $sql) = @_;
+    
+    1 while $sql =~ s{ ^ \s* (?: /\* .*? \*/ | -- [^\n]* | \# [^\n]* ) }{}xs;
+    
+    return $sql =~ qr{ ^ \s* (?: ALTER | CREATE | DROP | TRUNCATE | RENAME ) \b }xi ? 1 : '';
+}
+
+
 # _substitute_table_names ( sql )
 # 
 # Return a copy of the specified SQL statement in which each table specifier of the form
@@ -653,12 +671,28 @@ sub _substitute_table_names {
 
 # do_sql ( stmt, options )
 # 
-# Create an action that will execute the specified SQL statement, and do nothing else. The
-# execution is protected by a try block, and an E_EXECUTE condition will be added if it fails. The
-# appropriate cleanup methods will be called in this case. If an options hash is provided with the
-# key 'result' and a scalar reference, the result code returned by the statement execution will be
-# written to that reference. If the value is a code reference, it will be called with the result
-# as an argument.
+# Create an action that will execute the specified SQL statement, and do nothing else. Table
+# specifiers of the form <<NAME>> are replaced by the corresponding table names, except
+# inside quoted values. The action requires no permission, and the methods 'before_action',
+# 'after_action', and 'cleanup_action' are not called for it. The statement is logged
+# whenever a log file is set. If it fails, an E_EXECUTE condition is added.
+# 
+# A statement that MariaDB would implicitly commit the transaction for, one starting with
+# ALTER, CREATE, DROP, TRUNCATE, or RENAME, is held until the transaction has been committed
+# successfully, and is then executed. If the transaction fails or is rolled back, it is never
+# executed. If it fails after the commit, a W_EXECUTE warning is added, because the
+# transaction has already been committed.
+# 
+# If the transaction is executing actions immediately (IMMEDIATE_MODE or start_execution),
+# the statement is executed at once and the value returned by DBI's 'do' method is returned:
+# a row count, '0E0' if no rows were affected, or undef if the statement failed. Otherwise
+# nothing is returned, and the statement is executed in order with the other actions.
+# 
+# If an options hash is provided with the key 'store_result', its value must be a scalar,
+# array, or code reference. When the statement is executed, the result is stored in the
+# scalar, pushed onto the array, or passed to the code as an argument.
+# 
+# This description was rewritten by Claude under the guidance of Michael McClennen.
 
 sub do_sql {
 
@@ -676,22 +710,33 @@ sub do_sql {
 
     if ( ref $options eq 'HASH' && $options->{store_result} )
     {
-	croak "result value must be a scalar or code ref" unless
-	    ref $options->{store_result} =~ /^SCALAR|^CODE/;
+	croak "the value of 'store_result' must be a scalar, array, or code reference"  # [Changed by Claude under the guidance of Michael McClennen]
+	    unless ref($options->{store_result}) =~ /^(?:SCALAR|ARRAY|CODE)$/;
 	
 	$parameters->{store_result} = $options->{store_result};
-	weaken $options->{store_result};
     }
-
-    # $$$ need sql statement labels. In fact, we need an SQL statement type.
     
-    # my $action = EditTransaction::Action->new($edt, '<SQL>', 'other', ':#s1', $parameters);
+    # Create an action with the operation 'sql' and no table. It needs no authorization or
+    # validation. Then handle it, which executes it if the transaction is executing actions
+    # immediately. [Changed by Claude under the guidance of Michael McClennen]
     
-    # $action->set_method('_execute_sql_action');
+    my $action = $edt->_new_action('sql', undef, $parameters);
     
-    # $edt->_handle_action($action, 'other');
-
-    # return $action->label;
+    $action->set_permission('unrestricted');
+    
+    # A statement that MariaDB would implicitly commit the transaction for is held until the
+    # transaction has been committed. It returns nothing, even in immediate mode, because it
+    # has not been executed yet. [Changed by Claude under the guidance of Michael McClennen]
+    
+    $action->{post_commit} = 1 if $edt->_is_ddl_statement($sql);
+    
+    $edt->_handle_action($action);
+    
+    # In immediate mode, return the result of the statement. Otherwise, return nothing.
+    # [Changed by Claude under the guidance of Michael McClennen]
+    
+    return if $action->{post_commit};
+    return $edt->{execution} ? $action->{result} : ();
 }
 
 
