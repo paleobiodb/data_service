@@ -10,7 +10,7 @@ package EditTransaction::Execution;
 
 use strict;
 
-use TableDefs qw(%TABLE get_table_property);
+use TableDefs qw(%TABLE);  # [Changed by Claude under the guidance of Michael McClennen: get_table_property is now called as a method]
 use Switch::Plain;
 use Carp qw(carp croak);
 use Fcntl qw(:flock SEEK_END);
@@ -290,8 +290,14 @@ sub _do_all_prechecks {
 	    my $colname   = $cols->[$i];
 	    my $fieldname = $fkey_check{$colname}[1];
 	    my $ftable =    $fkey_check{$colname}[3];
-	    my $fcolname =  $fkey_check{$colname}[4] || get_table_property($ftable, 'PRIMARY_KEY');
 	    my $checkval =  $vals->[$i];
+	    
+	    # If the precheck does not name the foreign column, use the primary key of the
+	    # foreign table. It is taken from the table information, which includes a primary
+	    # key found in the database schema as well as one set as a table property.
+	    # [Changed by Claude under the guidance of Michael McClennen]
+	    
+	    my $fcolname =  $fkey_check{$colname}[4] || $edt->get_table_property($ftable, 'PRIMARY_KEY');
 	    
 	    # If the column value is still a reference, substitute it with the keyval of the
 	    # corresponding action. If an error occurs, report it and then set the value to

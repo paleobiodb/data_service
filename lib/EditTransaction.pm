@@ -893,9 +893,7 @@ sub start_transaction {
 		$edt->_call_cleanup('errors');
 	    }
 	    
-	    my ($in_transaction) = $edt->{dbh}->selectrow_array('SELECT @@in_transaction');
-	    
-	    if ( $in_transaction )
+	    if ( _db_transaction_active($edt->{dbh}) )  # [Changed by Claude under the guidance of Michael McClennen]
 	    {
 		$edt->_rollback_transaction('errors');
 	    }
@@ -1157,9 +1155,7 @@ sub _start_transaction {
     
     if ( ref $TRANSACTION_INTERLOCK{$dbh} && $TRANSACTION_INTERLOCK{$dbh}->isa('EditTransaction') )
     {
-	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
-	
-	if ( $in_transaction )
+	if ( _db_transaction_active($dbh) )  # [Changed by Claude under the guidance of Michael McClennen]
 	{
 	    $TRANSACTION_INTERLOCK{$dbh}->_rollback_transaction('interlock');
 	}
@@ -1175,8 +1171,24 @@ sub _start_transaction {
     # committed. If there was an uncommitted transaction that was initiated by this
     # module, it was rolled back earlier in this subroutine.
     
+    # The transaction is started with 'begin_work', which turns AutoCommit off until it is
+    # committed or rolled back. With AutoCommit on, a handle with mariadb_auto_reconnect set
+    # would silently reconnect if the connection were lost in the middle of the
+    # transaction, and the rest of the statements would be committed one at a time. With
+    # AutoCommit off, the driver does not reconnect, so they fail instead. If AutoCommit is
+    # already off, a transaction is started with START TRANSACTION as before. [Changed by
+    # Claude under the guidance of Michael McClennen]
+    
     eval {
-	$dbh->do("START TRANSACTION");
+	if ( $dbh->{AutoCommit} )
+	{
+	    $dbh->begin_work;
+	}
+	
+	else
+	{
+	    $dbh->do("START TRANSACTION");
+	}
 	
 	# Store a reference to this transaction, so that the interlock code above can
 	# function properly. The reference must be a weak one, so the transaction will be
@@ -1208,12 +1220,12 @@ sub _start_transaction {
 	
 	$edt->{transaction} = 'failed';
 	
-	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
-	
-	if ( $in_transaction )
+	if ( _db_transaction_active($dbh) )  # [Changed by Claude under the guidance of Michael McClennen]
 	{
 	    $edt->_rollback_transaction('errors');
 	}
+	
+	$edt->_check_lost_connection($dbh);  # [Added by Claude under the guidance of Michael McClennen]
 	
 	return 0;
     }
@@ -1244,7 +1256,7 @@ sub _commit_transaction {
     # Tell the database to commit the transaction.
     
     eval {
-	$dbh->do("COMMIT");
+	_db_commit($dbh);  # [Changed by Claude under the guidance of Michael McClennen]
 	$TRANSACTION_INTERLOCK{$dbh} = undef;
 	
 	$edt->{transaction} = 'committed';
@@ -1261,13 +1273,15 @@ sub _commit_transaction {
 	$edt->error_line($@);
 	$edt->add_condition('E_EXECUTE', 'an exception occurred while committing the transaction');
 
-	my ($in_transaction) = $dbh->selectrow_array('SELECT @@in_transaction');
-
-	if ( $in_transaction )
+	# The rollback may itself fail if the connection has been lost, in which case the
+	# database has already rolled the transaction back. [Changed by Claude under the
+	# guidance of Michael McClennen]
+	
+	if ( _db_transaction_active($dbh) )
 	{
 	    $edt->debug_line( " <<< ROLLBACK TRANSACTION $edt->{unique_id} FROM exception\n" );
 	    
-	    $dbh->do("ROLLBACK");
+	    eval { _db_rollback($dbh) };
 	    
 	    $edt->{rollback_count}++;
 	}
@@ -1278,6 +1292,8 @@ sub _commit_transaction {
 	
 	$TRANSACTION_INTERLOCK{$dbh} = undef;
 	$edt->{transaction} = 'failed';
+	
+	$edt->_check_lost_connection($dbh);  # [Added by Claude under the guidance of Michael McClennen]
 	
 	return '';
     }
@@ -1313,7 +1329,7 @@ sub _rollback_transaction {
     
     eval {
 	$TRANSACTION_INTERLOCK{$dbh} = undef;
-	$dbh->do("ROLLBACK");
+	_db_rollback($dbh);  # [Changed by Claude under the guidance of Michael McClennen]
 	
 	$edt->{transaction} = 'aborted';
 	$edt->{rollback_count}++;
@@ -1327,6 +1343,8 @@ sub _rollback_transaction {
 	$edt->error_line($@);
 	$edt->add_condition('E_EXECUTE', 'an exception occurred while rolling back the transaction');
 	$edt->{transaction} = 'aborted';
+	
+	$edt->_check_lost_connection($dbh);  # [Added by Claude under the guidance of Michael McClennen]
     }
     
     # If the reason for the rollback was 'errors', correct the transaction status to 'failed'.
@@ -1337,6 +1355,75 @@ sub _rollback_transaction {
     }
     
     return 1;
+}
+
+
+# _db_transaction_active ( dbh )
+# 
+# Return true if a database transaction may be active on the specified handle: either
+# AutoCommit is off, or the database reports an active transaction. If the database cannot
+# be asked, which happens if the connection has been lost, rely on AutoCommit alone. When a
+# connection is lost, the database rolls back any transaction that was active on it.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _db_transaction_active {
+    
+    my ($dbh) = @_;
+    
+    return 1 unless $dbh->{AutoCommit};
+    
+    my ($in_transaction) = eval { $dbh->selectrow_array('SELECT @@in_transaction') };
+    
+    return $in_transaction;
+}
+
+
+# _check_lost_connection ( dbh )
+# 
+# This is called after starting, committing, or rolling back a transaction has failed. If
+# the connection to the database has been lost, disconnect the handle. The database has
+# already rolled back any transaction that was active on it, but DBI may not have been
+# able to turn AutoCommit back on, which leaves the handle unusable: with AutoCommit off,
+# the driver will not reconnect. Disconnecting it lets the code that provides the handle,
+# such as Dancer::Plugin::Database, see that it must make a new connection.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _check_lost_connection {
+    
+    my ($edt, $dbh) = @_;
+    
+    return if eval { $dbh->ping };
+    
+    $edt->error_line("The connection to the database was lost; disconnecting the handle");
+    
+    eval { $dbh->disconnect };
+}
+
+
+# _db_commit ( dbh ) and _db_rollback ( dbh )
+# 
+# Commit or roll back the transaction on the specified handle. If AutoCommit is off, use
+# the DBI methods, which turn AutoCommit back on if the transaction was started with
+# 'begin_work'. Otherwise, the transaction was not started through DBI, so issue the
+# statement directly.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _db_commit {
+    
+    my ($dbh) = @_;
+    
+    $dbh->{AutoCommit} ? $dbh->do("COMMIT") : $dbh->commit;
+}
+
+
+sub _db_rollback {
+    
+    my ($dbh) = @_;
+    
+    $dbh->{AutoCommit} ? $dbh->do("ROLLBACK") : $dbh->rollback;
 }
 
 
