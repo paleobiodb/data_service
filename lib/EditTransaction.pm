@@ -1175,20 +1175,15 @@ sub _start_transaction {
     # committed or rolled back. With AutoCommit on, a handle with mariadb_auto_reconnect set
     # would silently reconnect if the connection were lost in the middle of the
     # transaction, and the rest of the statements would be committed one at a time. With
-    # AutoCommit off, the driver does not reconnect, so they fail instead. If AutoCommit is
-    # already off, a transaction is started with START TRANSACTION as before. [Changed by
+    # AutoCommit off, the driver does not reconnect, so they fail instead. START
+    # TRANSACTION is then issued as well, so that the database reports the transaction as
+    # active from the start, which '_check_transaction_intact' relies on. [Changed by
     # Claude under the guidance of Michael McClennen]
     
     eval {
-	if ( $dbh->{AutoCommit} )
-	{
-	    $dbh->begin_work;
-	}
+	$dbh->begin_work if $dbh->{AutoCommit};
 	
-	else
-	{
-	    $dbh->do("START TRANSACTION");
-	}
+	$dbh->do("START TRANSACTION");
 	
 	# Store a reference to this transaction, so that the interlock code above can
 	# function properly. The reference must be a weak one, so the transaction will be
@@ -1534,6 +1529,10 @@ sub initialize_transaction {
 # This method is called at the end of every successful transaction. It is passed the name that was
 # designated as the "main table" for this transaction. The method is designed to be overridden by
 # subclasses, so that any necessary work can be carried out at the end of the transaction.
+# 
+# If this method executes SQL statements, it must not catch and ignore an exception thrown
+# by one of them. See '_check_transaction_intact' in EditTransaction::Execution. [Added by
+# Claude under the guidance of Michael McClennen]
 
 sub finalize_transaction {
 
@@ -1584,6 +1583,10 @@ sub initialize_action {
 # Whenever possible, it is better to make auxiliary changes to the database in
 # the 'after_action' method, because at that point you know that the action
 # itself has succeeded.
+# 
+# If this method executes SQL statements, it must not catch and ignore an exception thrown
+# by one of them. See '_check_transaction_intact' in EditTransaction::Execution. [Added by
+# Claude under the guidance of Michael McClennen]
 
 sub before_action {
 
@@ -1601,6 +1604,10 @@ sub before_action {
 # the newly inserted record. For update, replace, delete, and do_sql actions,
 # $result will get the result of the database statement that was executed. For
 # other actions, it will get the result returned by the action method.
+# 
+# If this method executes SQL statements, it must not catch and ignore an exception thrown
+# by one of them. See '_check_transaction_intact' in EditTransaction::Execution. [Added by
+# Claude under the guidance of Michael McClennen]
 
 sub after_action {
 

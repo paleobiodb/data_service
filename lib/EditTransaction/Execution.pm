@@ -129,6 +129,16 @@ sub execute_action_list {
 		$edt->error_line("execute_action_list: bad operation '$_'");
 	    }
 	}
+	
+	# If the action failed, check that the database transaction is still active. A
+	# deadlock, for example, causes the database to roll back the entire transaction,
+	# not just the statement that failed. [Added by Claude under the guidance of Michael
+	# McClennen]
+	
+	if ( $action->status eq 'failed' && $edt->{transaction} eq 'active' )
+	{
+	    $edt->_check_transaction_intact;
+	}
     }
     
     # Update the count of completed actions. If this routine is called again, it will skip
@@ -143,6 +153,42 @@ sub execute_action_list {
     if ( my $parent_action = $edt->{current_action} && $edt->{current_action}->parent )
     {
 	$edt->{current_action} = $parent_action;
+    }
+}
+
+
+# _check_transaction_intact ( )
+# 
+# Add an error condition to the transaction if the database transaction is no longer
+# active, which means that the database has rolled it back. The condition is attached to
+# the transaction itself rather than to an action, so it cannot be demoted by PROCEED.
+# This stops the remaining actions from being executed, and causes the transaction to
+# fail. Otherwise, the remaining statements would run in a new database transaction,
+# which would be committed without the ones that were rolled back.
+# 
+# This check is made only after an action fails. Every statement executed by
+# EditTransaction itself causes its action to fail if it throws an exception, so a
+# rollback by the database is always detected if it happens during one of those
+# statements. The limitation is that it is not detected if it happens during a statement
+# executed by subclass or client code which catches the exception and ignores it, or adds
+# only a warning. This includes statements executed by 'before_action', 'after_action',
+# 'finalize_transaction', and the methods called by 'table_action', and statements
+# executed through the database handle between actions. In that case, the remaining
+# statements are committed without the ones that were rolled back, whether or not
+# PROCEED is allowed. Code that catches such an exception should add an error condition
+# instead, which causes the action or the transaction to fail.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _check_transaction_intact {
+    
+    my ($edt) = @_;
+    
+    my ($in_transaction) = eval { $edt->dbh->selectrow_array('SELECT @@in_transaction') };
+    
+    unless ( $in_transaction )
+    {
+	$edt->add_condition('main', 'E_EXECUTE', "the database rolled back the transaction");
     }
 }
 

@@ -419,6 +419,10 @@ sub record_action {
 # subclass methods for authoriation and validation. No authentication will be performed,
 # but the 'validate_action' method will be called and it may check table permissions and
 # do other forms of authentication.
+# 
+# If the action method executes SQL statements, it must not catch and ignore an exception
+# thrown by one of them. See '_check_transaction_intact' in EditTransaction::Execution.
+# [Added by Claude under the guidance of Michael McClennen]
 
 sub table_action {
     
