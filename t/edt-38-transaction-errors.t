@@ -9,8 +9,8 @@
 #                               elsewhere: the less common forms of the constructor,
 #                               failures of the database statements that start, commit, and
 #                               roll back a transaction, the loss of the database connection
-#                               during a transaction, the allowance methods, and the default
-#                               hook methods.
+#                               during a transaction, a deadlock, the allowance methods, and
+#                               the default hook methods.
 #
 # Added by Claude under the guidance of Michael McClennen.
 #
@@ -18,7 +18,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 9;
+use Test::More tests => 10;
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -325,6 +325,75 @@ subtest 'connection lost' => sub {
 	ok_no_record('EDT_TEST', "string_req = 'after'", "the second record was not stored$label");
 	
 	ok( ! $lost_dbh->{Active}, "the handle whose connection was lost has been disconnected$label" );
+    }
+};
+
+
+# Check what happens if the database rolls back the transaction because of a deadlock. A
+# second connection locks the same two records as the transaction, in the opposite order.
+# It also modifies many other records, so that the database chooses the transaction as
+# the one to roll back. Under PROCEED, the error from the failed statement is demoted, but
+# the remaining actions must not be executed, because they would be committed without
+# the statements that were rolled back.
+
+subtest 'deadlock' => sub {
+    
+    foreach my $allowance ( '', 'PROCEED' )
+    {
+	clear_table('EDT_TEST');
+	clear_table('EDT_SUB');
+	
+	sql_command("INSERT INTO <<EDT_TEST>> (test_no, string_req) VALUES (5, 'five'), (6, 'six')");
+	
+	my $label = $allowance ? " with $allowance" : "";
+	
+	my $edt_dbh = $dbh->clone || die "could not clone the database handle";
+	my $other_dbh = $dbh->clone || die "could not clone the database handle";
+	
+	my $edt = ETBasicTest->new($edt_dbh, { allows => [ 'SILENT_MODE', $allowance || () ] });
+	
+	$edt->start_execution;
+	
+	$edt->update_record('EDT_TEST', { test_no => 5, string_req => 'updated five' });
+	
+	$other_dbh->begin_work;
+	$other_dbh->do("UPDATE $TABLE{EDT_TEST} SET string_req = 'other six' WHERE test_no = 6");
+	$other_dbh->do("INSERT INTO $TABLE{EDT_SUB} (name, test_no) VALUES " .
+		       join(',', map { "('other $_', 6)" } 1..200));
+	
+	# This statement waits for the lock that the transaction holds on record 5.
+	
+	$other_dbh->do("UPDATE $TABLE{EDT_TEST} SET string_req = 'other five' WHERE test_no = 5",
+		       { mariadb_async => 1 });
+	
+	select(undef, undef, undef, 0.5);
+	
+	# This statement needs the lock that the other connection holds on record 6.
+	
+	$edt->update_record('EDT_TEST', { test_no => 6, string_req => 'updated six' });
+	
+	is( $edt->action_status('&_'), 'failed', "the action that deadlocked failed$label" );
+	
+	$edt->insert_record('EDT_TEST', { test_no => 7, string_req => 'seven' });
+	
+	isnt( $edt->action_status('&_'), 'executed', "the next action was not executed$label" );
+	
+	ok( ! $edt->commit, "commit returns false$label" );
+	
+	is( $edt->status, 'failed', "the transaction status is 'failed'$label" );
+	
+	ok_has_condition($edt, 'main', 'E_EXECUTE', qr/rolled back the transaction/,
+			 "the rollback by the database is reported$label");
+	
+	eval { $other_dbh->mariadb_async_result };
+	$other_dbh->rollback;
+	
+	ok_found_record('EDT_TEST', "test_no = 5 and string_req = 'five'",
+			"the first update was not stored$label");
+	
+	ok_no_record('EDT_TEST', "test_no = 7", "the insert was not stored$label");
+	
+	ok( $edt_dbh->{AutoCommit}, "AutoCommit is turned back on$label" );
     }
 };
 
