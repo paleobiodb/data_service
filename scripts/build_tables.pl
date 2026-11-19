@@ -26,7 +26,6 @@ use SpecimenTables qw(buildSpecimenTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
-# use TimescaleTables qw(establishTimescaleTables);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
@@ -37,7 +36,7 @@ use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydqspfAMSL', \%options);
+getopts('tT:OmR:bcKUuIivrydqspfAML', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -79,7 +78,6 @@ my $occurrence_int_maps = $options{M};
 my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
 my $prevalence_tables = $options{q};
-my $timescale_tables = $options{S};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -275,11 +273,6 @@ if ( $strata_tables )
 if ( $occurrence_tables )
 {
     buildSpecimenTables($dbh);
-}
-
-if ( $timescale_tables )
-{
-    establishTimescaleTables($dbh);
 }
 
 print "done rebuilding tables\n";

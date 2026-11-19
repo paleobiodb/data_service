@@ -23,7 +23,7 @@ use namespace::clean;
 {
     ArchiveEdit->register_conditions(
 	C_ARCHIVE_HAS_DOI => "Allow 'ARCHIVE_HAS_DOI' in order to alter or delete a record with an assigned DOI",
-	E_IMMUTABLE => "An archive that has a DOI assigned is immutable except for the description".);
+	E_IMMUTABLE => "An archive that has a DOI assigned is immutable except for the description");  # [Changed by Claude under the guidance of Michael McClennen: a stray '.' here was a syntax error]
     
     ArchiveEdit->register_allowances('ARCHIVE_HAS_DOI');
 }

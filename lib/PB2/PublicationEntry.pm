@@ -11,7 +11,7 @@ package PB2::PublicationEntry;
 
 use strict;
 
-use PbdbEdit;
+use PBDBEdit;  # [Changed by Claude under the guidance of Michael McClennen: PbdbEdit was merged into PBDBEdit]
 use TableDefs qw(%TABLE);
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
 use TableData qw(complete_ruleset);
@@ -128,10 +128,10 @@ sub update_publications {
 	die $request->exception(400, "Bad data");
     }
     
-    # If we get here without any errors being detected so far, create a new PbdbEdit object to
+    # If we get here without any errors being detected so far, create a new PBDBEdit object to
     # handle this operation.
     
-    my $edt = PbdbEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
@@ -246,11 +246,11 @@ sub delete_publications {
 	$allowances->{$_} = 1 foreach @allowance;
     }
     
-    # Determine our authentication info, and then create an PbdbEdit object.
+    # Determine our authentication info, and then create a PBDBEdit object.
     
     my $perms = $request->require_authentication('PUBLICATIONS');
     
-    my $edt = PbdbEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
 
     # Then go through the records and handle each one in turn.
     

@@ -14,6 +14,7 @@ use lib '..';
 package PB2::ArchiveEntry;
 
 use TableDefs qw(%TABLE);
+use ArchiveEdit;  # [Added by Claude under the guidance of Michael McClennen: this module used the base EditTransaction class]
 
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
 use TableData qw(complete_ruleset);
@@ -131,10 +132,10 @@ sub update_archives {
 	die $request->exception(400, "Bad data");
     }
     
-    # If we get here without any errors being detected so far, create a new EditTransaction object to
+    # If we get here without any errors being detected so far, create a new ArchiveEdit object to
     # handle this operation.
     
-    my $edt = EditTransaction->new($request, $perms, 'ARCHIVES', $allowances);
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
@@ -249,11 +250,11 @@ sub delete_archives {
 	$allowances->{$_} = 1 foreach @allowance;
     }
     
-    # Determine our authentication info, and then create an EditTransaction object.
+    # Determine our authentication info, and then create an ArchiveEdit object.
     
     my $perms = $request->require_authentication('ARCHIVES');
     
-    my $edt = EditTransaction->new($request, $perms, 'ARCHIVES', $allowances);
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', $allowances);
     
     # Then go through the records and handle each one in turn.
     
@@ -405,12 +406,12 @@ sub open_archive {
     
     die $request->exception(500, "Permissions not found") unless $perms && $perms->{enterer_no};
     
-    # Create an EditTransaction for inserting or updating a data archive record. The CREATE
+    # Create an ArchiveEdit transaction for inserting or updating a data archive record. The CREATE
     # allowance lets us create a new record if we don't already have an archive_no for this
     # request.
     
-    my $edt = EditTransaction->new($request, $perms, 'ARCHIVES', { CREATE => 1,
-								   IMMEDIATE_EXECUTION => 1 });
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', { CREATE => 1,
+							       IMMEDIATE_EXECUTION => 1 });
     
     # If we are replacing the contents of an existing archive record, the user can also update the
     # 'authors' and 'description' fields. A new record can have both of those fields and must also

@@ -37,7 +37,7 @@ no warnings 'uninitialized';
 # transaction initiation, commitment, and rollback, permission checking, and also error and
 # warning conditions.
 # 
-# This class can be subclassed (see ResourceEdit.pm, TimescaleEdit.pm) in order to provide
+# This class can be subclassed (see ResourceEdit.pm, SpecimenEdit.pm) in order to provide
 # additional logic for checking values and performing auxiliary operations in conjunction with
 # database inserts, updates, and deletes.
 

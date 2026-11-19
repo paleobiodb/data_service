@@ -247,6 +247,13 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');
     set_table_property('ARCHIVES', PRIMARY_FIELD => 'archive_id');
     set_table_property('ARCHIVES', LOG_CHANGES => 1);
+    
+    # [Added by Claude under the guidance of Michael McClennen: without these, edits to archives
+    # were not permission-checked. Any database member may create an archive, and only its
+    # owner or an administrator may modify or delete it.]
+    
+    set_table_property('ARCHIVES', CAN_POST => 'MEMBERS');
+    set_table_property('ARCHIVES', CAN_DELETE => 'OWNER');
     # set_table_property('ARCHIVES', BY_AUTHORIZER => 1);
     
     set_table_name(APP_STATE => 'navigator_states');

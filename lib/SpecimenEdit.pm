@@ -27,7 +27,16 @@ use ExternalIdent qw(%IDRE);
 
 use Taxonomy;
 
-use base 'EditTransaction';
+use parent 'EditTransaction';
+
+# [Changed by Claude under the guidance of Michael McClennen: the MariaDB and PaleoBioDB
+# roles were not included, so the default permission checks allowed everything and the
+# special columns were not handled]
+
+use Role::Tiny::With;
+
+with 'EditTransaction::Mod::MariaDB';
+with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
