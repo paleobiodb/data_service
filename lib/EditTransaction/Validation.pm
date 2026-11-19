@@ -527,6 +527,34 @@ sub validate_data_column {
 	}
     }
     
+    # If this class includes an application role that implements 'check_data_column', call
+    # it now. It may return an error condition, or a true result and a cleaned value that
+    # replaces the one given, for example a key value unpacked from an external identifier.
+    # The cleaned value is then validated in the usual way. [Added by Claude under the
+    # guidance of Michael McClennen: this call was lost when this method was rewritten]
+    
+    my $value_changed;
+    
+    if ( defined $value && $edt->can('check_data_column') )
+    {
+	my ($app_result, $clean_value, $additional) =
+	    $edt->check_data_column($cr, $action->operation, $action->permission, $value, $fieldname);
+	
+	$edt->add_condition($action, $additional->@*) if ref $additional eq 'ARRAY';
+	
+	if ( ref $app_result eq 'ARRAY' )
+	{
+	    $edt->add_condition($action, $app_result->@*);
+	    return 'ignore';
+	}
+	
+	elsif ( $app_result )
+	{
+	    $value = $clean_value;
+	    $value_changed = 1;
+	}
+    }
+    
     # If this column is a foreign key, validation cannot be completed until execution time.
     
     if ( my $foreign_table = $cr->{FOREIGN_KEY} )
@@ -606,7 +634,14 @@ sub validate_data_column {
 	return 'ignore';
     }
     
-    # Otherwise, return the result and the cleaned value if one was returned.
+    # Otherwise, return the result and the cleaned value if one was returned. If the value
+    # was changed by 'check_data_column' and is otherwise valid as it is, return it as the
+    # cleaned value. [Changed by Claude under the guidance of Michael McClennen]
+    
+    if ( $value_changed && ! $result )
+    {
+	return ('clean', $value);
+    }
     
     return ($result, $new_value);
 }

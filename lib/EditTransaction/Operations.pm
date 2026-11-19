@@ -174,6 +174,11 @@ sub record_operation {
 	    {
 		$edt->validate_against_schema($action, $operation, $table_specifier);
 	    }
+	    
+	    # If the action operates on a locked record, check whether it needs the LOCKED
+	    # allowance. [Added by Claude under the guidance of Michael McClennen]
+	    
+	    $edt->check_unlock($action) if $action->validation_status ne 'PENDING';
 	}
     };
     
@@ -389,6 +394,8 @@ sub record_action {
 	    # class-specific checks and substitutions.
 	    
 	    $edt->validate_action($action, $method, $table_specifier);
+	    
+	    $edt->check_unlock($action);  # [Added by Claude under the guidance of Michael McClennen]
 	};
 	
 	if ( $@ )

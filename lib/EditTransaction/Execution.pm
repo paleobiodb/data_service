@@ -343,6 +343,12 @@ sub pre_execution_check {
 	}
     }
     
+    # If the action operates on a locked record, check whether it needs the LOCKED
+    # allowance. This covers actions whose authorization or validation was put off until
+    # now. [Added by Claude under the guidance of Michael McClennen]
+    
+    $edt->check_unlock($action);
+    
     # If any prechecks have been defined for this action, do them now.
     
     eval {

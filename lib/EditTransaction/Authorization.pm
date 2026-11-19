@@ -702,11 +702,15 @@ sub authorize_against_table {
 	    $primary =~ s/_unlock//;
 	}
 	
+	# Otherwise, mark the action as requiring an unlock. Whether the C_LOCKED caution
+	# is needed is decided after the action has been validated, by 'check_unlock',
+	# because the action may unlock the record itself. [Changed by Claude under the
+	# guidance of Michael McClennen: C_LOCKED was added here]
+	
 	else
 	{
-	    $edt->add_condition('main', 'C_LOCKED');
 	    $edt->add_condition($action, 'W_LOCKED');
-	    # $action->requires_unlock(1);
+	    $action->requires_unlock(1);
 	}
     }
     
@@ -715,6 +719,27 @@ sub authorize_against_table {
     $action->set_permission($primary);
     
     return ($primary, $count);
+}
+
+
+# check_unlock ( action )
+# 
+# This is called after an action has been validated. If the action operates on a locked
+# record that the user has permission to unlock, add a C_LOCKED caution unless the
+# transaction allows LOCKED or the action itself unlocks the record. Application modules
+# that handle lock columns indicate the latter by calling $action->requires_unlock(0) during
+# validation. The caution is added only once for each action.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub check_unlock {
+    
+    my ($edt, $action) = @_;
+    
+    if ( $action->requires_unlock && ! $action->{unlock_checked}++ && ! $edt->allows('LOCKED') )
+    {
+	$edt->add_condition('main', 'C_LOCKED');
+    }
 }
 
 

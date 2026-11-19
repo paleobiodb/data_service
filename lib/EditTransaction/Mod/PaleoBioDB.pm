@@ -35,8 +35,19 @@ BEGIN {
     
     EditTransaction->register_allowances('SKIP_LOGGING');
     
-    EditTransaction->register_directives('au_authorizer', 'au_creater', 'au_modifier',
-					 'adm_lock', 'own_lock');
+    # [Changed by Claude under the guidance of Michael McClennen: the names registered were
+    # 'au_authorizer', 'au_creater', and 'au_modifier', which are not the ones this module
+    # uses, and 'auth_updater' and 'ts_updated' were not registered]
+    
+    EditTransaction->register_directives('auth_authorizer', 'auth_creator', 'auth_modifier',
+					 'auth_updater', 'ts_updated', 'adm_lock', 'own_lock');
+    
+    # The condition E_KEY_NOT_FOUND is used by this module, so it must have a template.
+    # [Added by Claude under the guidance of Michael McClennen]
+    
+    EditTransaction->register_conditions(
+	E_KEY_NOT_FOUND => ["Field '&1': no record was found with key '&2'",
+			    "Field '&1': no record was found with this key"]);
 };
 
 
@@ -130,7 +141,7 @@ sub finish_table_definition {
 	    # If the column name is one of the canonical names for this directive, just add it to
 	    # the list. Fields ending in _no MUST keep their canonical name.
 	    
-	    if ( $COMMON_FIELD_SPECIAL{$colname} eq $cr->{DIRECTIVE} )
+	    if ( ($COMMON_FIELD_SPECIAL{$colname} // '') eq $cr->{DIRECTIVE} )  # [Changed by Claude under the guidance of Michael McClennen: avoid a warning for other names]
 	    {
 		push @auth_columns, $colname;
 	    }
@@ -234,7 +245,9 @@ sub check_data_column {
     my ($edt, $cr, $operation, $permission, $value, $fieldname) = @_;
     
     # If the value is an external identifier, check to see if the column allows it. If so, unpack
-    # the raw value and return the cleaned value.
+    # the raw value and return the cleaned value. A value that looks like an external
+    # identifier is rejected only for an integer column, because in a text column it may
+    # just be text. [Changed by Claude under the guidance of Michael McClennen]
     
     if ( looks_like_extid($value) )
     {
@@ -243,7 +256,7 @@ sub check_data_column {
 	    return $edt->validate_extid_value($expected, $value, $fieldname);
 	}
 	
-	else
+	elsif ( ref $value || $cr->{TypeMain} eq 'integer' )
 	{
 	    return [ 'E_EXTID', $fieldname, "this field does not accept external identifiers" ];
 	}
@@ -366,8 +379,10 @@ sub validate_special_column {
     
     # If the value is empty, set it according to the operation and the column name. The only
     # exception is for the modifier/modified fields if the transaction is in FIXUP_MODE.
+    # [Changed by Claude under the guidance of Michael McClennen: the test was inverted, so
+    # a value that was given was treated as if it were empty, and vice versa]
     
-    unless ( defined $value && $value eq '' )
+    unless ( defined $value && $value ne '' )
     {
 	# If the transaction is being executed in FIXUP_MODE, the modifier and modified date
 	# should remain unchanged. This is only allowed with 'admin' or 'unrestricted' permission.
@@ -413,39 +428,62 @@ sub validate_special_column {
 	# columns whose names end in '_no' are keys with integer values. Those whose names end in
 	# '_id' have string values.
 	
+	# For a 'replace' operation, the authorizer and creator are copied from the old
+	# record. [Changed by Claude under the guidance of Michael McClennen: 'unchanged' was
+	# returned as the value of the column instead of as the result, so it was stored]
+	
 	if ( $directive eq 'auth_authorizer' )
 	{
-	    $value = $operation eq 'replace' ? 'unchanged'
-		   : $operation eq 'update'  ? undef
+	    return 'unchanged' if $operation eq 'replace';
+	    
+	    $value = $operation eq 'update'  ? undef
 					     : $edt->{permission}->authorizer_no;
 	    return ('clean', $value);
 	}
 	
 	elsif ( $directive eq 'auth_creator' )
 	{
-	    $value = $operation eq 'replace' ? 'unchanged'
-		   : $operation eq 'update'  ? undef
+	    return 'unchanged' if $operation eq 'replace';
+	    
+	    $value = $operation eq 'update'  ? undef
 		   : $cr->{Field} =~ /_no$/  ? $edt->{permission}->enterer_no
 					     : $edt->{permission}->user_id;
 	    return ('clean', $value);
 	}
 	
+	# On insert, the modifier is empty: 0 for a person number, or the empty string for a
+	# user id. [Changed by Claude under the guidance of Michael McClennen: it was 0 for
+	# both]
+	
 	elsif ( $directive eq 'auth_modifier' )
 	{
-	    $value = $operation eq 'insert' ? 0
+	    $value = $operation eq 'insert' ? ( $cr->{Field} =~ /_no$/ ? 0 : '' )
 		   : $cr->{Field} =~ /_no$/ ? $edt->{permission}->enterer_no
 					    : $edt->{permission}->user_id;
 	    return ('clean', $value);
 	}
 	
+	# Outside of FIXUP_MODE, the updater is left alone, except that for a 'replace'
+	# operation it must be copied from the old record. [Changed by Claude under the
+	# guidance of Michael McClennen: it was ignored, so a replace reset it]
+	
 	elsif ( $directive eq 'auth_updater' )
 	{
-	    return 'ignore';
+	    return $operation eq 'replace' ? 'unchanged' : 'ignore';
 	}
 	
 	# For the 'ts_created' and 'ts_modified' directives, if the column does not have a default
 	# value then emulate the desired behavior by putting in the current timestamp on insert
 	# and/or update.
+	
+	# For a 'replace' operation, the creation time is copied from the old record,
+	# because otherwise the database would set it to the current time. [Added by Claude
+	# under the guidance of Michael McClennen]
+	
+	elsif ( $directive eq 'ts_created' && $operation eq 'replace' )
+	{
+	    return 'unchanged';
+	}
 	
 	elsif ( $directive eq 'ts_created' || $directive eq 'ts_modified' )
 	{
@@ -523,9 +561,12 @@ sub validate_special_column {
 	my $check_result;
 	my $check_value = $value;
 	
+	# [Changed by Claude under the guidance of Michael McClennen: the results were
+	# assigned to new variables declared inside this block, so they were discarded]
+	
 	if ( looks_like_extid($value) )
 	{
-	    my ($check_result, $check_value) =
+	    ($check_result, $check_value) =
 		$edt->validate_extid_value($cr->{EXTID_TYPE} || 'PRS', $value, $fieldname);
 	}
 	
@@ -554,13 +595,13 @@ sub validate_special_column {
 	}
     }
     
-    # The lock fields take boolean values. When a lock field is set or unset, that cancels any
-    # requirement for record unlocking.
+    # The lock fields take boolean values. Clearing the locks that are set on a record
+    # cancels any requirement for the LOCKED allowance; this is done below, after the
+    # permission check. [Changed by Claude under the guidance of Michael McClennen]
     
     elsif ( $directive eq 'adm_lock' || $directive eq 'own_lock' )
     {
 	@result = $edt->validate_boolean_value('boolean', $value, $fieldname);
-	$action->requires_unlock(0);
     }
     
     # Any other directive generates an error condition.
@@ -612,7 +653,62 @@ sub validate_special_column {
 	return 'ignore';
     }
     
+    # If the value check returned an error condition, add it to the action and ignore the
+    # value. Otherwise, the caller would use the value as given. [Added by Claude under the
+    # guidance of Michael McClennen]
+    
+    if ( ref $result[0] eq 'ARRAY' )
+    {
+	$edt->add_condition($action, $result[0]->@*);
+	return 'ignore';
+    }
+    
+    # If a lock column is being cleared, note it. [Added by Claude under the guidance of
+    # Michael McClennen]
+    
+    if ( ( $directive eq 'adm_lock' || $directive eq 'own_lock' ) && ! $result[1] )
+    {
+	$edt->_note_lock_cleared($action, $colname);
+    }
+    
     return @result;
+}
+
+
+# _note_lock_cleared ( action, colname )
+# 
+# This is called when the specified action clears the specified lock column. If the action
+# was marked as requiring an unlock, and it now clears every lock column that is set on the
+# record, the requirement is cancelled, because the action unlocks the record itself. This
+# is only done for an action that selects a single record.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _note_lock_cleared {
+    
+    my ($edt, $action, $colname) = @_;
+    
+    return unless $action->requires_unlock;
+    
+    # The first time this is called for an action, find the lock columns that are set on
+    # the existing record.
+    
+    unless ( $action->{locks_set} )
+    {
+	return if $action->keymult;
+	
+	my $old = $edt->fetch_old_record($action) || return;
+	my $columns = $edt->table_column_ref($action->table) || return;
+	
+	my @lock_columns = grep { ($columns->{$_}{DIRECTIVE} // '') =~ /^adm_lock$|^own_lock$/ }
+	    keys %$columns;
+	
+	$action->{locks_set} = { map { $_ => 1 } grep { $old->{$_} } @lock_columns };
+    }
+    
+    delete $action->{locks_set}{$colname};
+    
+    $action->requires_unlock(0) unless $action->{locks_set}->%*;
 }
 
 
@@ -1323,7 +1419,10 @@ sub _check_admin_permission {
 	
 	my $lock_fields = join(',', @fields);
 	
-	my @authinfo = $edt->select_authinfo($table_specifier, $where, $lock_fields);
+	# [Changed by Claude under the guidance of Michael McClennen: the arguments were in the
+	# old order, and the result, which is a list reference, was not dereferenced]
+	
+	my @authinfo = ( $edt->select_authinfo($table_specifier, $lock_fields, $where) || [ ] )->@*;
 	
 	my $lock_count = 0;
 	my $nolock_count = 0;
