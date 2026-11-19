@@ -15,6 +15,7 @@ use Permissions;
 use ExternalIdent qw(%IDP %IDRE);
 
 use Carp qw(croak);
+use Scalar::Util qw(blessed);  # [Added by Claude under the guidance of Michael McClennen: blessed was called but not imported]
 use List::Util qw(none);
 
 use feature 'unicode_strings', 'postderef';
@@ -33,7 +34,11 @@ BEGIN {
     set_table_property_name('BY_AUTHORIZER', 1);
     set_column_property_name('EXTID_TYPE', 1);
     
-    EditTransaction->register_allowances('SKIP_LOGGING');
+    # [Changed by Claude under the guidance of Michael McClennen: INSERT_KEY was used by
+    # 'authorize_insert_key' but was not registered, and SKIP_LOGGING was registered but
+    # not used]
+    
+    EditTransaction->register_allowances('INSERT_KEY');
     
     # [Changed by Claude under the guidance of Michael McClennen: the names registered were
     # 'au_authorizer', 'au_creater', and 'au_modifier', which are not the ones this module
@@ -50,12 +55,6 @@ BEGIN {
 			    "Field '&1': no record was found with this key"]);
 };
 
-
-# These are the special column directives accepted by this application.
-
-our %APP_DIRECTIVE = ( ts_created => 1, ts_modified => 1, ts_updated => 1,
-		       auth_authorizer => 1, auth_creator => 1, auth_modifier => 1, auth_updater => 1,
-		       adm_lock => 1, own_lock => 1 );
 
 our %AUTH_DIRECTIVE = ( auth_authorizer => 'authorizer_id', auth_creator => 'enterer_id',
 			adm_lock => 'admin_lock', own_lock => 'owner_lock' );
@@ -485,22 +484,13 @@ sub validate_special_column {
 	    return 'unchanged';
 	}
 	
+	# Otherwise, the database fills in these columns. [Changed by Claude under the
+	# guidance of Michael McClennen: removed the unused column properties INSERT_FILL and
+	# UPDATE_FILL]
+	
 	elsif ( $directive eq 'ts_created' || $directive eq 'ts_modified' )
 	{
-	    if ( $operation eq 'insert' && $cr->{INSERT_FILL} )
-	    {
-		return ('unquoted', $cr->{INSERT_FILL}, undef, 1);
-	    }
-	    
-	    elsif ( $operation =~ /^update|^replace/ && $cr->{UPDATE_FILL} )
-	    {
-		return ('unquoted', $cr->{UPDATE_FILL}, undef, 1);
-	    }
-	    
-	    else
-	    {
-		return;
-	    }
+	    return;
 	}
 	
 	# A column with the 'ts_updated' directive is ignored if we are not in FIXUP_MODE
@@ -758,18 +748,6 @@ sub check_foreign_key {
 }
 
 
-# has_app_directive ( directive )
-#
-# Return true if the specified directive is recognized by this application, false otherwise.
-
-sub has_app_directive {
-    
-    my ($edt, $directive) = @_;
-    
-    return $APP_DIRECTIVE{$directive} ? 1 : '';
-}
-
-
 # Permissions and authorization
 # -----------------------------
 
@@ -884,8 +862,8 @@ sub _compute_table_permission {
     my $tableinfo = $edt->table_info_ref($table_specifier);
     my $tp = $perms->get_table_permissions($table_specifier);
     
-    my $dprefix = $debug_mode && "    Permission for $table_specifier : '$requested' ";
-    my $dauth = $debug_mode && $perms->{auth_diag}{$table_specifier};
+    my $dprefix = $debug_mode ? "    Permission for $table_specifier : '$requested' " : '';  # [Changed by Claude under the guidance of Michael McClennen: avoid warnings]
+    my $dauth = $debug_mode ? ($perms->{auth_diag}{$table_specifier} // '') : '';
     
     # If the table has no authentication properties, return 'unrestricted'.
     
@@ -918,9 +896,32 @@ sub _compute_table_permission {
 	return 'none';
     }
     
-    # If we know they have the requested permission, return it.
+    # A request to move records in a subordinate table to a different superior record is
+    # granted according to the table's CAN_MOVE property, using the same categories of user as
+    # CAN_POST and CAN_MODIFY. A value of 'OWNER' grants it to anybody who may modify the
+    # record being moved, which is checked separately. [Added by Claude under the guidance of
+    # Michael McClennen]
     
-    if ( $tp->{$requested} )
+    if ( $requested eq 'move' )
+    {
+	my $can_move = uc($tableinfo->{CAN_MOVE} // '');
+	
+	if ( $can_move eq 'ALL' || $can_move eq 'ANY' || $can_move eq 'OWNER' ||
+	     $can_move eq 'LOGGED_IN' && $perms->{user_id} ||
+	     $can_move eq 'MEMBERS' && $perms->{enterer_no} ||
+	     $can_move eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
+	{
+	    return 'granted';
+	}
+	
+	return 'none';
+    }
+    
+    # If we know they have the requested permission, return it. The permission to insert
+    # records with chosen keys is granted in the table_permissions table as 'insert_key'.
+    # [Changed by Claude under the guidance of Michael McClennen: such a grant had no effect]
+    
+    if ( $tp->{$requested} || $requested eq 'insert' && $tp->{insert_key} )
     {
 	$edt->debug_line( "$dprefix granted from $dauth\n" ) if $debug_mode;
 	return 'granted';
@@ -1001,14 +1002,31 @@ sub check_row_permission {
     my $tableinfo = $edt->table_info_ref($table_specifier);
     my $tp = $perms->get_table_permissions($table_specifier);
     
-    my $dprefix = $debug_mode && "    Permission for $table_specifier ($where) : '$requested' ";
-    my $dauth = $debug_mode && $perms->{auth_diag}{$table_specifier};
+    my $dprefix = $debug_mode ? "    Permission for $table_specifier ($where) : '$requested' " : '';  # [Changed by Claude under the guidance of Michael McClennen: avoid warnings]
+    my $dauth = $debug_mode ? ($perms->{auth_diag}{$table_specifier} // '') : '';
     
     # If the table has no authentication properties, all we need to know is whether there are any
     # matching records. If the requested permission is 'replace', we don't even need that.
     
     if ( $tableinfo->{UNRESTRICTED} )
     {
+	# If the table has a CAN_DELETE property, a 'delete' request must satisfy it. The
+	# value 'NONE' refuses everybody, 'AUTHORIZED' and 'OWNER' allow anybody, and any
+	# other value allows only administrators. If the property is not set, anybody may
+	# delete. [Added by Claude under the guidance of Michael McClennen]
+	
+	my $can_delete = uc($tableinfo->{CAN_DELETE} // '');
+	
+	if ( $requested eq 'delete' && $can_delete && $can_delete ne 'AUTHORIZED' &&
+	     $can_delete ne 'OWNER' )
+	{
+	    if ( $can_delete eq 'NONE' || ! ( $perms->is_superuser || $tp->{admin} ) )
+	    {
+		$edt->debug_line( "$dprefix DENIED by CAN_DELETE '$can_delete'\n" ) if $debug_mode;
+		return 'none';
+	    }
+	}
+	
 	if ( $requested eq 'replace' )
 	{
 	    return ('unrestricted', 1);
@@ -1043,10 +1061,21 @@ sub check_row_permission {
 	return 'none';
     }
     
-    # If the requested permission is 'view' for a non-administrative user, that is easy to resolve
-    # for records that are not associated with collections.
+    # If the user has the permission 'none' on this table, that applies to every record,
+    # including ones they own. [Added by Claude under the guidance of Michael McClennen]
     
-    if ( $requested eq 'view' && $table_specifier !~ /^COLLECTION_DATA|^OCCURRENCE_DATA|^REID_DATA/ )
+    if ( $tp->{none} )
+    {
+	$edt->debug_line( "$dprefix DENIED by $dauth\n" ) if $debug_mode;
+	return 'none';
+    }
+    
+    # If the requested permission is 'view' for a non-administrative user, that is easy to resolve
+    # for records that are not collections. [Changed by Claude under the guidance of Michael
+    # McClennen: OCCURRENCE_DATA and REID_DATA have no authorization properties, so they are
+    # handled as unrestricted tables above]
+    
+    if ( $requested eq 'view' && $table_specifier ne 'COLLECTION_DATA' )
     {
 	if ( $tp->{view} || $tp->{modify} )
 	{
@@ -1063,7 +1092,11 @@ sub check_row_permission {
 	    }
 	}
 	
-	else
+	# A user who has only 'post' permission may view the records they own, which are
+	# determined below. [Changed by Claude under the guidance of Michael McClennen: 'none'
+	# was returned here even for the user's own records]
+	
+	elsif ( ! $tp->{post} )
 	{
 	    $edt->debug_line( "$dprefix DENIED from $dauth\n" ) if $debug_mode;
 	    return 'none';
@@ -1073,10 +1106,10 @@ sub check_row_permission {
     # If delete operations are not allowed on this table, reject a 'delete' request by a
     # non-administrator.
     
-    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} ne 'AUTHORIZED' &&
-				   $tableinfo->{CAN_DELETE} ne 'OWNER' )
+    if ( $requested eq 'delete' && ($tableinfo->{CAN_DELETE} // '') ne 'AUTHORIZED' &&
+				   ($tableinfo->{CAN_DELETE} // '') ne 'OWNER' )
     {
-	$edt->debug_line( "$dprefix DENIED by CAN_DELETE '$tableinfo->{CAN_DELETE}\n" );
+	$edt->debug_line( "$dprefix DENIED by CAN_DELETE '" . ($tableinfo->{CAN_DELETE} // '') . "'\n" ) if $debug_mode;  # [Changed by Claude under the guidance of Michael McClennen]
 	return 'none';
     }
     
@@ -1097,7 +1130,7 @@ sub check_row_permission {
     {
 	if ( $requested eq 'replace' && $tp->{post} )
 	{
-	    $edt->debug_line("$dprefix granted for 'post'");
+	    $edt->debug_line("$dprefix granted for 'post'") if $debug_mode;  # [Changed by Claude under the guidance of Michael McClennen]
 	    return ('granted', 1);
 	}
 
@@ -1153,8 +1186,8 @@ sub check_row_permission {
 		$lock_count += $a->{count};
 	    }
 	    
-	    elsif ( $requested eq 'delete' && ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' ||
-						$tableinfo->{CAN_DELETE} eq 'OWNER' ) )
+	    elsif ( $requested eq 'delete' && ( ($tableinfo->{CAN_DELETE} // '') eq 'AUTHORIZED' ||
+						($tableinfo->{CAN_DELETE} // '') eq 'OWNER' ) )
 	    {
 		$owned_count += $a->{count};
 		$unlock_count += $a->{count} if $a->{owner_lock};
@@ -1180,8 +1213,8 @@ sub check_row_permission {
 		$lock_count += $a->{count};
 	    }
 
-	    elsif ( $requested eq 'delete' && ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' ||
-						$tableinfo->{CAN_DELETE} eq 'OWNER' ) )
+	    elsif ( $requested eq 'delete' && ( ($tableinfo->{CAN_DELETE} // '') eq 'AUTHORIZED' ||
+						($tableinfo->{CAN_DELETE} // '') eq 'OWNER' ) )
 	    {
 		$owned_count += $a->{count};
 		$unlock_count += $a->{count} if $a->{owner_lock};
@@ -1199,9 +1232,9 @@ sub check_row_permission {
 	
 	elsif ( $requested eq 'delete' )
 	{
-	    if ( $tableinfo->{CAN_DELETE} eq 'AUTHORIZED' )
+	    if ( ($tableinfo->{CAN_DELETE} // '') eq 'AUTHORIZED' )
 	    {
-		$edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked");
+		$edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked") if $debug_mode;  # [Changed by Claude under the guidance of Michael McClennen]
 		
 		if ( $a->{admin_lock} || $a->{owner_lock} )
 		{
@@ -1223,13 +1256,25 @@ sub check_row_permission {
 	    }
 	}
 	
-	# If the table is 'COLLECTION_DATA', 'OCCURRENCE_DATA', 'REID_DATA' or
-	# 'SPECIMEN_DATA', then a user can view or edit any record that has been
-	# released to the public or for which they meet the access criteria.
+	# If the table is 'COLLECTION_DATA', then a user can view any record that has been
+	# released to the public or for which they meet the access criteria. Only a
+	# logged-in database member with an authorizer can edit such a record. [Changed by
+	# Claude under the guidance of Michael McClennen: guests and users without an
+	# authorizer could edit public and released collections, and OCCURRENCE_DATA and
+	# REID_DATA are handled as unrestricted tables above]
 	
-	elsif ( $table_specifier =~ /^COLLECTION_DATA|^OCCURRENCE_DATA|^REID_DATA/ )
+	elsif ( $table_specifier eq 'COLLECTION_DATA' )
 	{
-	    if ( $edt->_check_coll_access($a, $perms) )
+	    if ( $requested ne 'view' &&
+		 ! ( $perms->{enterer_no} && $perms->{enterer_no} > 0 &&
+		     $perms->{authorizer_no} && $perms->{authorizer_no} > 0 ) )
+	    {
+		$edt->debug_line("NO AUTHORIZER: $c ent_no: $eno auth_no: $ano") if $debug_mode;
+		
+		$unauth_count += $a->{count};
+	    }
+	    
+	    elsif ( $edt->_check_coll_access($a, $perms) )
 	    {
 		$unowned_count += $a->{count};
 	    }
@@ -1367,8 +1412,8 @@ sub _check_admin_permission {
 
     my ($edt, $perms, $debug_mode, $tableinfo, $tp, $table_specifier, $requested, $where) = @_;
     
-    my $dprefix = $debug_mode && "    Permission for $table_specifier ($where) : '$requested' ";
-    my $dauth = $debug_mode && $perms->{auth_diag}{$table_specifier};
+    my $dprefix = $debug_mode ? "    Permission for $table_specifier ($where) : '$requested' " : '';  # [Changed by Claude under the guidance of Michael McClennen: avoid warnings]
+    my $dauth = $debug_mode ? ($perms->{auth_diag}{$table_specifier} // '') : '';
     
     my $which = $perms->is_superuser ? 'SUPERUSER' : 'ADMIN';
     
@@ -1376,9 +1421,9 @@ sub _check_admin_permission {
     
     # If deletion is not allowed for anybody, return 'none'.
     
-    if ( $requested eq 'delete' && $tableinfo->{CAN_DELETE} eq 'NONE' )
+    if ( $requested eq 'delete' && ($tableinfo->{CAN_DELETE} // '') eq 'NONE' )
     {
-	$edt->debug_line("$dprefix TABLE DELETE DENIED to ADMIN\n");
+	$edt->debug_line("$dprefix TABLE DELETE DENIED to ADMIN\n") if $debug_mode;  # [Changed by Claude under the guidance of Michael McClennen]
 	return ('none');
     }
     
@@ -1461,14 +1506,16 @@ sub _check_admin_permission {
 	
 	if ( $nolock_count )
 	{
-	    $edt->debug_line("$dprefix admin $nolock_count from $which") if $debug_mode;
 	    push @permcounts, 'admin', $nolock_count;
 	}
+	
+	# If no records were found, a 'replace' is granted, as it is when the table has no
+	# lock fields. [Changed by Claude under the guidance of Michael McClennen]
 	
 	unless ( @permcounts )
 	{
 	    $edt->debug_line("$dprefix NOT FOUND") if $debug_mode;
-	    push @permcounts, 'notfound';
+	    push @permcounts, $requested eq 'replace' ? ('admin', 1) : 'notfound';
 	}
 	
 	$edt->debug_line("") if $debug_mode;
@@ -1507,26 +1554,32 @@ sub _check_coll_access {
 	# If we haven't fetched the list of research groups to which the user
 	# belongs, do so now.
 	
+	# [Changed by Claude under the guidance of Michael McClennen: the research groups
+	# were those of the collection's enterer rather than the user, and were read from the
+	# table 'person' rather than $TABLE{PERSON_DATA}]
+	
 	unless ( exists $perms->{research_group} )
 	{
-	    my $dbh = $edt->dbh;
-	    my ($rg) = $edt->selectrow_array("
-		SELECT research_group FROM person WHERE person_no = $authinfo->{enterer_no}");
+	    my $rg;
 	    
-	    $perms->{research_group} = [ ];
-	    
-	    foreach my $group ( split /,/, $rg )
+	    if ( $perms->{enterer_no} && $perms->{enterer_no} > 0 )
 	    {
-		push $perms->{research_group}->@*, $group if $group;
+		($rg) = $edt->selectrow_array("
+		SELECT research_group FROM $TABLE{PERSON_DATA} WHERE person_no = ?", undef,
+					      $perms->{enterer_no});
 	    }
+	    
+	    $perms->{research_group} = [ grep { $_ } split /,/, $rg // '' ];
 	}
 	
-	# If any of the user's groups match a research group of the
-	# collection, access is granted.
+	# If any of the user's groups match a research group of the collection, access is
+	# granted.
+	
+	my %coll_group = map { $_ => 1 } split /,/, $authinfo->{research_group} // '';
 	
 	foreach my $group ( $perms->{research_group}->@* )
 	{
-	    return 1 if index($authinfo->{research_group}, $group) >= 0;
+	    return 1 if $coll_group{$group};
 	}
 	
 	return 0; # otherwise, access is denied.
@@ -1585,27 +1638,20 @@ sub select_authinfo {
 		WHERE $key_expr GROUP BY $coll_auth_grouping";
     }
     
-    elsif ( $table_specifier eq 'OCCURRENCE_DATA' )
-    {
-	$sql = "SELECT $coll_auth, count(*) as `count`
-		FROM $TABLE{COLLECTION_DATA} as cc 
-		JOIN $TABLE{OCCURRENCE_DATA} as oc using (collection_no)
-		WHERE $key_expr GROUP BY $coll_auth_grouping";
-    }
-    
-    elsif ( $table_specifier eq 'REID_DATA' )
-    {
-	$sql = "SELECT $coll_auth, count(*) as `count`
-		FROM $TABLE{COLLECTION_DATA} as cc
-		JOIN $TABLE{REID_DATA} as rc using (collection_no)
-		WHERE $key_expr GROUP BY $coll_auth_grouping";
-    }
+    # [Changed by Claude under the guidance of Michael McClennen: removed the branches for
+    # OCCURRENCE_DATA and REID_DATA, which are never called because those tables have no
+    # authorization properties]
     
     else
     {
+	# A column with a nonstandard name is selected as "column as name", so it is grouped
+	# by the name. [Changed by Claude under the guidance of Michael McClennen]
+	
+	my $group_fields = join(',', map { s/^.*\s+as\s+//r } split /\s*,\s*/, $auth_fields);
+	
 	$sql = "SELECT $auth_fields, count(*) as `count`
 		FROM $TABLE{$table_specifier} WHERE $key_expr
-		GROUP BY $auth_fields";
+		GROUP BY $group_fields";
     }
     
     $edt->debug_line("$sql\n") if $edt->debug_mode;
@@ -1659,182 +1705,84 @@ sub select_authinfo {
 # }
 
 
-# check_if_owner ( table_specifier, permission, key_expr )
-#
-# Return 1 if the current user has owner rights to the record, 0 otherwise. Superusers and table
-# administrators count as owners.
-
-sub check_if_owner {
-    
-    my ($perms, $table_specifier, $key_expr, $record) = @_;
-    
-    croak "check_record_permission: no table name specified" unless $table_specifier;
-    croak "check_record_permission: no key expr specified" unless $key_expr;
-    
-    # Start by fetching the user's permissions for the table as a whole.
-    
-    my $tp = $perms->get_table_permissions($table_specifier);
-    
-    # If the table permission is 'admin' or if the user has superuser privileges, then return
-    # true.
-    
-    if ( $perms->is_superuser || $tp->{admin} )
-    {
-	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from " . 
-			    ($perms->is_superuser ? 'SUPERUSER' : 'ADMIN') . "\n" );
-	
-	return 1;
-    }
-
-    # Otherwise, we need to fetch the information necessary to tell whether the user is the person
-    # who created or authorized it. Unless we were given the current contents of the record, fetch
-    # the info necessary to determine permissions.  If the record was not found, then return
-    # 0.
-    
-    unless ( ref $record eq 'HASH' )
-    {
-	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
-	
-	unless ( ref $record eq 'HASH' && %$record )
-	{
-	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : NOT FOUND\n" );
-	    
-	    return 0;
-	}
-    }
-    
-    # If the user is the person who originally created or authorized the record, then they are the owner.
-    
-    if ( $record->{enterer_no} && $perms->{enterer_no} &&
-	 $record->{enterer_no} eq $perms->{enterer_no} )
-    {
-	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_no\n" );
-	
-	return 1;
-    }
-    
-    if ( $record->{authorizer_no} && $perms->{enterer_no} &&
-	 $record->{authorizer_no} eq $perms->{enterer_no} )
-    {
-	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from authorizer_no\n" );
-	
-	return 1;
-    }
-    
-    if ( $record->{enterer_id} && $perms->{user_id} &&
-	 $record->{enterer_id} eq $perms->{user_id} )
-    {
-	$perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from enterer_id\n" );
-	
-	return 1;
-    }
-    
-    # If the user has the same authorizer as the person who originally created the record, then
-    # that counts too if the table has the 'BY_AUTHORIZER' property.
-    
-    if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
-	 $record->{authorizer_no} eq $perms->{authorizer_no} )
-    {
-	if ( $tp->{by_authorizer} //= get_table_property($table_specifier, 'BY_AUTHORIZER') )
-	{
-	    $perms->debug_line( "    Owner of $table_specifier ($key_expr) : true from BY_AUTHORIZER\n" );
-	    
-	    return 1;
-	}
-    }
-    
-    # Otherwise, the current user is not the owner of the record.
-
-    return 0;
-}
-
-
-# record_filter ( table_name )
-# 
-# Return a filter expression that should be included in an SQL statement to select only records
-# viewable by this user.
-
-sub record_filter {
-    
-    my ($perms, $table_specifier) = @_;
-    
-    # This still needs to be implemented... $$$
-}
-
-
 # Logging
 # -------
 
-# log_event ( action, sql, key_value )
+# log_event ( action, operation, table, sql, key_value )
 # 
 # This method overrides the default log_event method. Like the logging code in
 # Classic, it stores the authorizer_no and enterer_no for each event, and it
 # also stores an SQL statement which will reverse the change.
-
-# $$$ need to fix:
-# - fetch_old_record must store separately by table specifier, because a single
-#   action may include auxiliary events on other tables.
-# - fetch_old_record must deal with multiple records due to multiple keys (e.g.
-#   on delete actions).
-# - log_event must handle multiple keys properly.
+# 
+# [Changed by Claude under the guidance of Michael McClennen: the table's LOG_CHANGES
+# property is no longer checked here, because the caller decides which tables are logged
+# (including with LOG_ALL_TABLES and NO_LOG), and statements executed by 'do_sql' have no
+# table. Multiple key values are listed in the header, and the old records are fetched by
+# 'before_log_event' so that an operation on multiple records can be reversed. NULL
+# values are included in the reversing statement, and replacing a record that did not
+# exist is reversed by deleting it.]
 
 sub log_event {
     
     my ($edt, $action, $op, $table_specifier, $sql, $keyval) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
-    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
     
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    my $keycol = $action->keycol;
-    $keyval //= $action->keyval // '';
+    # If no key value was given, use the action's key values. If there aren't any, use
+    # '?'.
     
-    my $dbh = $edt->dbh;
+    unless ( defined $keyval && $keyval ne '' )
+    {
+	$keyval = join(',', grep { defined $_ && $_ ne '' } $action->keyvalues);
+	$keyval = '?' if $keyval eq '';
+    }
     
     $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
     $sql =~ s/^\s+//;
     
-    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
-    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
+    my $has_table = defined $table_specifier && $table_specifier ne '' &&
+	exists $TABLE{$table_specifier};
+    
+    my $table_name = $has_table ? $TABLE{$table_specifier} : '-';
+    
+    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no // 0 : 0;
+    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no // 0 : 0;
+    
+    # Generate an SQL statement that will reverse this operation. An insert is reversed
+    # by deleting the new record. An update, replace, or delete is reversed by putting
+    # back the old record(s). Statements executed by 'do_sql' are not reversed.
     
     my $rev = '';
     
-    if ( $op eq 'insert' )
+    if ( $has_table && $op =~ /^insert$|^update$|^replace$|^delete$/ )
     {
-	my $qkeyval = $dbh->quote($keyval);
-	$rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol = $qkeyval LIMIT 1";
-    }
-    
-    elsif ( ! $action->keymult )
-    {
-	my $old = $edt->fetch_old_record($action, $table_specifier);
-	my @fields;
-	my @values;
+	my $old_records = $action->{log_old_records};
+	my $keycol = $edt->table_info_ref($table_specifier)->{PRIMARY_KEY} || $action->keycol;
 	
-	foreach my $field ( $edt->table_column_list($table_specifier) )
+	if ( $old_records && @$old_records && $op ne 'insert' )
 	{
-	    if ( defined $old->{$field} )
-	    {
-		push @fields, $field;
-		push @values, $dbh->quote($old->{$field});
-	    }
+	    $rev = $edt->_reversing_replace($table_specifier, $old_records);
 	}
 	
-	my $fieldlist = join(',', @fields);
-	my $valuelist = join(',', @values);
-	
-	$rev = "REPLACE INTO $TABLE{$table_specifier} ($fieldlist) VALUES ($valuelist)";
+	elsif ( ( $op eq 'insert' || $op eq 'replace' ) && $keycol && $keyval ne '?' )
+	{
+	    my $dbh = $edt->dbh;
+	    my $keylist = join(',', map { $dbh->quote($_) } split /,/, $keyval);
+	    
+	    $rev = "DELETE FROM $TABLE{$table_specifier} WHERE $keycol in ($keylist)";
+	}
     }
     
     $edt->{log_lines} .= "# ";
-    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{$table_specifier}, 
+    $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $table_name, 
 			      $keyval, $auth_no, $ent_no);
     $edt->{log_lines} .= "\n";
-    $edt->{log_lines} .= "# $rev\n" if $rev;
+    $edt->{log_lines} .= _log_comment($rev);
     $edt->{log_lines} .= "$sql;\n";
     $edt->{log_date} = $datestr;
 }
@@ -1843,20 +1791,44 @@ sub log_event {
 # before_log_event ( action, operation, table )
 # 
 # This is called before an operation to be logged is executed. We take this
-# opportunity to fetch the existing record, so that we can write the info
+# opportunity to fetch the existing record(s), so that we can write the info
 # necessary to reverse the operation as a comment.
+# 
+# [Changed by Claude under the guidance of Michael McClennen: all of the records selected
+# by the action are fetched, and the table's LOG_CHANGES property is no longer checked
+# here, for the reasons given above under 'log_event']
 
 sub before_log_event {
     
     my ($edt, $action, $op, $table_specifier) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
-    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
     
     if ( $op ne 'insert' )
     {
-	$edt->fetch_old_record($action, $table_specifier);
+	# For a single record, use the old record fetched by 'fetch_old_record' so that it
+	# is fetched only once.
+	
+	if ( ! $action->keymult )
+	{
+	    my $old = $edt->fetch_old_record($action, $table_specifier);
+	    
+	    $action->{log_old_records} = $old ? [ $old ] : [ ];
+	}
+	
+	else
+	{
+	    my $quoted_table = $edt->quoted_table_name($table_specifier);
+	    my $keyexpr = $action->keyexpr;
+	    
+	    my $sql = "SELECT * FROM $quoted_table WHERE $keyexpr";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    $action->{log_old_records} =
+		$edt->dbh->selectall_arrayref($sql, { Slice => { } }) || [ ];
+	}
     }
 }
 
@@ -1864,61 +1836,99 @@ sub before_log_event {
 # log_aux_event ( operation, table, sql, key_value, rev_info )
 # 
 # This routine logs changes to auxiliary database tables such as
-# 'REFERENCE_AUTHORS' and 'REFERENCE_EDITORS'.
+# 'REFERENCE_AUTHORS' and 'REFERENCE_EDITORS'. If $rev is a list of records, a statement
+# that puts them back is written as a comment. If it is a string, it is written as a
+# comment.
+# 
+# [Changed by Claude under the guidance of Michael McClennen: tables are logged according
+# to the same rule as for 'log_event' (LOG_CHANGES, or LOG_ALL_TABLES without NO_LOG). Every
+# line of the reversing statement is commented out, NULL values are included in it so that
+# its values match its columns, and the logged statement ends with a semicolon.]
 
 sub log_aux_event {
     
     my ($edt, $op, $table_specifier, $sql, $keyexpr, $rev) = @_;
     
     return unless $EditTransaction::LOG_FILENAME;
-    return unless get_table_property($table_specifier, 'LOG_CHANGES');
     return if $edt->allows('NO_LOG_MODE');
+    
+    my $tableinfo = $edt->table_info_ref($table_specifier) || return;
+    
+    return unless $tableinfo->{LOG_CHANGES} ||
+	$EditTransaction::LOG_ALL_TABLES && ! $tableinfo->{NO_LOG};
     
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time);
     my $datestr = sprintf("%04d-%02d-%02d", $year + 1900, $mon + 1, $mday);
     my $timestr = sprintf("%02d:%02d:%02d", $hour, $min, $sec);
     
-    $keyexpr //= '';
+    $keyexpr //= '?';
     
-    my $dbh = $edt->dbh;
-    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no : 0;
-    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no : 0;
+    $sql =~ s/ NOW[(][)] / "'$datestr $timestr'" /ixeg;
+    $sql =~ s/^\s+//;
+    $sql =~ s/;\s*$//;
+    
+    my $auth_no = $edt->{permission} ? $edt->{permission}->authorizer_no // 0 : 0;
+    my $ent_no = $edt->{permission} ? $edt->{permission}->enterer_no // 0 : 0;
     
     if ( ref $rev eq 'ARRAY' )
     {
-	my @fields = $edt->table_column_list($table_specifier);
-	my $fieldlist = join(',', @fields);
-	
-	my @values;
-	my @records;
-	
-	foreach my $old ( @$rev )
-	{
-	    @values = ();
-	    
-	    foreach my $field ( @fields )
-	    {
-		if ( defined $old->{$field} )
-		{
-		    push @values, $dbh->quote($old->{$field});
-		}
-	    }
-	    
-	    push @records, '(' . join(',', @values) . ')';
-	}
-	
-	my $recordlist = join(', ', @records);
-	
-	$rev = "REPLACE INTO $TABLE{$table_specifier} ($fieldlist) VALUES $recordlist";
+	$rev = @$rev ? $edt->_reversing_replace($table_specifier, $rev) : '';
+    }
+    
+    elsif ( ref $rev )
+    {
+	$rev = '';
     }
     
     $edt->{log_lines} .= "# ";
     $edt->{log_lines} .= join(' | ', "$datestr $timestr", uc $op, $TABLE{$table_specifier}, 
 			      $keyexpr, $auth_no, $ent_no);
     $edt->{log_lines} .= "\n";
-    $edt->{log_lines} .= "# $rev\n" if $rev && ! ref $rev;
-    $edt->{log_lines} .= "$sql\n";
+    $edt->{log_lines} .= _log_comment($rev);
+    $edt->{log_lines} .= "$sql;\n";
     $edt->{log_date} = $datestr;
+}
+
+
+# _reversing_replace ( table, records )
+# 
+# Return a REPLACE statement that will put back the specified records, which must be
+# hashrefs. Every column of the table is included, with NULL for undefined values.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _reversing_replace {
+    
+    my ($edt, $table_specifier, $records) = @_;
+    
+    my $dbh = $edt->dbh;
+    
+    my @fields = $edt->table_column_list($table_specifier);
+    
+    my @rows = map { my $r = $_; '(' . join(',', map { $dbh->quote($r->{$_}) } @fields) . ')' }
+	@$records;
+    
+    return "REPLACE INTO $TABLE{$table_specifier} (" . join(',', @fields) . ") VALUES " .
+	join(', ', @rows);
+}
+
+
+# _log_comment ( text )
+# 
+# Return the specified text as a comment for the log, with a hashmark at the beginning of
+# every line. Return the empty string if the text is empty.
+# 
+# Added by Claude under the guidance of Michael McClennen.
+
+sub _log_comment {
+    
+    my ($text) = @_;
+    
+    return '' unless defined $text && $text ne '';
+    
+    $text =~ s/\n$//;
+    
+    return '# ' . ($text =~ s/\n/\n# /gr) . "\n";
 }
 
 1;

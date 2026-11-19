@@ -156,6 +156,13 @@ sub new {
 	    {
 		$perms->default_table_permissions($table_specifier);
 	    }
+	    
+	    # Make the same final adjustments that 'get_table_permissions' makes for a
+	    # database member. [Added by Claude under the guidance of Michael McClennen: these
+	    # were not made here, so that a user granted 'modify' on this table had neither
+	    # 'post' nor 'view']
+	    
+	    $perms->adjust_table_permissions($table_specifier) if $perms->{enterer_no};
 	}
 	
 	# If this request comes from a user who is not a full database member with an authorizer,
@@ -341,28 +348,10 @@ sub get_table_permissions {
 	    }
 	    
 	    # Now make final adjustments to the table permissions for logged-in users.
+	    # [Changed by Claude under the guidance of Michael McClennen: moved to
+	    # 'adjust_table_permissions' so that 'new' can make them too]
 	    
-	    my $this_table = $perms->{table_permission}{$table_specifier};
-	    
-	    # The permission 'modify' also implies 'post' and 'view'.
-	    
-	    $this_table->{post} = 1 if $this_table->{modify};
-	    $this_table->{view} = 1 if $this_table->{modify};
-	    
-	    # # If the user has either 'post' or 'modify', then add 'delete'
-	    # # and/or 'insert_key' if the table properties allow that.
-	    
-	    # if ( $this_table->{post} || $this_table->{modify} )
-	    # {
-	    # 	$this_table->{no_delete} = 1 if get_table_property($table_specifier,
-	    # 							   'DISABLE_DELETE');
-	    # 	$this_table->{insert_key} = 1 if get_table_property($table_specifier,
-	    # 							    'ENABLE_INSERT_KEY');
-	    # }
-	    
-	    # If the table has the BY_AUTHORIZER property, add the 'by_authorizer' permission.
-	    
-	    $this_table->{by_authorizer} = 1 if get_table_property($table_specifier, 'BY_AUTHORIZER');
+	    $perms->adjust_table_permissions($table_specifier);
 	}
 	
 	# If the current user is not a database member, retrieve the default table properties for
@@ -375,6 +364,40 @@ sub get_table_permissions {
     }
     
     return $perms->{table_permission}{$table_specifier};
+}
+
+
+# adjust_table_permissions ( table_specifier )
+# 
+# Make the final adjustments to the table permissions of a database member for the
+# specified table, whether they were explicitly granted or computed from the table
+# properties. [Added by Claude under the guidance of Michael McClennen]
+
+sub adjust_table_permissions {
+    
+    my ($perms, $table_specifier) = @_;
+    
+    my $this_table = $perms->{table_permission}{$table_specifier};
+    
+    # The permission 'modify' also implies 'post' and 'view'.
+    
+    $this_table->{post} = 1 if $this_table->{modify};
+    $this_table->{view} = 1 if $this_table->{modify};
+    
+    # # If the user has either 'post' or 'modify', then add 'delete'
+    # # and/or 'insert_key' if the table properties allow that.
+    
+    # if ( $this_table->{post} || $this_table->{modify} )
+    # {
+    # 	$this_table->{no_delete} = 1 if get_table_property($table_specifier,
+    # 							   'DISABLE_DELETE');
+    # 	$this_table->{insert_key} = 1 if get_table_property($table_specifier,
+    # 							    'ENABLE_INSERT_KEY');
+    # }
+    
+    # If the table has the BY_AUTHORIZER property, add the 'by_authorizer' permission.
+    
+    $this_table->{by_authorizer} = 1 if get_table_property($table_specifier, 'BY_AUTHORIZER');
 }
 
 

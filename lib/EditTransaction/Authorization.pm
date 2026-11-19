@@ -284,6 +284,8 @@ sub authorize_against_table {
     
     # If the table corresponding to $table_specifier is subordinate to another table,
     # any action requires 'modify' permission on the linked records in that table.
+    # A delete also requires 'delete' permission on the records being deleted. [Added by
+    # Claude under the guidance of Michael McClennen]
     
     # The superior table and the link column were checked by unpack_key_values when the
     # action was created, and the action's permission was set to 'none' if either was
@@ -429,10 +431,14 @@ sub authorize_against_table {
 	    
 	    # If permission is granted for the linked record and a key expression is
 	    # present, get the permission for the records selected by that expression.
+	    # The requested permission is 'delete' if the operation is delete, as for a
+	    # regular table. [Changed by Claude under the guidance of Michael McClennen]
 	    
 	    elsif ( $key_expr )
 	    {
-		($primary, $count) = $edt->check_row_permission($table_specifier, 'modify', 
+		my $requested = $operation eq 'delete' ? 'delete' : 'modify';
+		
+		($primary, $count) = $edt->check_row_permission($table_specifier, $requested, 
 								$key_expr);
 		
 		# If an error was returned, add it and return 'none'.
@@ -702,14 +708,13 @@ sub authorize_against_table {
 	    $primary =~ s/_unlock//;
 	}
 	
-	# Otherwise, mark the action as requiring an unlock. Whether the C_LOCKED caution
-	# is needed is decided after the action has been validated, by 'check_unlock',
-	# because the action may unlock the record itself. [Changed by Claude under the
-	# guidance of Michael McClennen: C_LOCKED was added here]
+	# Otherwise, mark the action as requiring an unlock. Whether the W_LOCKED warning
+	# and C_LOCKED caution are needed is decided after the action has been validated,
+	# by 'check_unlock', because the action may unlock the record itself. [Changed by
+	# Claude under the guidance of Michael McClennen: both conditions were added here]
 	
 	else
 	{
-	    $edt->add_condition($action, 'W_LOCKED');
 	    $action->requires_unlock(1);
 	}
     }
@@ -725,10 +730,11 @@ sub authorize_against_table {
 # check_unlock ( action )
 # 
 # This is called after an action has been validated. If the action operates on a locked
-# record that the user has permission to unlock, add a C_LOCKED caution unless the
-# transaction allows LOCKED or the action itself unlocks the record. Application modules
-# that handle lock columns indicate the latter by calling $action->requires_unlock(0) during
-# validation. The caution is added only once for each action.
+# record that the user has permission to unlock, add a W_LOCKED warning to the action and a
+# C_LOCKED caution unless the transaction allows LOCKED or the action itself unlocks the
+# record. Application modules that handle lock columns indicate the latter by calling
+# $action->requires_unlock(0) during validation. These conditions are added only once for
+# each action.
 # 
 # Added by Claude under the guidance of Michael McClennen.
 
@@ -738,6 +744,7 @@ sub check_unlock {
     
     if ( $action->requires_unlock && ! $action->{unlock_checked}++ && ! $edt->allows('LOCKED') )
     {
+	$edt->add_condition($action, 'W_LOCKED');
 	$edt->add_condition('main', 'C_LOCKED');
     }
 }
