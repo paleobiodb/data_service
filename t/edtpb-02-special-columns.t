@@ -445,6 +445,8 @@ subtest 'locks' => sub {
     
     ok_has_condition('all', 'C_LOCKED', "the missing allowance is reported");
     
+    ok_has_condition('all', 'W_LOCKED', "the action has a warning that the record is locked" );  # [Added by Claude under the guidance of Michael McClennen]
+    
     $edt = ok_new_edt('LOCKED', permission => perm('SUPERUSER'));
     
     $edt->update_record('EDTPB_MAIN', { main_no => 1, string_val => 'admin update' });
@@ -459,6 +461,8 @@ subtest 'locks' => sub {
     $edt->update_record('EDTPB_MAIN', { main_no => 1, admin_lock => 0, string_val => 'unlocked' });
     
     ok_commit("an administrator can unlock a record without LOCKED");
+    
+    ok( ! $edt->has_condition('all', 'W_LOCKED'), "an action that unlocks the record has no lock warning" );  # [Added by Claude under the guidance of Michael McClennen]
     
     is_deeply( [ @{record()}{qw(string_val admin_lock)} ], [ 'unlocked', 0 ],
 	       "the record was changed and unlocked" );
@@ -501,11 +505,15 @@ subtest 'locks' => sub {
     
     ok_has_condition('all', 'C_LOCKED', "the missing allowance is reported");
     
+    ok_has_condition('all', 'W_LOCKED', "an action that leaves a lock set has a lock warning" );  # [Added by Claude under the guidance of Michael McClennen]
+    
     $edt = ok_new_edt(permission => perm('SUPERUSER'));
     
     $edt->update_record('EDTPB_MAIN', { main_no => 1, admin_lock => 0, owner_lock => 0 });
     
     ok_commit("clearing both locks does not require LOCKED");
+    
+    ok( ! $edt->has_condition('all', 'W_LOCKED'), "an action that clears both locks has no lock warning" );  # [Added by Claude under the guidance of Michael McClennen]
     
     is_deeply( [ @{record()}{qw(admin_lock owner_lock)} ], [ 0, 0 ], "the record is unlocked" );
     
@@ -518,6 +526,8 @@ subtest 'locks' => sub {
     $edt->update_record('EDTPB_MAIN', { main_no => 1, owner_lock => 0, string_val => 'owner unlocked' });
     
     ok_commit("the owner can unlock a record without LOCKED");
+    
+    ok( ! $edt->has_condition('all', 'W_LOCKED'), "the owner's unlocking action has no lock warning" );  # [Added by Claude under the guidance of Michael McClennen]
     
     is_deeply( [ @{record()}{qw(string_val owner_lock)} ], [ 'owner unlocked', 0 ],
 	       "the record was changed and unlocked" );

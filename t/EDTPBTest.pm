@@ -19,7 +19,9 @@ use EditTransaction;
 use parent 'EditTransaction';
 
 use TableDefs qw(%TABLE $TEST_DB set_table_name set_table_group set_table_property
-		 set_column_property enable_test_mode);
+		 set_column_property enable_test_mode change_table_db);
+
+use CoreTableDefs;
 
 use Carp qw(carp croak);
 
@@ -55,12 +57,13 @@ use namespace::clean;
     set_column_property(EDTPB_SUB => main_no => EXTID_TYPE => 'COL');
     
     # EDTPB_BYAUTH is like EDTPB_MAIN, except that records are owned by everyone with the
-    # same authorizer.
+    # same authorizer, and they can be deleted by their owners.
     
     set_table_name(EDTPB_BYAUTH => 'edtpb_byauth');
     set_table_property(EDTPB_BYAUTH => PRIMARY_KEY => 'byauth_no');
     set_table_property(EDTPB_BYAUTH => CAN_POST => 'AUTHORIZED');
     set_table_property(EDTPB_BYAUTH => BY_AUTHORIZER => 1);
+    set_table_property(EDTPB_BYAUTH => CAN_DELETE => 'OWNER');
     
     # EDTPB_UID records its creator and modifier by user id rather than by person number.
     # Records can be added by anyone who is logged in. Its column approver_id is given the
@@ -69,7 +72,15 @@ use namespace::clean;
     set_table_name(EDTPB_UID => 'edtpb_uid');
     set_table_property(EDTPB_UID => PRIMARY_KEY => 'uid_no');
     set_table_property(EDTPB_UID => CAN_POST => 'LOGGED_IN');
+    set_table_property(EDTPB_UID => CAN_DELETE => 'AUTHORIZED');
     set_column_property(EDTPB_UID => approver_id => DIRECTIVE => 'auth_authorizer');
+    
+    # Records in EDTPB_KEEP cannot be deleted by anybody.
+    
+    set_table_name(EDTPB_KEEP => 'edtpb_keep');
+    set_table_property(EDTPB_KEEP => PRIMARY_KEY => 'keep_no');
+    set_table_property(EDTPB_KEEP => CAN_POST => 'AUTHORIZED');
+    set_table_property(EDTPB_KEEP => CAN_DELETE => 'NONE');
     
     # EDTPB_OPEN has no authorization properties, so anybody can operate on it.
     
@@ -77,22 +88,32 @@ use namespace::clean;
     set_table_property(EDTPB_OPEN => PRIMARY_KEY => 'open_no');
     
     set_table_group('edtpb_test' => 'EDTPB_MAIN', 'EDTPB_SUB', 'EDTPB_BYAUTH', 'EDTPB_UID',
-		    'EDTPB_OPEN');
+		    'EDTPB_KEEP', 'EDTPB_OPEN');
 }
 
 
 # select_test_tables ( )
 # 
-# Switch the test tables over to the test database. This must be called after the
-# EditTester instance has been created, because that is when the database configuration is
-# read. Throw an exception if the switch did not succeed.
+# Switch the test tables over to the test database, along with the collection, occurrence,
+# and reidentification tables, which this module treats specially. This must be called
+# after the EditTester instance has been created, because that is when the database
+# configuration is read. Throw an exception if the switch did not succeed.
 
 sub select_test_tables {
     
     enable_test_mode('edtpb_test');
+    enable_test_mode('collection_data');
+    enable_test_mode('occurrence_data');
     
-    croak "could not select the test database for the table group 'edtpb_test'"
-	unless $TEST_DB && $TABLE{EDTPB_MAIN} =~ /^$TEST_DB[.]/;
+    # REID_DATA is not part of any table group.
+    
+    change_table_db('REID_DATA', $TEST_DB) unless $TABLE{REID_DATA} =~ /^$TEST_DB[.]/;
+    
+    foreach my $t ( 'EDTPB_MAIN', 'COLLECTION_DATA', 'OCCURRENCE_DATA', 'REID_DATA' )
+    {
+	croak "could not select the test database for the table '$t'"
+	    unless $TEST_DB && $TABLE{$t} =~ /^$TEST_DB[.]/;
+    }
     
     return 1;
 }
@@ -163,6 +184,30 @@ sub establish_test_tables {
 		string_val varchar(40) not null default '',
 		created timestamp not null default current_timestamp,
 		modified timestamp not null default current_timestamp on update current_timestamp)
+		default charset utf8");
+    
+    # The collection, occurrence, and reidentification tables are copies of the structure
+    # of the real ones.
+    
+    foreach my $t ( 'COLLECTION_DATA', 'OCCURRENCE_DATA', 'REID_DATA' )
+    {
+	my $test_name = $TABLE{$t};
+	my ($real_name) = TableDefs::original_table_name($test_name);
+	
+	croak "could not find the name of the real table for '$t'" unless $real_name;
+	
+	$dbh->do("DROP TABLE IF EXISTS $test_name");
+	$dbh->do("CREATE TABLE $test_name LIKE $real_name");
+    }
+    
+    $dbh->do("DROP TABLE IF EXISTS $TABLE{EDTPB_KEEP}");
+    
+    $dbh->do("CREATE TABLE $TABLE{EDTPB_KEEP} (
+		keep_no int unsigned primary key auto_increment,
+		authorizer_no int unsigned not null default 0,
+		enterer_no int unsigned not null default 0,
+		modifier_no int unsigned not null default 0,
+		string_val varchar(40) not null default '')
 		default charset utf8");
     
     $dbh->do("DROP TABLE IF EXISTS $TABLE{EDTPB_OPEN}");
