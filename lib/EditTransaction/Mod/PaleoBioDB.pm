@@ -1642,6 +1642,16 @@ sub select_authinfo {
     # OCCURRENCE_DATA and REID_DATA, which are never called because those tables have no
     # authorization properties]
     
+    # If the table has no authorization columns, none of its records is owned by anybody. Count
+    # the matching records, and return nothing if there are none. [Added by Claude under the
+    # guidance of Michael McClennen: the query was malformed for such tables]
+    
+    elsif ( ! $auth_fields )
+    {
+	$sql = "SELECT count(*) as `count` FROM $TABLE{$table_specifier}
+		WHERE $key_expr HAVING `count` > 0";
+    }
+    
     else
     {
 	# A column with a nonstandard name is selected as "column as name", so it is grouped

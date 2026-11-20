@@ -289,12 +289,15 @@ use ResourceDefs;
     set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');
     set_table_property('PUBLICATIONS', PRIMARY_FIELD => 'pub_no');
     set_table_property('PUBLICATIONS', LOG_CHANGES => 1);
+    set_table_property('PUBLICATIONS', CAN_POST => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
+    set_table_property('PUBLICATIONS', CAN_MODIFY => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
     set_column_property('PUBLICATIONS', 'pub_no', EXTID_TYPE => 'PUB');
     
     set_table_name(ARCHIVES => 'data_archives');
     set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');
     set_table_property('ARCHIVES', PRIMARY_FIELD => 'archive_id');
     set_table_property('ARCHIVES', LOG_CHANGES => 1);
+    set_column_property('ARCHIVES', 'archive_no', EXTID_TYPE => 'DAR');	# [Added by Claude under the guidance of Michael McClennen]
     
     # [Added by Claude under the guidance of Michael McClennen: without these, edits to archives
     # were not permission-checked. Any database member may create an archive, and only its

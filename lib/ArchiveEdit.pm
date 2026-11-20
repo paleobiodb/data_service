@@ -55,7 +55,13 @@ sub validate_action {
 	
 	if ( defined $record->{doi} )
 	{
-	    if ( $current && $current->{doi} && $current->{doi} eq $record->{doi} )
+	    # [Changed by Claude under the guidance of Michael McClennen: an empty value is the same
+	    # as no doi, so a non-administrator may submit an empty doi for an archive that has
+	    # none.]
+	    
+	    my $current_doi = $current ? $current->{doi} // '' : '';
+	    
+	    if ( $record->{doi} eq $current_doi )
 	    {
 		# Do nothing if the value is not being changed.
 	    }
@@ -78,8 +84,16 @@ sub validate_action {
 	{
 	    my $check_admin;
 	    
+	    # [Changed by Claude under the guidance of Michael McClennen: the field that holds the
+	    # primary key is skipped, since it identifies the record rather than changing it.]
+	    
+	    my $keycol = $action->keycol;
+	    my $keyfield = $action->keyfield;
+	    
 	    foreach my $key ( keys %$record )
 	    {
+		next if $key eq $keycol || $key eq $keyfield;
+		
 		$check_admin = 1 unless $key =~ /^description$|^doi$|^_/;
 	    }
 	    
