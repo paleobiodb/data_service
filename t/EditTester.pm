@@ -2215,7 +2215,7 @@ sub clear_table {
     
     my $dbh = $T->dbh;
     
-    my $tablename = $T->get_table_name($table);
+    my $tablename = $T->test_table_name($table);  # [Changed by Claude under the guidance of Michael McClennen]
     
     my $label = "cleared table $table";
     
@@ -2263,6 +2263,30 @@ sub get_table_name {
 }
 
 
+# test_table_name ( table_specifier )
+# 
+# Return the name of the specified table, the same as 'get_table_name', but throw an exception
+# unless the table is in the test database. This is used by the subroutines that modify tables,
+# because the main database may contain real data. [Added by Claude under the guidance of
+# Michael McClennen]
+
+sub test_table_name {
+    
+    my $T = ref $_[0] && $_[0]->isa('EditTester') ? shift @_ : $LAST_TESTER;
+    
+    my $specifier = shift @_;
+    
+    my $tablename = $T->get_table_name($specifier);
+    
+    unless ( $TEST_DB && $tablename =~ /^`?\Q$TEST_DB\E`?[.]/ )
+    {
+	croak "refusing to modify '$tablename' for '$specifier', because it is not in the test database";
+    }
+    
+    return $tablename;
+}
+
+
 # sql_command ( command, [label] )
 # 
 # Attempt to execute the specified sql command. If it executes without throwing
@@ -2284,9 +2308,10 @@ sub sql_command {
     
     my $dbh = $T->dbh;
     
-    # Substitute any table specifiers with with the corresponding table names.
+    # Substitute any table specifiers with with the corresponding table names. Each of them
+    # must be in the test database. [Changed by Claude under the guidance of Michael McClennen]
     
-    $sql =~ s/<<([\w_-]+)>>/$T->get_table_name($1)/ge;
+    $sql =~ s/<<([\w_-]+)>>/$T->test_table_name($1)/ge;
     
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     
