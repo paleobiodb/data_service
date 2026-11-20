@@ -369,8 +369,11 @@ sub validate_collection {
     
     else
     {
-	my $authorizer_no = $edt->perms->authorizer_no;
-	my $enterer_no = $edt->perms->enterer_no;
+	# [Changed by Claude under the guidance of Michael McClennen: these called the nonexistent
+	# method 'perms']
+	
+	my $authorizer_no = $edt->permission->authorizer_no;
+	my $enterer_no = $edt->permission->enterer_no;
 	
 	unless ( $authorizer_no && $enterer_no )
 	{
