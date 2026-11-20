@@ -105,9 +105,8 @@ sub select_test_tables {
     enable_test_mode('collection_data');
     enable_test_mode('occurrence_data');
     
-    # REID_DATA is not part of any table group.
-    
-    change_table_db('REID_DATA', $TEST_DB) unless $TABLE{REID_DATA} =~ /^$TEST_DB[.]/;
+    # [Changed by Claude under the guidance of Michael McClennen: REID_DATA is now part of the
+    # occurrence_data group, so it no longer needs to be switched separately.]
     
     foreach my $t ( 'EDTPB_MAIN', 'COLLECTION_DATA', 'OCCURRENCE_DATA', 'REID_DATA' )
     {

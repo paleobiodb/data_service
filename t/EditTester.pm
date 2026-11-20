@@ -94,12 +94,22 @@ sub new {
     
     # If a class was specified, load corresponding module if it was not already loaded.
     
-    if ( $edt_class != 'EditTransaction' && ! $edt_class->isa('EditTransaction') )
+    # [Changed by Claude under the guidance of Michael McClennen: this used '!=', which compares
+    # numerically, so the module was never loaded]
+    
+    if ( $edt_class ne 'EditTransaction' && ! $edt_class->isa('EditTransaction') )
     {
 	my $class = $edt_class;
 	$class =~ s{::}{/}g;
 	
-	require "${class}.pm";
+	# If the module cannot be found, the check below reports that the class is not a subclass
+	# of EditTransaction. Any other error in loading it is rethrown. [Changed by Claude
+	# under the guidance of Michael McClennen]
+	
+	unless ( eval { require "${class}.pm"; 1 } )
+	{
+	    die $@ unless $@ =~ /^Can't locate \Q${class}.pm\E in \@INC/;
+	}
     }
     
     # Make sure this class actually is a subclass of EditTransaction.
