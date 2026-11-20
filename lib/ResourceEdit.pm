@@ -23,6 +23,8 @@ use strict;
 use parent 'EditTransaction';
 
 use Carp qw(carp croak);
+use File::Temp;		# [Added by Claude under the guidance of Michael McClennen]
+use MIME::Base64;	# [Added by Claude under the guidance of Michael McClennen]
 
 use TableDefs qw(%TABLE is_test_mode);
 use ResourceDefs;
@@ -34,8 +36,16 @@ with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
-our ($IMAGE_IDENTIFY_COMMAND, $IMAGE_CONVERT_COMMAND, $IMAGE_MAX);
-our ($RESOURCE_IDFIELD, $RESOURCE_IMG_DIR);
+# [Changed by Claude under the guidance of Michael McClennen: these have the same defaults as
+# in 'configure', so that they are defined even if it has not been called.]
+
+our ($IMAGE_IDENTIFY_COMMAND, $IMAGE_CONVERT_COMMAND, $IMAGE_MAX) = ('identify', 'convert', 150);
+our ($RESOURCE_IMG_DIR) = '../images';	# [Changed by Claude under the guidance of Michael McClennen: this was never used]
+
+# [Changed by Claude under the guidance of Michael McClennen: this was set only by
+# 'configure', so deleting or deactivating a resource failed if that had not been called.]
+
+our ($RESOURCE_IDFIELD) = 'id';
 
 our (%TAG_ID);
 
@@ -52,8 +62,8 @@ our (%TAG_ID);
 
 # validate_action ( table, operation, action )
 # 
-# This method is called from EditTransaction.pm to validate each insert and update action.
-# We override it to do additional checks before calling validate_against_schema.
+# This method is called from EditTransaction.pm to validate each insert, update, replace, and
+# delete action. We override it to do additional checks before calling validate_against_schema.
 
 sub validate_action {
     
@@ -61,6 +71,15 @@ sub validate_action {
     
     my $record = $action->record;
     my $permission = $action->permission;
+    
+    # A replace operation is handled as an update if the record already exists, and as an
+    # insert if it does not. [Added by Claude under the guidance of Michael McClennen: this
+    # method threw an exception for replace operations]
+    
+    if ( $operation eq 'replace' )
+    {
+	$operation = $edt->fetch_old_record($action) ? 'update' : 'insert';
+    }
     
     # First, handle the status.
     
@@ -328,7 +347,7 @@ sub convert_image {
 	else
 	{
 	    my $newsize = $width >= $height ? $IMAGE_MAX : "x$IMAGE_MAX";
-	    my $resize_cmd = "convert $filename -resize $newsize -";
+	    my $resize_cmd = "$IMAGE_CONVERT_COMMAND $filename -resize $newsize -";  # [Changed by Claude under the guidance of Michael McClennen: this ignored the configured command]
 	    
 	    print STDERR "Executing: $resize_cmd\n" if $edt->debug_mode;
 	    
@@ -593,7 +612,7 @@ sub write_image_file {
     
     if ( is_test_mode ) { $filename = "T$filename"; }
     
-    my $filepath = "../images/$filename";
+    my $filepath = "$RESOURCE_IMG_DIR/$filename";  # [Changed by Claude under the guidance of Michael McClennen]
 
     my $result = open( my $fout, ">", $filepath );
 
@@ -624,7 +643,7 @@ sub delete_image_file {
     
     my ($edt, $filename) = @_;
 
-    my $filepath = "../images/$filename";
+    my $filepath = "$RESOURCE_IMG_DIR/$filename";  # [Changed by Claude under the guidance of Michael McClennen]
     
     if ( -e $filepath )
     {
@@ -651,7 +670,10 @@ sub configure {
     
     my ($class, $dbh, $config) = @_;
     
-    $RESOURCE_IMG_DIR = $config->{eduresource_img_dir};
+    # [Changed by Claude under the guidance of Michael McClennen: the setting name did not match
+    # the one in config.yml.]
+    
+    $RESOURCE_IMG_DIR = $config->{eduresources_img_dir} || '../images';
     
     $IMAGE_IDENTIFY_COMMAND = $config->{image_identify_cmd} || 'identify';
     $IMAGE_CONVERT_COMMAND = $config->{image_convert_cmd} || 'convert';

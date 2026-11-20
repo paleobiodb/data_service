@@ -12,6 +12,7 @@ use EditTransaction;
 use Carp qw(croak);
 use Scalar::Util qw(reftype blessed);
 use List::Util qw(any);  # added by Claude under the guidance of Michael McClennen
+use mro;  # [Added by Claude under the guidance of Michael McClennen]
 
 use Role::Tiny;
 
@@ -219,6 +220,34 @@ sub register_conditions {
 }
 
 
+# _condition_templates ( class, code )
+# 
+# Return the templates registered for the specified code by the specified class and each of its
+# superclasses, nearest first, ending with the template registered by EditTransaction if any. The
+# first argument may be either a class name or an instance. [Added by Claude under the guidance
+# of Michael McClennen: templates were looked up only for the exact class and EditTransaction,
+# so a subclass of a client module did not get that module's templates]
+
+sub _condition_templates {
+    
+    my ($class, $code) = @_;
+    
+    $class = ref $class || $class;
+    
+    my (%seen, @templates);
+    
+    foreach my $c ( mro::get_linear_isa($class)->@*, 'EditTransaction' )
+    {
+	next if $seen{$c}++;
+	
+	push @templates, $CONDITION_BY_CLASS{$c}{$code}
+	    if ref $CONDITION_BY_CLASS{$c} eq 'HASH' && defined $CONDITION_BY_CLASS{$c}{$code};
+    }
+    
+    return @templates;
+}
+
+
 sub copy_conditions_from {
     
     my ($class, $from_class) = @_;
@@ -239,17 +268,10 @@ sub is_valid_condition {
     
     my ($class, $name) = @_;
     
-    if ( ref $class )
-    {
-	return $CONDITION_BY_CLASS{ref $class}{$name} || $CONDITION_BY_CLASS{EditTransaction}{$name}
-	    ? 1 : '';
-    }
+    # [Changed by Claude under the guidance of Michael McClennen: superclasses are checked as
+    # well, and a code registered with an empty template is valid, as it is in 'add_condition']
     
-    else
-    {
-	return $CONDITION_BY_CLASS{$class}{$name} || $CONDITION_BY_CLASS{EditTransaction}{$name}
-	    ? 1 : '';
-    }
+    return _condition_templates($class, $name) ? 1 : '';
 }
 
 
@@ -351,8 +373,7 @@ sub add_condition {
     # without one is a programming error, and would only produce a useless message.
     # [Changed by Claude under the guidance of Michael McClennen]
     
-    unless ( defined($CONDITION_BY_CLASS{ref $edt || $edt}{$code} //
-		     $CONDITION_BY_CLASS{EditTransaction}{$code}) )
+    unless ( _condition_templates($edt, $code) )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	croak "no template for condition code '$code'";
     }
@@ -1131,29 +1152,30 @@ sub get_condition_template {
 
     my ($edt, $code, $selector) = @_;
     
-    my $template = $CONDITION_BY_CLASS{ref $edt}{$code} //
-	           $CONDITION_BY_CLASS{EditTransaction}{$code};
+    # Look through the templates registered by this class and its superclasses, nearest
+    # first. A template that is a hash is used only if it has an entry for this selector or a
+    # default; otherwise, the search continues. If none is found, use UNKNOWN_TEMPLATE.
+    # [Changed by Claude under the guidance of Michael McClennen: only this class and
+    # EditTransaction were checked, and the default was not used before]
     
-    if ( ref $template eq 'HASH' )
+    my $template;
+    
+    foreach my $t ( _condition_templates($edt, $code) )
     {
-	$template = $template->{$selector} || $template->{default};
-	
-	# If the subclass template has neither this selector nor a default, use the one
-	# from EditTransaction, falling back to its default. [Changed by Claude under the
-	# guidance of Michael McClennen: the default was not used before]
-	
-	unless ( $template )
+	if ( ref $t eq 'HASH' )
 	{
-	    my $base = $CONDITION_BY_CLASS{EditTransaction}{$code};
-	    
-	    if ( ref $base eq 'HASH' )
-	    {
-		$template = $base->{$selector} || $base->{default};
-	    }
-	    
-	    $template ||= $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};
+	    $template = $t->{$selector} || $t->{default};
+	    last if $template;
+	}
+	
+	else
+	{
+	    $template = $t;
+	    last;
 	}
     }
+    
+    $template //= $CONDITION_BY_CLASS{EditTransaction}{UNKNOWN_TEMPLATE};
     
     # If we have reached a string value, return it. If it is a non-empty list, return
     # the list contents.
@@ -1300,7 +1322,7 @@ sub _import_condition {
     # template is looked up directly, because 'get_condition_template' returns a
     # placeholder template for unknown codes. [Changed by Claude under the guidance of Michael McClennen]
     
-    if ( defined($CONDITION_BY_CLASS{ref $edt}{$code} // $CONDITION_BY_CLASS{EditTransaction}{$code}) )
+    if ( _condition_templates($edt, $code) )  # [Changed by Claude under the guidance of Michael McClennen]
     {
 	if ( $form eq 'text' )
 	{
