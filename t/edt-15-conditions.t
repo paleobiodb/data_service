@@ -11,7 +11,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 13;  # plan updated by Claude under the guidance of Michael McClennen
+use Test::More tests => 14;  # plan updated by Claude under the guidance of Michael McClennen
 
 use ETBasicTest;
 use ETTrivialClass;
@@ -513,4 +513,54 @@ subtest 'literal conditions' => sub {
     
     is_deeply( $errwarn, [ [ 'E_FORMAT', 'string_req', 'bad value' ], [ "W_TRUNC: shortened" ] ],
 	       "importing does not change the data that was imported" );
+};
+
+
+# Check that a subclass of a subclass uses the templates registered by its superclasses, and
+# that a code registered with an empty template is valid. This subtest was added by Claude
+# under the guidance of Michael McClennen.
+
+{
+    package ETSubBasicTest;
+    our (@ISA) = ('ETBasicTest');
+}
+
+subtest 'inherited templates' => sub {
+    
+    ETBasicTest->register_conditions(E_SUBTEST => { alpha => "alpha message",
+						    default => "default message" },
+				     W_SUBONLY => "parent only");
+    
+    ETSubBasicTest->register_conditions(E_SUBTEST => { beta => "beta message" });
+    
+    ok( ETSubBasicTest->is_valid_condition('W_SUBONLY'),
+	"a code registered by the superclass is valid for the subclass" );
+    
+    ok( ! ETTrivialClass->is_valid_condition('W_SUBONLY'),
+	"it is not valid for an unrelated class" );
+    
+    ok( ETBasicTest->is_valid_condition('C_FOOBAR'), "a code with an empty template is valid" );
+    
+    my $edt = ok_new_edt(class => 'ETSubBasicTest');
+    
+    is( $edt->condition_message('W_SUBONLY'), "parent only",
+	"the subclass uses the superclass template" );
+    
+    is( $edt->condition_message('E_SUBTEST', 'beta'), "beta message",
+	"the subclass uses its own template for its own selector" );
+    
+    is( $edt->condition_message('E_SUBTEST', 'alpha'), "alpha message",
+	"a selector missing from the subclass template is found in the superclass template" );
+    
+    is( $edt->condition_message('E_SUBTEST', 'gamma'), "default message",
+	"the superclass default is used for an unknown selector" );
+    
+    is( $edt->condition_message('E_PERMISSION', 'update'),
+	"You do not have permission to update this record",
+	"the EditTransaction templates are still used" );
+    
+    ok_eval( sub { $edt->add_condition('W_SUBONLY'); 1 },
+	     "a condition registered by the superclass can be added" );
+    
+    ok_has_one_condition('W_SUBONLY', "the condition was added");
 };

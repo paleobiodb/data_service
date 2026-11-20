@@ -174,7 +174,11 @@ sub connect_to_database {
     
     my $dbconf = configData('Database');
     
-    unless ( $ENV{PWD} =~ qr{^/var/paleomacro/pbapi} )
+    # [Changed by Claude under the guidance of Michael McClennen: this checked whether PWD
+    # started with /var/paleomacro/pbapi, but PWD is not set when a command is run in the
+    # container without a shell. Docker creates the file /.dockerenv in every container.]
+    
+    unless ( -e '/.dockerenv' )
     {
 	$dbconf->{host} = '127.0.0.1';
     }
