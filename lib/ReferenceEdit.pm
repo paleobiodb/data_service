@@ -21,7 +21,7 @@ use ReferenceMatch qw(ref_similarity parse_authorname);
 use Carp qw(carp croak);
 
 use ExternalIdent qw(generate_identifier);
-use TableDefs qw(%TABLE set_table_name set_table_group set_table_property set_column_property);
+use TableDefs qw(%TABLE);
 use CoreTableDefs;
 
 use Role::Tiny::With;
@@ -47,26 +47,8 @@ our (@CARP_NOT) = qw(EditTransaction);
     
     ReferenceEdit->register_allowances('DUPLICATE', 'IGNORE-DUPLICATE', 'CAPITAL');
     
-    set_table_name(REFERENCE_DATA => 'refs');
-    set_table_name(REFERENCE_AUTHORS => 'ref_authors');
-    set_table_name(REFERENCE_SOURCES => 'ref_sources');
-    set_table_name(REFERENCE_EXTDATA => 'ref_external');
-    
-    set_table_group('references' => qw(REFERENCE_DATA REFERENCE_AUTHORS 
-				       REFERENCE_SOURCES REFERENCE_EXTDATA));
-    
-    set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
-    set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('REFERENCE_DATA', CAN_DELETE => 'OWNER');
-    set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle, publication_type, pubyr');
-    set_table_property('REFERENCE_DATA', SPECIAL_COLS => 
-		       'ts_created, ts_modified, authorizer_no, enterer_no, modifier_no');
-    set_column_property('REFERENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
-    
-    set_table_property(REFERENCE_EXTDATA => CAN_POST => 'AUTHORIZED');
-    set_table_property(REFERENCE_EXTDATA => CAN_MODIFY => 'AUTHORIZED');
-    set_table_property(REFERENCE_TEMPDATA => CAN_MODIFY => 'AUTHORIZED');
-    set_table_property(REFERENCE_TEMPDATA => REQUIRED_COLS => 'source');
+    # [Changed by Claude under the guidance of Michael McClennen: the table definitions that
+    # were here have been moved to CoreTableDefs.pm.]
 }
 
 

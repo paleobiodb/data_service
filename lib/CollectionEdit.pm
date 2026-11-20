@@ -20,7 +20,7 @@ use Carp qw(carp croak);
 use List::Util qw(any);
 
 use ExternalIdent qw(generate_identifier);
-use TableDefs qw(%TABLE set_table_property set_column_property);
+use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use IntervalBase qw(int_defined int_bounds);
 use OccurrenceBase qw(parseIdentifiedName matchExactName matchIdentifiedName findParentTaxon
@@ -69,34 +69,8 @@ my (%OCC_RESO, %OCC_RESO_RE);
     CollectionEdit->ignore_field('OCCURRENCE_DATA', 'validation');
     CollectionEdit->ignore_field('REID_DATA', 'validation');
     
-    set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
-    set_table_property('COLLECTION_DATA', CAN_MODIFY => 'AUTHORIZED');
-    set_table_property('COLLECTION_DATA', CAN_DELETE => 'OWNER');
-    set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
-    set_table_property('COLLECTION_DATA', REQUIRED_COLS =>
-		       ['access_level', 'release_date', 'collection_name', 'collection_type',
-			'reference_no', 'country', 'latdeg', 'lngdeg', 'latlng_basis',
-			'lithology1', 'environment', 'assembl_comps']);
-    set_column_property('COLLECTION_DATA', 'collection_no', EXTID_TYPE => 'COL');
-    set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
-    
-    set_table_property('COLLECTION_REFS', LOG_CHANGES => 1 );
-    set_table_property('COLLECTION_UNITS', LOG_CHANGES => 1 );
-    
-    set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['reference_no']);
-    
-    set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
-    set_column_property('OCCURRENCE_DATA', 'collection_no', EXTID_TYPE => 'COL');
-    set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
-    set_column_property('OCCURRENCE_DATA', 'taxon_no', EXTID_TYPE => 'TID');
-    
-    set_table_property('REID_DATA', REQUIRED_COLS => ['reference_no']);
-    
-    set_column_property('REID_DATA', 'reid_no', EXTID_TYPE => 'REI');
-    set_column_property('REID_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
-    set_column_property('REID_DATA', 'collection_no', EXTID_TYPE => 'COL');
-    set_column_property('REID_DATA', 'reference_no', EXTID_TYPE => 'REF');
-    set_column_property('REID_DATA', 'taxon_no', EXTID_TYPE => 'TID');
+    # [Changed by Claude under the guidance of Michael McClennen: the table definitions that
+    # were here have been moved to CoreTableDefs.pm.]
 }
 
 

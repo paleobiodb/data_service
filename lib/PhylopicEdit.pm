@@ -20,7 +20,8 @@ package PhylopicEdit;
 
 use strict;
 
-use TableDefs qw(%TABLE set_table_property set_column_property);
+use TableDefs qw(%TABLE);
+use CoreTableDefs;		# [Added by Claude under the guidance of Michael McClennen]
 
 use parent 'EditTransaction';
 
@@ -36,12 +37,8 @@ our (@CARP_NOT) = qw(EditTransaction);
 {
     PhylopicEdit->ignore_field('PHYLOPIC_CHOICE', 'considered');
     
-    set_table_property('PHYLOPIC_CHOICE', CAN_POST => 'ADMIN');
-    set_table_property('PHYLOPIC_CHOICE', CAN_MODIFY => 'ADMIN');
-    set_table_property('PHYLOPIC_CHOICE', CAN_DELETE => 'ADMIN');
-    set_table_property('PHYLOPIC_CHOICE', REQUIRED_COLS => ['image_no']);
-    set_column_property('PHYLOPIC_CHOICE', 'image_no', ALTERNATE_NAME => 'selected');
-    set_column_property('PHYLOPIC_CHOICE', 'image_no', EXTID_TYPE => 'PHP');
+    # [Changed by Claude under the guidance of Michael McClennen: the table definitions that
+    # were here have been moved to CoreTableDefs.pm.]
 }
 
 

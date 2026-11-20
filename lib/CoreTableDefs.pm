@@ -13,6 +13,12 @@ use Carp qw(croak);
 
 use TableDefs qw(set_table_name set_table_group set_table_property set_column_property);
 
+# [Added by Claude under the guidance of Michael McClennen: the definitions for the Educational
+# Resource tables are kept in their own module, but are loaded along with these so that every
+# table is defined no matter which other modules are loaded.]
+
+use ResourceDefs;
+
 
 
 # At runtime, set table and column properties.
@@ -50,11 +56,26 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(PHYLOPIC_CHOICE => 'phylopic_choice');
     set_table_name(PHYLOPIC_SEEN => 'phylopic_seen');
     
+    # [Moved here by Claude under the guidance of Michael McClennen from PhylopicEdit.pm.]
+    set_table_property('PHYLOPIC_CHOICE', CAN_POST => 'ADMIN');
+    set_table_property('PHYLOPIC_CHOICE', CAN_MODIFY => 'ADMIN');
+    set_table_property('PHYLOPIC_CHOICE', CAN_DELETE => 'ADMIN');
+    set_table_property('PHYLOPIC_CHOICE', REQUIRED_COLS => ['image_no']);
+    set_column_property('PHYLOPIC_CHOICE', 'image_no', ALTERNATE_NAME => 'selected');
+    set_column_property('PHYLOPIC_CHOICE', 'image_no', EXTID_TYPE => 'PHP');
+    
     set_table_name(OCCURRENCE_DATA => 'occurrences');
     set_table_property('OCCURRENCE_DATA', AUTH_TABLE => 'COLLECTION_DATA');
     set_table_property('OCCURRENCE_DATA', CAN_DELETE => 'AUTHORIZED');
     set_table_property('OCCURRENCE_DATA', CAN_MOVE => 'NONE');
     set_table_property('OCCURRENCE_DATA', LOG_CHANGES => 1);
+    
+    # [Moved here by Claude under the guidance of Michael McClennen from CollectionEdit.pm.]
+    set_table_property('OCCURRENCE_DATA', REQUIRED_COLS => ['reference_no']);
+    set_column_property('OCCURRENCE_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
+    set_column_property('OCCURRENCE_DATA', 'collection_no', EXTID_TYPE => 'COL');
+    set_column_property('OCCURRENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    set_column_property('OCCURRENCE_DATA', 'taxon_no', EXTID_TYPE => 'TID');
     
     set_table_name(OCCURRENCE_MATRIX => 'occ_matrix');
     
@@ -63,7 +84,8 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(OCC_INT_SUMMARY => 'int_summary');
     set_table_name(OCC_TS_SUMMARY => 'ts_summary');
     
-    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX',
+    # [Changed by Claude under the guidance of Michael McClennen: added REID_DATA.]
+    set_table_group('occurrence_data' => 'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX', 'REID_DATA',
 		    'OCC_TAXON_SUMMARY', 'OCC_REF_SUMMARY', 
 		    'OCC_INT_SUMMARY', 'OCC_TS_SUMMARY');
     
@@ -73,10 +95,26 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REID_DATA', CAN_MOVE => 'NONE');
     set_table_property('REID_DATA', LOG_CHANGES => 1);
     
+    # [Moved here by Claude under the guidance of Michael McClennen from CollectionEdit.pm.]
+    set_table_property('REID_DATA', REQUIRED_COLS => ['reference_no']);
+    set_column_property('REID_DATA', 'reid_no', EXTID_TYPE => 'REI');
+    set_column_property('REID_DATA', 'occurrence_no', EXTID_TYPE => 'OCC');
+    set_column_property('REID_DATA', 'collection_no', EXTID_TYPE => 'COL');
+    set_column_property('REID_DATA', 'reference_no', EXTID_TYPE => 'REF');
+    set_column_property('REID_DATA', 'taxon_no', EXTID_TYPE => 'TID');
+    
     set_table_name(COLLECTION_DATA => 'collections');
     set_table_property('COLLECTION_DATA', CAN_POST => 'AUTHORIZED');
+    set_table_property('COLLECTION_DATA', CAN_MODIFY => 'AUTHORIZED');	# [Moved here by Claude under the guidance of Michael McClennen from CollectionEdit.pm]
     set_table_property('COLLECTION_DATA', CAN_DELETE => 'OWNER');
     set_table_property('COLLECTION_DATA', LOG_CHANGES => 1);
+    # [Moved here by Claude under the guidance of Michael McClennen from CollectionEdit.pm.]
+    set_table_property('COLLECTION_DATA', REQUIRED_COLS =>
+		       ['access_level', 'release_date', 'collection_name', 'collection_type',
+			'reference_no', 'country', 'latdeg', 'lngdeg', 'latlng_basis',
+			'lithology1', 'environment', 'assembl_comps']);
+    set_column_property('COLLECTION_DATA', 'collection_no', EXTID_TYPE => 'COL');
+    set_column_property('COLLECTION_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
     set_table_name(COLLECTION_MATRIX => 'coll_matrix');
     
@@ -135,13 +173,16 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_name(DIVERSITY_GLOBAL => 'div_global');
     set_table_name(DIVERSITY_MATRIX => 'div_matrix');
     
-    set_table_group(diversity_data => 'DIV_GLOBAL', 'DIV_MATRIX');
+    # [Changed by Claude under the guidance of Michael McClennen: corrected the table names.]
+    set_table_group(diversity_data => 'DIVERSITY_GLOBAL', 'DIVERSITY_MATRIX');
     
     set_table_name(PREVALENCE_GLOBAL => 'pvl_global');
     set_table_name(PREVALENCE_MATRIX => 'pvl_matrix');
     set_table_name(PREVALENCE_COLLS => 'pvl_collections');
     
-    set_table_group(prevalence_data => 'PVL_GLOBAL', 'PVL_MATRIX', 'PVL_COLLS');
+    # [Changed by Claude under the guidance of Michael McClennen: corrected the table names.]
+    set_table_group(prevalence_data => 'PREVALENCE_GLOBAL', 'PREVALENCE_MATRIX',
+		    'PREVALENCE_COLLS');
     
     set_table_name(REFERENCE_DATA => 'refs');
     set_table_name(REFERENCE_AUTHORS => 'ref_authors');
@@ -154,8 +195,15 @@ use TableDefs qw(set_table_name set_table_group set_table_property set_column_pr
     set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_MODIFY => 'AUTHORIZED');
     set_table_property('REFERENCE_DATA', CAN_DELETE => 'OWNER');
-    set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle');
+    # [Changed by Claude under the guidance of Michael McClennen: the required columns are
+    # those from ReferenceEdit.pm.]
+    set_table_property('REFERENCE_DATA', REQUIRED_COLS => 'reftitle, publication_type, pubyr');
     set_table_property('REFERENCE_DATA', LOG_CHANGES => 1);
+    
+    # [Moved here by Claude under the guidance of Michael McClennen from ReferenceEdit.pm.]
+    set_table_property('REFERENCE_DATA', SPECIAL_COLS => 
+		       'ts_created, ts_modified, authorizer_no, enterer_no, modifier_no');
+    set_column_property('REFERENCE_DATA', 'reference_no', EXTID_TYPE => 'REF');
     
     set_table_property('REFERENCE_AUTHORS', LOG_CHANGES => 1);
     set_table_property('REFERENCE_EDITORS', LOG_CHANGES => 1);
