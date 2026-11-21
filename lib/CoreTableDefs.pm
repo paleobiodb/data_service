@@ -190,6 +190,13 @@ use ResourceDefs;
     set_table_name(REFERENCE_SOURCES => 'ref_sources');
     set_table_name(REFERENCE_SCORES => 'ref_scores');
     
+    # [Added by Claude under the guidance of Michael McClennen: the table searched by
+    # ReferenceEdit.pm for possible duplicates of a new reference. It is the same table as
+    # REFERENCE_DATA, but it is deliberately left out of the 'reference_data' group so that
+    # it is not switched over to the test database along with REFERENCE_DATA. Tests can then
+    # check for duplicates of real references.]
+    set_table_name(REFERENCE_DUPLICATE_SEARCH => 'refs');
+    
     set_table_property('REFERENCE_DATA', PRIMARY_KEY => 'reference_no');
     set_table_property('REFERENCE_DATA', PRIMARY_FIELD => 'reference_id');
     set_table_property('REFERENCE_DATA', CAN_POST => 'AUTHORIZED');

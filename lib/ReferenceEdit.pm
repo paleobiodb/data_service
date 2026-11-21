@@ -304,7 +304,16 @@ sub validate_action {
     
     # Handle the editor names, if any.
     
-    if ( exists $record->{editors} )
+    # [Changed by Claude under the guidance of Michael McClennen: an 'editors' value that is
+    # neither a string nor a list of strings is reported as E_FORMAT, the same as for
+    # 'authors'. It threw an exception before.]
+    
+    if ( ref $record->{editors} && ref $record->{editors} ne 'ARRAY' )
+    {
+	$edt->add_condition('E_FORMAT', 'editors', 'must be a string or an array of strings');
+    }
+    
+    elsif ( exists $record->{editors} )
     {
 	my $editor_list = $record->{editors};
 	my (@editorname, @editorfirst, @editorlast);
@@ -312,11 +321,6 @@ sub validate_action {
 	if ( ref $editor_list eq 'ARRAY' )
 	{
 	    @editorname = $editor_list->@*;
-	}
-	
-	elsif ( ref $editor_list )
-	{
-	    croak "The value of 'editors' must be a listref or a scalar";
 	}
 	
 	else
@@ -410,7 +414,10 @@ sub validate_action {
     
     # Handle the page number(s).
     
-    if ( $record->{pages} =~ /(.*)\s*-\s*(.*)/ )
+    # [Changed by Claude under the guidance of Michael McClennen: spaces around the dash, and
+    # at either end, are not kept in the page numbers.]
+    
+    if ( $record->{pages} =~ /^\s*(.*?)\s*-\s*(.*?)\s*$/ )
     {
 	$record->{firstpage} = $1;
 	$record->{lastpage} = $2;
@@ -501,44 +508,56 @@ sub after_action {
     if ( $operation eq 'replace' || $operation eq 'delete' ||
 	 ($operation eq 'update' && exists $record->{n_authors}) )
     {
-	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE $keyexpr";
+	# [Changed by Claude under the guidance of Michael McClennen: the rows to be deleted are
+	# read before deleting them, so that the deletion can be logged with a statement that
+	# would put them back. They were read afterward, so they were never found.]
 	
-	$edt->debug_line("$sql\n\n");
-				    
-	$result = $dbh->do($sql);
+	my $old_rows;
 	
 	if ( $tableinfo->{LOG_CHANGES} )
 	{
-	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_AUTHORS}
+	    $old_rows = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_AUTHORS}
 			WHERE $keyexpr", { Slice => { } });
+	}
 	
-	    if ( ref $result eq 'ARRAY' && @$result )
-	    {
-		$edt->log_aux_event('delete', 'REFERENCE_AUTHORS', $sql,
-				    "reference_no = '$keyval'", $result);
-	    }
+	my $sql = "DELETE FROM $TABLE{REFERENCE_AUTHORS} WHERE $keyexpr";
+	
+	$edt->debug_line("$sql\n\n");
+	
+	$result = $dbh->do($sql);
+	
+	if ( ref $old_rows eq 'ARRAY' && @$old_rows )
+	{
+	    $edt->log_aux_event('delete', 'REFERENCE_AUTHORS', $sql,
+				"reference_no = '$keyval'", $old_rows);
 	}
     }
     
     if ( $operation eq 'replace' || $operation eq 'delete' ||
 	 ($operation eq 'update' && exists $record->{n_editors}) )
     {
+	# [Changed by Claude under the guidance of Michael McClennen: the rows to be deleted are
+	# read before deleting them, so that the deletion can be logged with a statement that
+	# would put them back. They were read afterward, so they were never found.]
+	
+	my $old_rows;
+	
+	if ( $tableinfo->{LOG_CHANGES} )
+	{
+	    $old_rows = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_EDITORS}
+			WHERE $keyexpr", { Slice => { } });
+	}
+	
 	my $sql = "DELETE FROM $TABLE{REFERENCE_EDITORS} WHERE $keyexpr";
 	
 	$edt->debug_line("$sql\n\n");
 	
 	$result = $dbh->do($sql);
 	
-	if ( $tableinfo->{LOG_CHANGES} )
+	if ( ref $old_rows eq 'ARRAY' && @$old_rows )
 	{
-	    $result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{REFERENCE_EDITORS}
-			WHERE $keyexpr", { Slice => { } });
-	
-	    if ( $tableinfo->{LOG_CHANGES} && ref $result eq 'ARRAY' && @$result )
-	    {
-		$edt->log_aux_event('delete', 'REFERENCE_EDITORS', $sql,
-				    "reference_no = '$keyval'", $result);
-	    }
+	    $edt->log_aux_event('delete', 'REFERENCE_EDITORS', $sql,
+				"reference_no = '$keyval'", $old_rows);
 	}
     }
     
@@ -662,15 +681,13 @@ sub my_duplicate_check {
     my @matches;
     
     # Start by matching against the reftitle and pubtitle fields with a pubyr
-    # filter.  If a DOI is provided, use that for the initial search as well.
-    # But if the search returns no results, try it again without the DOI.
+    # filter.
+    # 
+    # [Changed by Claude under the guidance of Michael McClennen: the query was done a
+    # second time if a DOI was given and nothing matched. But my_reftitle_query does not use
+    # the DOI, so the second query was the same as the first.]
     
-    @matches = $edt->my_reftitle_query($attrs, { doi => 1 });
-    
-    if ( !@matches && $attrs->{doi} )
-    {
-	@matches = $edt->my_reftitle_query($attrs, { });
-    }
+    @matches = $edt->my_reftitle_query($attrs, { });
     
     # If we can't find any matches at all, try again with just the DOI and see
     # if we get any hits.
@@ -679,7 +696,10 @@ sub my_duplicate_check {
     {
 	my $quoted = $dbh->quote($attrs->{doi});
 	
-	my $sql = "SELECT reference_no FROM refs WHERE doi=$quoted";
+	# [Changed by Claude under the guidance of Michael McClennen: this used the table name
+	# 'refs' instead of the REFERENCE_DUPLICATE_SEARCH table.]
+	
+	my $sql = "SELECT reference_no FROM $TABLE{REFERENCE_DUPLICATE_SEARCH} WHERE doi=$quoted";
 	
 	@matches = grep { $_ } map { $_->{reference_no} } $edt->my_sql_query($dbh, $sql);
     }
@@ -727,10 +747,22 @@ sub my_reftitle_query {
 	$having = "score > 0";
     }
     
+    # [Added by Claude under the guidance of Michael McClennen: if neither title was given,
+    # there is nothing to match. The query below would be malformed.]
+    
+    else
+    {
+	return;
+    }
+    
     my $pubyr_quoted = $dbh->quote($attrs->{pubyr});
     
+    # [Changed by Claude under the guidance of Michael McClennen: the search uses
+    # REFERENCE_DUPLICATE_SEARCH, which is the same table as REFERENCE_DATA except when
+    # testing. See CoreTableDefs.pm.]
+    
     my $sql = "SELECT r.*, $fulltext
-		FROM $TABLE{REFERENCE_DATA} as r
+		FROM $TABLE{REFERENCE_DUPLICATE_SEARCH} as r
 		WHERE r.pubyr = $pubyr_quoted
 		HAVING $having";
     

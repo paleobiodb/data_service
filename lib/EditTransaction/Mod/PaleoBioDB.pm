@@ -276,7 +276,10 @@ sub looks_like_extid {
 
     my ($value) = @_;
     
-    return ref $value && $value->isa('PBDB::ExtIdent') || $value =~ $IDRE{LOOSE};
+    # [Changed by Claude under the guidance of Michael McClennen: a value that is an unblessed
+    # reference, such as a hash, made the call to 'isa' throw an exception.]
+    
+    return blessed $value && $value->isa('PBDB::ExtIdent') || $value =~ $IDRE{LOOSE};
 }
 
 
@@ -293,7 +296,10 @@ sub validate_extid_value {
     # If the external identifier has already been parsed and turned into an object, make sure it
     # has the proper type and return the stringified value.
     
-    if ( ref $value && $value->isa('PBDB::ExtIdent') )
+    # [Changed by Claude under the guidance of Michael McClennen: blessed instead of ref, as
+    # in looks_like_extid.]
+    
+    if ( blessed $value && $value->isa('PBDB::ExtIdent') )
     {
 	my $value_type = $value->type;
 	
