@@ -48,7 +48,11 @@ our (%MODULE_TABLES) = (
     SpecimenEdit => [ 'SPECIMEN_DATA', 'SPECIMEN_MATRIX', 'MEASUREMENT_DATA', 'OCCURRENCE_DATA',
 		      'OCCURRENCE_MATRIX', 'COLLECTION_DATA', 'COLLECTION_MATRIX',
 		      'AUTHORITY_DATA' ],
-    ReferenceEdit => [ 'REFERENCE_DATA', 'REFERENCE_AUTHORS', 'REFERENCE_EDITORS' ],
+    # [Changed by Claude under the guidance of Michael McClennen: ReferenceEdit also reads the
+    # tables that may refer to a reference, before deleting it.]
+    ReferenceEdit => [ 'REFERENCE_DATA', 'REFERENCE_AUTHORS', 'REFERENCE_EDITORS',
+		       'COLLECTION_DATA', 'COLLECTION_REFS', 'OCCURRENCE_DATA', 'SPECIMEN_DATA',
+		       'AUTHORITY_DATA', 'OPINION_DATA', 'INTERVAL_DATA', 'SCALE_DATA' ],
     CollectionEdit => [ 'COLLECTION_DATA', 'COLLECTION_MATRIX', 'COLLECTION_REFS',
 			'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX', 'REID_DATA',
 			'AUTHORITY_DATA' ],
