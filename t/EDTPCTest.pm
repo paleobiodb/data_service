@@ -53,9 +53,12 @@ our (%MODULE_TABLES) = (
     ReferenceEdit => [ 'REFERENCE_DATA', 'REFERENCE_AUTHORS', 'REFERENCE_EDITORS',
 		       'COLLECTION_DATA', 'COLLECTION_REFS', 'OCCURRENCE_DATA', 'SPECIMEN_DATA',
 		       'AUTHORITY_DATA', 'OPINION_DATA', 'INTERVAL_DATA', 'SCALE_DATA' ],
+    # [Changed by Claude under the guidance of Michael McClennen: CollectionEdit also reads
+    # SPECIMEN_DATA before deleting collections and occurrences, and the collection matrix
+    # is computed in part from COLLECTION_LOC.]
     CollectionEdit => [ 'COLLECTION_DATA', 'COLLECTION_MATRIX', 'COLLECTION_REFS',
 			'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX', 'REID_DATA',
-			'AUTHORITY_DATA' ],
+			'AUTHORITY_DATA', 'SPECIMEN_DATA', 'COLLECTION_LOC' ],
     );
 
 
