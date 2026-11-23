@@ -5,9 +5,9 @@
 # This file contains unit tests for the EditTransaction client modules, the subclasses of
 # EditTransaction that handle edits to particular kinds of Paleobiology Database records.
 #
-# edtpc-07-names.t : Test matchIdentifiedName from OccurrenceBase.pm, which CollectionEdit
-#                    uses to find the taxon that matches the identified name of an
-#                    occurrence or reidentification. The test data is the genus
+# edtpc-07-names.t : Test parseIdentifiedName and matchIdentifiedName from OccurrenceBase.pm,
+#                    which CollectionEdit and SpecimenEdit use to parse identified names
+#                    and to find the taxon that matches each one. The test data is the genus
 #                    Drepanomeryx, which has two subgenera, copied from the real
 #                    authorities table.
 #
@@ -17,7 +17,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 use TableDefs qw(%TABLE original_table_name);
 
@@ -91,6 +91,42 @@ subtest 'setup' => sub {
     is_deeply( { map { $_->[0] => $_->[1] } @$rows }, \%TAXON, "the test taxa are in place" );
     
     OccurrenceBase::initializeModifiers($dbh);
+};
+
+
+# parseIdentifiedName splits a name into the eight standard fields: each name component and
+# its modifier. Anything left after the subspecies name is an error.
+
+subtest 'parsing' => sub {
+    
+    my %ok = ( 'Tyrannosaurus rex' => 'Tyrannosaurus||||rex|||',
+	       'Tyrannosaurus cf. rex' => 'Tyrannosaurus||||rex|cf.||',
+	       'Drepanomeryx (Matthomeryx) matthewi' => 'Drepanomeryx||Matthomeryx||matthewi|||',
+	       'Martes caurina nobilis' => 'Martes||||caurina||nobilis|',
+	       'Martes caurina cf. nobilis' => 'Martes||||caurina||nobilis|cf.',
+	       'Martes caurina <undescribed form>' => 'Martes||||caurina||undescribed form|informal',
+	       '  Martes caurina nobilis  ' => 'Martes||||caurina||nobilis|' );
+    
+    foreach my $name ( sort keys %ok )
+    {
+	my @fields = OccurrenceBase::parseIdentifiedName($name);
+	
+	is( ref $fields[0] ? "ERROR: $fields[0]{error}" : join('|', map { $_ // '' } @fields),
+	    $ok{$name}, "parsed '$name'" );
+    }
+    
+    my %extra = ( 'Nosuchtaxon foo bar baz' => 'baz',
+		  'Nosuchtaxon foo bar baz qux' => 'baz qux',
+		  'Martes caurina <undescribed form> extra' => 'extra' );
+    
+    foreach my $name ( sort keys %extra )
+    {
+	my @fields = OccurrenceBase::parseIdentifiedName($name);
+	
+	is( ref $fields[0] && $fields[0]{error},
+	    "Unexpected text after the subspecies name: '$extra{$name}'",
+	    "the extra text in '$name' was reported" );
+    }
 };
 
 

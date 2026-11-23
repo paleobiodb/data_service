@@ -102,6 +102,24 @@ subtest 'alternate names' => sub {
     is( cvalue('string_val'), "'x'", "value given under alternate name stored with ALTERNATE_ONLY" );
     
     ETBasicTest->alter_column_property('EDT_TYPES', string_val => ALTERNATE_ONLY => 0);
+
+    # If a required column with an alternate name is not given, the condition names the
+    # alternate name, which is the field the record should have had. [Added by Claude under
+    # the guidance of Michael McClennen]
+
+    ETBasicTest->alter_column_property('EDT_TYPES', string_val => REQUIRED => 1);
+
+    vtest('insert', 'EDT_TYPES', { name => 'a6' });
+
+    ok_has_one_condition('E_REQUIRED', qr/Field 'alt_val'/,
+			 "a missing required column is reported under its alternate name");
+
+    vtest('insert', 'EDT_TYPES', { name => 'a7', string_val => '' });
+
+    ok_has_one_condition('E_REQUIRED', qr/Field 'string_val'/,
+			 "an empty value is reported under the field name that was given");
+
+    ETBasicTest->alter_column_property('EDT_TYPES', string_val => REQUIRED => 0);
 };
 
 
