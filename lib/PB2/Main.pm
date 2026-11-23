@@ -13,7 +13,8 @@ package PBData;
 use PB2::CommonData;
 use PB2::ConfigData;
 use PB2::IntervalData;
-use PB2::TimescaleData;
+# [Removed by Claude under the guidance of Michael McClennen: 'use PB2::TimescaleData'. That
+# module was deleted; no route used it, and the timescale routes use PB2::IntervalData.]
 use PB2::TaxonData;
 use PB2::PlaceData;
 use PB2::CollectionData;

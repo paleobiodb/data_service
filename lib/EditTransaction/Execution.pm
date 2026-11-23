@@ -323,7 +323,7 @@ sub pre_execution_check {
     }
     
     # If this is an update or replace on a subordinate table that gives a link value,
-    # record the link value(s) of the existing record, so that 'superior_keys' can report
+    # record the link value(s) of the existing record, so that 'auth_keys' can report
     # the superior record it is being moved from. This is done just before the action is
     # executed, so that it reflects any earlier actions in the transaction. [Added by
     # Claude under the guidance of Michael McClennen]

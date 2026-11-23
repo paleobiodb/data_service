@@ -43,7 +43,8 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefix
 	     CLM => 'clm',		# macrostrat columns
 	     UNT => 'unit',		# macrostrat units
 	     INT => 'int',		# geologic time intervals
-	     BND => 'bnd',		# geologic time interval boundaries
+	     # [Removed by Claude under the guidance of Michael McClennen: the type BND
+	     # ('bnd'), for geologic time interval boundaries, which nothing used.]
 	     TSC => 'tsc',		# geologic time scales
 	     PHP => 'php',		# phylopic image identifiers
 	     EDR => 'edr',		# educational resources

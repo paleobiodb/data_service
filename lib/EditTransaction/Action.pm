@@ -428,7 +428,7 @@ sub linkexpr {
 # 
 # If an update or replace changes the link value of a record in a subordinate table, the
 # link value(s) the record had before the change are stored using 'set_old_linkvalues'.
-# They are returned by 'old_linkvalues', and are used by 'superior_keys'. [Added by Claude
+# They are returned by 'old_linkvalues', and are used by 'auth_keys'. [Added by Claude
 # under the guidance of Michael McClennen]
 
 sub set_old_linkvalues {

@@ -37,8 +37,9 @@ our %FOREIGN_KEY_TABLE = ( taxon_no => 'AUTHORITY_DATA',
 			   reid_no => 'REID_DATA',
 			   opinion_no => 'OPINION_DATA',
 			   interval_no => 'INTERVAL_DATA',
-			   timescale_no => 'TIMESCALE_DATA',
-			   bound_no => 'TIMESCALE_BOUNDS',
+			   # [Removed by Claude under the guidance of Michael McClennen: the entries
+			   # for timescale_no and bound_no, whose tables TIMESCALE_DATA and
+			   # TIMESCALE_BOUNDS are no longer defined.]
 			   eduresource_no => 'RESOURCE_QUEUE',
 			   person_no => 'WING_USERS',
 			   authorizer_no => 'WING_USERS',
@@ -61,7 +62,8 @@ our %COMMON_FIELD_IDTYPE = ( taxon_no => 'TID',
 			     opinion_no => 'OPN',
 			     interval_no => 'INT',
 			     timescale_no => 'TSC',
-			     bound_no => 'BND',
+			     # [Removed by Claude under the guidance of Michael McClennen: the entry
+			     # for bound_no, whose identifier type BND was removed.]
 			     eduresource_no => 'EDR',
 			     person_no => 'PRS',
 			     authorizer_no => 'PRS',

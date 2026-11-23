@@ -1683,18 +1683,23 @@ sub other_keys {
 }
 
 
-# superior_keys ( [table] )
+# auth_keys ( [table] )
 # 
 # Return the keys of the records in superior tables that were affected by executed actions
-# on subordinate tables. If a table is given, return only the keys of records in that
-# superior table. Each key is returned once, even if several actions affected the same
-# record. A record that a subordinate record was moved away from by an update or replace
-# is included along with the one it was moved to. In scalar context, return the number of
-# keys. If the transaction failed or was rolled back, return nothing.
+# on subordinate tables. The superior table of a subordinate table is the one named by its
+# AUTH_TABLE property, and the key values come from the column named by AUTH_KEY. If a
+# table is given, return only the keys of records in that superior table. Each key is
+# returned once, even if several actions affected the same record. A record that a
+# subordinate record was moved away from by an update or replace is included along with
+# the one it was moved to. In scalar context, return the number of keys. If the
+# transaction failed or was rolled back, return nothing.
 # 
 # [Changed by Claude under the guidance of Michael McClennen: this method was a stub]
+# 
+# [Changed by Claude under the guidance of Michael McClennen: renamed from 'superior_keys',
+# to match the AUTH_TABLE and AUTH_KEY properties.]
 
-sub superior_keys {
+sub auth_keys {
 
     my ($edt, $table_key) = @_;
     
@@ -1890,7 +1895,10 @@ sub _result_keys {
 # }
 
 
-# sub count_superior_key {
+# [Changed by Claude under the guidance of Michael McClennen: renamed to match the method
+# 'auth_keys', which was renamed from 'superior_keys', along with the hash key below.]
+
+# sub count_auth_key {
 
 #     my ($edt, $table_key, $keyval) = @_;
     
@@ -1900,14 +1908,14 @@ sub _result_keys {
 # 	{
 # 	    if ( $keyval = $action->keyval )
 # 	    {
-# 		$edt->{superior_keys}{$table_key}{$keyval} = 1;
+# 		$edt->{auth_keys}{$table_key}{$keyval} = 1;
 # 	    }
 # 	}
 #     }
     
 #     elsif ( $keyval )
 #     {
-# 	$edt->{superior_keys}{$table_key}{$keyval} = 1;
+# 	$edt->{auth_keys}{$table_key}{$keyval} = 1;
 #     }
 # }
 

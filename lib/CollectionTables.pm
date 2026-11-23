@@ -211,17 +211,20 @@ sub buildCollectionTables {
     
     $result = $dbh->do($sql);
     
+    # [Changed by Claude under the guidance of Michael McClennen: this commented-out code uses
+    # PCOORD_DATA, the name now used for the table that was also named PALEOCOORDS.]
+    
     # # Setting paleocoordinates using GPlates, if available
     
     # my ($paleo_available) = eval { 0
-    # 	# $dbh->selectrow_array("SELECT count(*) from $TABLE{PALEOCOORDS}");
+    # 	# $dbh->selectrow_array("SELECT count(*) from $TABLE{PCOORD_DATA}");
     # };
     
     # if ( $paleo_available )
     # {
     # 	logMessage(2, "    setting geoplates using GPlates...");
 	
-    # 	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $TABLE{PALEOCOORDS} as pc using (collection_no)
+    # 	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $TABLE{PCOORD_DATA} as pc using (collection_no)
     # 		SET m.g_plate_no = pc.plate_no";
 	
     # 	$result = $dbh->do($sql);
@@ -229,7 +232,7 @@ sub buildCollectionTables {
     
     # else
     # {
-    # 	logMessage(2, "    skipping geoplates from GPlates: table '$TABLE{PALEOCOORDS}' not found");
+    # 	logMessage(2, "    skipping geoplates from GPlates: table '$TABLE{PCOORD_DATA}' not found");
     # }
     
     # Assign the collections to bins at the various binning levels.

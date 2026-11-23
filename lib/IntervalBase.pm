@@ -156,9 +156,13 @@ sub cache_interval_data {
     }
     
     # Then cache information about interval correlations.
-    
+    #
+    # [Changed by Claude under the guidance of Michael McClennen: the table is named by
+    # CLASSIC_INTERVAL_LOOKUP, as in bin/intervals.pl. The table name 'interval_lookup' was
+    # used.]
+
     $sql = "SELECT interval_no, stage_no, subepoch_no, epoch_no, period_no, ten_my_bin
-	    FROM interval_lookup";
+	    FROM $TABLE{CLASSIC_INTERVAL_LOOKUP}";
     
     foreach my $r ( $dbh->selectall_array($sql, { Slice => {} }) )
     {

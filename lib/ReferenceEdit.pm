@@ -100,8 +100,11 @@ sub validate_action {
     
     if ( exists $record->{publication_type} && ! $record->{publication_type} )
     {
+	# [Changed by Claude under the guidance of Michael McClennen: this commented-out query
+	# uses the REFERENCE_DATA table instead of the table name 'refs'.]
+	
 	# my $dbh = $edt->dbh;
-	# my $sql = "SELECT publication_type FROM refs WHERE $keyexpr";
+	# my $sql = "SELECT publication_type FROM $TABLE{REFERENCE_DATA} WHERE $keyexpr";
 	
 	# $edt->debug_line("$sql\n") if $edt->debug_mode;
 	
@@ -766,8 +769,11 @@ sub my_reftitle_query {
 		WHERE r.pubyr = $pubyr_quoted
 		HAVING $having";
     
+    # [Changed by Claude under the guidance of Michael McClennen: this commented-out query
+    # searches REFERENCE_DUPLICATE_SEARCH, like the one above.]
+    
     # my $sql = "SELECT r.*, $fulltext
-    # 		FROM $TABLE{REFERENCE_DATA} as r
+    # 		FROM $TABLE{REFERENCE_DUPLICATE_SEARCH} as r
     # 		     join $TABLE{REFERENCE_SEARCH} as rs using (reference_no)
     # 		WHERE r.pubyr = $pubyr_quoted
     # 		HAVING $having";

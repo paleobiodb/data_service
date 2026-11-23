@@ -911,8 +911,12 @@ sub matchIdentifiedName {
     # completely specified (i.e. only a species match with the subspecies missing, or
     # only a genus match with the species missing) or they may have the occurrence genus
     # as a subgenus or vice versa. Also handle the % and _ wildcards.
+    #
+    # [Changed by Claude under the guidance of Michael McClennen: $result is not set if the
+    # name contains a wildcard, because the exact match is skipped. This test dereferenced
+    # it anyway, which threw an exception for every name with a wildcard.]
 
-    unless ( @$result )
+    unless ( $result && @$result )
     {
 	my ($opt_re, $req_re, $genus_re, $subgenus_re);
 	

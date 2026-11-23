@@ -149,15 +149,12 @@ use ResourceDefs;
 		    'STRATA_NAMES', 'STRAT_RAW', 'STRAT_NAMES', 'STRAT_CONCEPTS',
 		    'COLLECTION_UNITS');
     
-    set_table_name(PALEOCOORDS => 'paleocoords');
-    set_table_name(PALEOSTATIC => 'paleostatic');
-    set_table_name(PALEOCOORDS_BINS => 'paleocoords_bins');
-    set_table_name(PALEOSTATIC_BINS => 'paleostatic_bins');
-    set_table_name(PALEOMODELS => 'paleomodels');
-    
-    set_table_group('paleocoordinates' => 'PALEOCOORDS', 'PALEOSTATIC',
-		    'PALEOCOORDS_BINS', 'PALEOSTATIC_BINS', 'PALEOMODELS');
-    
+    # [Removed by Claude under the guidance of Michael McClennen: the table names PALEOCOORDS,
+    # PALEOSTATIC, PALEOCOORDS_BINS, PALEOSTATIC_BINS, and PALEOMODELS, and the table group
+    # 'paleocoordinates'. The same tables are defined below as PCOORD_DATA, PCOORD_STATIC,
+    # PCOORD_BINS_DATA, PCOORD_BINS_STATIC, and PCOORD_MODELS, in the group
+    # 'paleocoord_data'. Nothing used the old names or the old group.]
+
     set_table_name(MACROSTRAT_LITHS => 'macrostrat.liths');
     
     set_table_name(COUNTRY_MAP => 'country_map');
@@ -268,12 +265,12 @@ use ResourceDefs;
     set_table_property(SPEC_MATRIX => TABLE_COMMENT =>
 		       "This table should not be modified directly, but only through automatic processes");
     
-    set_table_name(INTERVAL_DATA => 'interval_data');
-    set_table_name(INTERVAL_LOOKUP => 'interval_lookup');
-    set_table_name(TIMESCALE_DATA => 'scale_data');
-    set_table_name(TIMESCALE_MAP => 'scale_map');
-    set_table_group('intervals' => 'INTERVAL_DATA', 'INTERVAL_LOOKUP', 
-		    'TIMESCALE_DATA', 'TIMESCALE_MAP');
+    # [Removed by Claude under the guidance of Michael McClennen: a second block of interval
+    # table definitions, which set INTERVAL_DATA again and defined INTERVAL_LOOKUP,
+    # TIMESCALE_DATA, and TIMESCALE_MAP as other names for the tables defined above as
+    # CLASSIC_INTERVAL_LOOKUP, SCALE_DATA, and SCALE_MAP, along with the table group
+    # 'intervals'. Nothing used those names or the group except PB2/TimescaleData.pm,
+    # whose methods were not reached by any route, and which has also been deleted.]
     
     set_table_name(INTERVAL_MAJOR_MAP => 'int_major_map');
     
