@@ -356,7 +356,7 @@ subtest 'moving subordinate records' => sub {
 };
 
 
-# Check that superior_keys reports the records in the superior table that were affected
+# Check that auth_keys reports the records in the superior table that were affected
 # by actions on a subordinate table. [Added by Claude under the guidance of Michael
 # McClennen]
 
@@ -378,20 +378,20 @@ subtest 'superior keys' => sub {
     $edt->delete_record('EDT_SUB', 3);
     $edt->update_record('EDT_SUB', { aux_no => 4, name => 'same parent again' });
     
-    is_deeply( [ $edt->superior_keys ], [ ], "superior_keys is empty before execution" );
+    is_deeply( [ $edt->auth_keys ], [ ], "auth_keys is empty before execution" );
     
     ok_commit;
     
     my $new_key = $edt->action_keyval('&p');
     
-    is_deeply( [ $edt->superior_keys('EDT_TEST') ], [ $new_key, 5, 6 ],
-	       "superior_keys lists each affected record in the superior table once" );
+    is_deeply( [ $edt->auth_keys('EDT_TEST') ], [ $new_key, 5, 6 ],
+	       "auth_keys lists each affected record in the superior table once" );
     
-    is( scalar($edt->superior_keys('EDT_TEST')), 3, "superior_keys in scalar context returns the count" );
+    is( scalar($edt->auth_keys('EDT_TEST')), 3, "auth_keys in scalar context returns the count" );
     
-    is_deeply( [ $edt->superior_keys ], [ $new_key, 5, 6 ], "superior_keys with no table" );
+    is_deeply( [ $edt->auth_keys ], [ $new_key, 5, 6 ], "auth_keys with no table" );
     
-    is_deeply( [ $edt->superior_keys('EDT_SUB') ], [ ], "superior_keys for a table that is not a superior table" );
+    is_deeply( [ $edt->auth_keys('EDT_SUB') ], [ ], "auth_keys for a table that is not a superior table" );
     
     is_deeply( [ $edt->action_ref('&c')->old_linkvalues ], [ 6 ],
 	       "a record moved to another parent records its old parent" );
@@ -414,7 +414,7 @@ subtest 'superior keys' => sub {
     is_deeply( [ $edt->action_ref('&back')->old_linkvalues ], [ 6 ],
 	       "the old parent is the one the record had when the action was executed" );
     
-    is_deeply( [ $edt->superior_keys('EDT_TEST') ], [ 6, 5 ], "both parents are listed" );
+    is_deeply( [ $edt->auth_keys('EDT_TEST') ], [ 6, 5 ], "both parents are listed" );
     
     # If the transaction fails, nothing is reported.
     
@@ -425,7 +425,7 @@ subtest 'superior keys' => sub {
     
     ok_failed_commit;
     
-    is_deeply( [ $edt->superior_keys ], [ ], "superior_keys is empty after a failed transaction" );
+    is_deeply( [ $edt->auth_keys ], [ ], "auth_keys is empty after a failed transaction" );
     
     set_can_move(undef);
 };

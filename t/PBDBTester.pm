@@ -878,19 +878,26 @@ sub safe_clear_table {
     my ($sql, $result);
     
     croak "you must specify a table" unless $table;
-
+    
+    # [Added by Claude under the guidance of Michael McClennen: refuse to modify a table that
+    # is not in the test database, as clear_table and sql_command do. Only the rows entered
+    # by test users are deleted, but those deletions would still be made in a real table if
+    # this one had not been switched to the test database.]
+    
+    my $table_name = $T->test_table_name($table);
+    
     if ( defined $base_table )
     {
 	croak "you must specify a base table" unless $base_table;
 	croak "you must specify a link field" unless $link_field;
 	
-	$sql = "DELETE $TABLE{$table} FROM $TABLE{$table} join $TABLE{$base_table} USING ($link_field) WHERE " .
+	$sql = "DELETE $table_name FROM $table_name join $TABLE{$base_table} USING ($link_field) WHERE " .
 	    $T->test_entry_filter($field, $base_table);
     }
     
     else
     {
-	$sql = "DELETE FROM $TABLE{$table} WHERE " . $T->test_entry_filter($field);
+	$sql = "DELETE FROM $table_name WHERE " . $T->test_entry_filter($field);
     }
     
     $T->debug_line($sql);
@@ -902,13 +909,13 @@ sub safe_clear_table {
 	$T->debug_line("Deleted $result rows");
     }
     
-    my ($remaining) = $dbh->selectrow_array("SELECT count(*) FROM $TABLE{$table}");
+    my ($remaining) = $dbh->selectrow_array("SELECT count(*) FROM $table_name");
 
     # If the table is now empty, reset its auto_increment count to 1.
     
     if ( defined $remaining && $remaining == 0 )
     {
-	$sql = "ALTER TABLE $TABLE{$table} AUTO_INCREMENT = 1";
+	$sql = "ALTER TABLE $table_name AUTO_INCREMENT = 1";
 	
 	$T->debug_line($sql);
 	

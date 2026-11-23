@@ -32,5 +32,7 @@ $T->establish_session_data;
 $T->set_specific_permission('RESOURCE_QUEUE', $perm_a, 'admin');
 $T->set_specific_permission('PUBLICATIONS', $perm_a, 'admin');
 $T->set_specific_permission('ARCHIVES', $perm_a, 'admin');
-# $T->set_specific_permission('TIMESCALE_DATA', $perm_a, 'admin');
+# [Changed by Claude under the guidance of Michael McClennen: TIMESCALE_DATA is no longer
+# defined. The same table is SCALE_DATA.]
+# $T->set_specific_permission('SCALE_DATA', $perm_a, 'admin');
 
