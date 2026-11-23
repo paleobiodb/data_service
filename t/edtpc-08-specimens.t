@@ -424,7 +424,8 @@ subtest 'names' => sub {
 };
 
 
-# A measurement may follow its specimen in the same transaction, without a specimen_id.
+# A measurement may follow its specimen in the same transaction, without a specimen_id. Anyone
+# who can edit measurements can also delete them.
 
 subtest 'measurements' => sub {
     
@@ -462,6 +463,44 @@ subtest 'measurements' => sub {
     
     ok_has_condition(qr/^E_REQUIRED .*Field 'specimen_id': a value is required/,
 		     "the missing specimen_id was reported");
+    
+    # Add three measurements to delete.
+    
+    $edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('ENTERER', 'MEASUREMENT_DATA'));
+    
+    $edt->insert_record('MEASUREMENT_DATA', { specimen_id => $specimen, measurement_type => $_,
+					       average => '1' }) foreach qw(circumference diagonal diameter);
+    
+    ok_commit("three more measurements were inserted") || return;
+    
+    my @m = $edt->inserted_keys('MEASUREMENT_DATA');
+    
+    foreach my $t ( [ 'ENTERER', $m[0], 'the owner' ], [ 'OTHER', $m[1], 'another member' ] )
+    {
+	my ($who, $m, $label) = @$t;
+	
+	$edt = ok_new_edt(class => 'SpecimenEdit', permission => perm($who, 'MEASUREMENT_DATA'));
+	
+	$edt->update_record('MEASUREMENT_DATA', { measurement_id => $m, average => '2' });
+	$edt->delete_record('MEASUREMENT_DATA', $m);
+	
+	ok_commit("$label can edit and delete a measurement");
+	
+	ok_no_record('MEASUREMENT_DATA', "measurement_no = $m");
+    }
+    
+    $edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('GUEST', 'MEASUREMENT_DATA'));
+    
+    $edt->delete_record('MEASUREMENT_DATA', $m[2]);
+    
+    ok_failed_commit("a guest cannot delete a measurement");
+    
+    ok_has_condition('E_PERMISSION', "the refusal was reported");
+    
+    ok_found_record('MEASUREMENT_DATA', "measurement_no = $m[2]", "the measurement is still there");
+    
+    ok_found_record('SPECIMEN_DATA', "specimen_no = $specimen",
+		    "deleting measurements did not delete the specimen");
 };
 
 

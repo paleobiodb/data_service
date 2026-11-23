@@ -196,8 +196,29 @@ subtest 'deletion' => sub {
 	"without CAN_DELETE, an administrator may delete a record" );
     is( row_perm('ENTERER', 'EDTPB_BYAUTH', 'delete', 'byauth_no in (1,2)'), 'none,1,owned,1',
 	"with CAN_DELETE 'OWNER', only the owner may delete a record" );
-    is( row_perm('ENTERER', 'EDTPB_UID', 'delete', 'uid_no in (1,2)'), 'granted,1,owned,1',
-	"with CAN_DELETE 'AUTHORIZED', any user may delete a record" );
+    # With CAN_DELETE 'AUTHORIZED', anyone who may modify a record may delete it.
+    # EDTPB_UID has no CAN_MODIFY property, so a user may modify, and delete, only the
+    # records they own. [Changed by Claude under the guidance of Michael McClennen: any user,
+    # including a guest, could delete a record from such a table that they could not modify.]
+    
+    is( row_perm('ENTERER', 'EDTPB_UID', 'delete', 'uid_no in (1,2)'), 'none,1,owned,1',
+	"with CAN_DELETE 'AUTHORIZED', a user may delete their own record" );
+    is( row_perm('GUEST', 'EDTPB_UID', 'delete', 'uid_no in (1,2)'), 'none,2',
+	"with CAN_DELETE 'AUTHORIZED', a guest may not delete a record" );
+    
+    set_table_property(EDTPB_UID => CAN_MODIFY => 'AUTHORIZED');
+    EDTPBTest->clear_table_cache('EDTPB_UID');
+    
+    is( row_perm('OTHER', 'EDTPB_UID', 'modify', 'uid_no in (1,2)'), 'granted,1,owned,1',
+	"with CAN_MODIFY 'AUTHORIZED', any member may modify a record" );
+    is( row_perm('OTHER', 'EDTPB_UID', 'delete', 'uid_no in (1,2)'), 'granted,1,owned,1',
+	"with CAN_DELETE 'AUTHORIZED', any member who may modify a record may delete it" );
+    is( row_perm('GUEST', 'EDTPB_UID', 'delete', 'uid_no in (1,2)'), 'none,2',
+	"a guest still may not delete a record" );
+    
+    set_table_property(EDTPB_UID => CAN_MODIFY => undef);
+    EDTPBTest->clear_table_cache('EDTPB_UID');
+    
     is( row_perm('SUPERUSER', 'EDTPB_KEEP', 'delete', 'keep_no = 1'), 'none',
 	"with CAN_DELETE 'NONE', even an administrator may not delete a record" );
     
