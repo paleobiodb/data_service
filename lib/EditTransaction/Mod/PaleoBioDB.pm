@@ -1234,11 +1234,18 @@ sub check_row_permission {
 	}
 	
 	# If we get here and the requested operation is 'delete', it will
-	# succeed only if the CAN_DELETE property is 'AUTHORIZED'.
+	# succeed only if the CAN_DELETE property is 'AUTHORIZED' and the user may edit the
+	# record, so that anyone who can edit a record can delete it. For a subordinate table,
+	# that is checked separately as 'modify' permission on the superior record. Otherwise,
+	# the user must have 'modify' permission on the table.
+	# [Changed by Claude under the guidance of Michael McClennen: 'modify' permission was
+	# not checked, so any user, including a guest, could delete any record they did not own
+	# from a table whose CAN_DELETE property is 'AUTHORIZED'.]
 	
 	elsif ( $requested eq 'delete' )
 	{
-	    if ( ($tableinfo->{CAN_DELETE} // '') eq 'AUTHORIZED' )
+	    if ( ($tableinfo->{CAN_DELETE} // '') eq 'AUTHORIZED' &&
+		 ( $tp->{modify} || $tableinfo->{AUTH_TABLE} ) )
 	    {
 		$edt->debug_line("TABLE DELETE: $c end_no: $eno auth_no: $ano $uid $locked") if $debug_mode;  # [Changed by Claude under the guidance of Michael McClennen]
 		

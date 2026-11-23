@@ -249,6 +249,7 @@ use ResourceDefs;
     
     set_table_property('MEASUREMENT_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('MEASUREMENT_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('MEASUREMENT_DATA', CAN_DELETE => 'AUTHORIZED');	# [Added by Claude under the guidance of Michael McClennen: anyone who can edit measurements can delete them]
     set_table_property('MEASUREMENT_DATA', PRIMARY_KEY => 'measurement_no');
     set_table_property('MEASUREMENT_DATA', PRIMARY_FIELD => 'measurement_id');
     set_table_property('MEASUREMENT_DATA', LOG_CHANGES => 1);
