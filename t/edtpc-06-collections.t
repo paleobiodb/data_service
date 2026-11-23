@@ -551,6 +551,18 @@ subtest 'reidentifications' => sub {
     is( "$n_ages|$occ_early|$occ_late", "1|$early_age|$late_age",
 	"every identification has the ages of the collection" );
     
+    # An occurrence may not use the same reference as one of its reidentifications.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $occ, reference_id => 6 });
+    
+    ok_failed_commit("an occurrence cannot use the reference of one of its reidentifications");
+    
+    ok_has_one_condition(qr/E_BAD_VALUE.*'reference_id'/, "the conflict was reported for 'reference_id'");
+    
     # Delete one of the reidentifications. The other becomes the current identification.
     
     $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'REID_DATA'));
@@ -705,9 +717,9 @@ subtest 'delete occurrences' => sub {
     
     $edt->initialize_occs({ $occ => 1 }, { });
     
-    $edt->delete_record('OCCURRENCE_DATA', { occurrence_id => $occ });
+    $edt->delete_record('OCCURRENCE_DATA', { occurrence_id => $occ, identified_name => '' });
     
-    ok_commit("the occurrence was deleted");
+    ok_commit("the occurrence was deleted, and the other fields of the record were not checked");
     
     ok_no_record('OCCURRENCE_DATA', "occurrence_no = $occ");
     ok_no_record('REID_DATA', "occurrence_no = $occ");
