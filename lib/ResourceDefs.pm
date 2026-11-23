@@ -6,7 +6,10 @@
 # Definitions and properties necessary for working with the Educational Resource tables.
 # 
 
-package ResourceTables;
+# [Changed by Claude under the guidance of Michael McClennen: the package name matches the
+# file name. It was 'ResourceTables', which is the package in ResourceTables.pm.]
+
+package ResourceDefs;
 
 use strict;
 

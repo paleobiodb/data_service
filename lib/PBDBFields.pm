@@ -28,7 +28,9 @@ our %COMMON_FIELD_SPECIAL = ( authorizer_no => 'auth_authorizer',
 			      owner_lock => 'own_lock' );
 
 our %FOREIGN_KEY_TABLE = ( taxon_no => 'AUTHORITY_DATA',
-			   resource_no => 'REFERENCE_DATA',
+			   # [Removed by Claude under the guidance of Michael McClennen: the entry
+			   # resource_no => 'REFERENCE_DATA'. No table has a column resource_no, and
+			   # REFERENCE_DATA was not the right table for it.]
 			   collection_no => 'COLLECTION_DATA',
 			   occurrence_no => 'OCCURRENCE_DATA',
 			   specimen_no => 'SPECIMEN_DATA',

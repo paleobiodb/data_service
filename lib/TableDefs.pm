@@ -37,8 +37,6 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $IDIGBIO
 		      $MACROSTRAT_LITHS
 		      $MACROSTRAT_INTERVALS $MACROSTRAT_SCALES $MACROSTRAT_SCALES_INTS
-		      $TIMESCALE_DATA $TIMESCALE_ARCHIVE
-		      $TIMESCALE_REFS $TIMESCALE_INTS $TIMESCALE_BOUNDS $TIMESCALE_PERMS
 		      $TEST_DB %TABLE
 		      init_table_names enable_test_mode disable_test_mode is_test_mode
 		      change_table_name change_table_db restore_table_name original_table_name
@@ -240,14 +238,11 @@ our $MACROSTRAT_INTERVALS = 'macrostrat.intervals';
 our $MACROSTRAT_SCALES = 'macrostrat.timescales';
 our $MACROSTRAT_SCALES_INTS = 'macrostrat.timescales_intervals';
 
-# New timescale system
-
-our $TIMESCALE_DATA = 'timescales';
-our $TIMESCALE_REFS = 'timescale_refs';
-our $TIMESCALE_INTS = 'timescale_ints';
-our $TIMESCALE_BOUNDS = 'timescale_bounds';
-our $TIMESCALE_QUEUE = 'timescale_queue';
-our $TIMESCALE_PERMS = 'timescale_perms';
+# [Removed by Claude under the guidance of Michael McClennen: the variables $TIMESCALE_DATA,
+# $TIMESCALE_REFS, $TIMESCALE_INTS, $TIMESCALE_BOUNDS, $TIMESCALE_QUEUE, and
+# $TIMESCALE_PERMS, for an earlier timescale system whose tables no longer exist, and their
+# entries in @EXPORT_OK along with $TIMESCALE_ARCHIVE, which was never defined. Nothing
+# used them.]
 
 
 # Define a routine to print debugging output.
