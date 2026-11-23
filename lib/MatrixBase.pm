@@ -2,8 +2,8 @@
 # 
 #   MatrixBase.pm
 #
-# The routines in this module update the occurrence matrix and collection matrix
-# when the base tables have changed. It is designed to be used both by the API
+# The routines in this module update the occurrence matrix, collection matrix, and specimen
+# matrix when the base tables have changed. It is designed to be used both by the API
 # and by Classic.
 
 package MatrixBase;
@@ -16,7 +16,7 @@ our (@EXPORT_OK) = qw(initializeBins updateCollectionMatrix
 		      updateOccurrenceMatrix updateOccurrenceMatrixReids
 		      deleteFromCollectionMatrix deleteFromOccurrenceMatrix
 		      deleteReidsFromOccurrenceMatrix deleteCollsFromOccurrenceMatrix
-		      updateOccurrenceCounts);
+		      updateOccurrenceCounts updateSpecimenMatrix deleteFromSpecimenMatrix);
 
 use Carp qw(carp croak);
 use Scalar::Util qw(blessed);
@@ -467,6 +467,112 @@ sub deleteCollsFromOccurrenceMatrix {
 	my $collection_list = join(',', map { $dbh->quote($_) } @work_list);
 	
 	$sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX} WHERE collection_no in ($collection_list)";
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	$dbh->do($sql);
+    }
+}
+
+
+# updateSpecimenMatrix ( dbh, specimen_nos, debug_out )
+#
+# Add or replace the rows in the specimen matrix for the specified specimens, derived from their
+# records in the specimen table. The argument must be either a single specimen_no value or else
+# an arrayref whose elements are specimen_no values. If a specimen belongs to an occurrence,
+# there is one row for each identification of that occurrence, because the specimen may be
+# labeled with any of them, not necessarily the latest. Return the number of rows that were
+# written.
+#
+# [Added by Claude under the guidance of Michael McClennen: moved here from SpecimenEdit.pm,
+# where it was the method update_specimen_matrix. Every value has a default, because the
+# columns of the specimen matrix do not accept null. A specimen with no occurrence has no row in
+# the occurrence matrix, so the values from that table would otherwise be null.]
+
+sub updateSpecimenMatrix {
+
+    my ($dbh, $specimen_nos, $debug_out) = @_;
+
+    my @specimen_nos;
+
+    if ( ref $specimen_nos eq 'ARRAY' )
+    {
+	@specimen_nos = @$specimen_nos;
+    }
+
+    else
+    {
+	@specimen_nos = $specimen_nos;
+    }
+
+    # Update the specimen matrix, at most 1000 records at a time.
+
+    my ($sql, $count);
+
+    while ( @specimen_nos )
+    {
+	my @work_list = splice(@specimen_nos, 0, 1000);
+	
+	my $specimen_list = join(',', map { $dbh->quote($_) } @work_list);
+	
+	$sql = "REPLACE INTO $TABLE{SPECIMEN_MATRIX}
+		       (specimen_no, occurrence_no, reid_no, latest_ident, taxon_no, orig_no,
+			reference_no, authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT s.specimen_no, ifnull(s.occurrence_no, 0), ifnull(o.reid_no, 0),
+		       ifnull(o.latest_ident, 1),
+		       ifnull(if(s.taxon_no is not null and s.taxon_no > 0, s.taxon_no, o.taxon_no), 0),
+		       ifnull(if(a.orig_no is not null and a.orig_no > 0, a.orig_no, o.orig_no), 0),
+		       s.reference_no, s.authorizer_no, s.enterer_no, s.modifier_no,
+		       s.created, s.modified
+		FROM $TABLE{SPECIMEN_DATA} as s LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
+			LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = s.occurrence_no
+		WHERE s.specimen_no in ($specimen_list)";
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	my $result = $dbh->do($sql);
+	
+	$count += $result if $result;
+    }
+
+    return $count || 0;
+}
+
+
+# deleteFromSpecimenMatrix ( dbh, specimen_nos, debug_out )
+#
+# Delete the rows in the specimen matrix for the specified specimens. The argument must be
+# either a single specimen_no value or else an arrayref whose elements are specimen_no values.
+#
+# [Added by Claude under the guidance of Michael McClennen, to go with updateSpecimenMatrix.]
+
+sub deleteFromSpecimenMatrix {
+
+    my ($dbh, $specimen_nos, $debug_out) = @_;
+
+    my @specimen_nos;
+
+    if ( ref $specimen_nos eq 'ARRAY' )
+    {
+	@specimen_nos = @$specimen_nos;
+    }
+
+    else
+    {
+	@specimen_nos = $specimen_nos;
+    }
+    
+    # Update the specimen matrix, at most 1000 records at a time.
+    
+    my $sql;
+    
+    while ( @specimen_nos )
+    {
+	my @work_list = splice(@specimen_nos, 0, 1000);
+	
+	my $specimen_list = join(',', map { $dbh->quote($_) } @work_list);
+	
+	$sql = "DELETE FROM $TABLE{SPECIMEN_MATRIX} WHERE specimen_no in ($specimen_list)";
 	
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	

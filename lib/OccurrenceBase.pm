@@ -592,6 +592,16 @@ sub parseIdentifiedName {
 	return { error => "Could not resolve subspecies" };
     }
     
+    # [Added by Claude under the guidance of Michael McClennen: anything left after the
+    # subspecies name is an error. It was ignored, so for example 'Genus species subspecies
+    # extra' was parsed as 'Genus species subspecies'.]
+
+    if ( defined $name && $name =~ /\S/ )
+    {
+	my $extra = $name =~ s/^\s+|\s+$//gr;
+	return { error => "Unexpected text after the subspecies name: '$extra'" };
+    }
+
     if ( $subspecies_name && $subspecies_reso ne 'informal' )
     {
 	if ( $subspecies_name =~ / ^ ( [A-Za-z][A-Za-z]? | var | form?a? | morp?h? | mut ) $ /x )

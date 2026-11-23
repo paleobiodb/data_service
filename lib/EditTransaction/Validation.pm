@@ -339,11 +339,16 @@ sub validate_against_schema {
 	# For an 'update' operation, the requirement is only checked if the
 	# column is given a new value.
 	
+	# [Changed by Claude under the guidance of Michael McClennen: if the record has no field
+	# for the column, the condition names the column's alternate name if it has one, since
+	# that is the field the record should have given. The column name was used, for example
+	# 'reference_no' instead of 'reference_id'.]
+
 	if ( $cr->{REQUIRED} && ($operation !~ /^update/ || $fieldname) )
 	{
 	    if ( ! defined $value || $value eq '' )
 	    {
-		$edt->add_condition('E_REQUIRED', $fieldname || $colname);
+		$edt->add_condition('E_REQUIRED', $fieldname || $cr->{ALTERNATE_NAME} || $colname);
 	    }
 	}
 	

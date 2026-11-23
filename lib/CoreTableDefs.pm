@@ -232,6 +232,7 @@ use ResourceDefs;
     
     set_table_property('SPECIMEN_DATA', CAN_POST => 'AUTHORIZED');
     set_table_property('SPECIMEN_DATA', CAN_MODIFY => 'AUTHORIZED');
+    set_table_property('SPECIMEN_DATA', CAN_DELETE => 'OWNER');	# [Added by Claude under the guidance of Michael McClennen]
     set_table_property('SPECIMEN_DATA', PRIMARY_KEY => "specimen_no");
     set_table_property('SPECIMEN_DATA', PRIMARY_FIELD => "specimen_id");
     set_table_property('SPECIMEN_DATA', CASCADE_DELETE => [ 'MEASUREMENT_DATA' ]);
@@ -254,6 +255,10 @@ use ResourceDefs;
     
     set_column_property('MEASUREMENT_DATA', 'specimen_no', REQUIRED => 1);
     set_column_property('MEASUREMENT_DATA', 'specimen_no', ALTERNATE_NAME => 'specimen_id');
+    # [Added by Claude under the guidance of Michael McClennen: with this property, the value of
+    # specimen_no may be a reference to a specimen action in the same transaction, which is
+    # resolved when the measurement is inserted.]
+    set_column_property('MEASUREMENT_DATA', 'specimen_no', FOREIGN_KEY => 'SPECIMEN_DATA');
     set_column_property('MEASUREMENT_DATA', 'measurement_type', REQUIRED => 1);
     # set_column_property('MEASUREMENT_DATA', 'real_average', IGNORE => 1);
     # set_column_property('MEASUREMENT_DATA', 'real_median', IGNORE => 1);
