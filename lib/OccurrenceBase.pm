@@ -933,7 +933,11 @@ sub matchIdentifiedName {
 	
 	if ( $subgenus_name && $subgenus_name =~ /[%_]/ )
 	{
-	    $subgenus_re =~ s/%/[a-zA-Z]*/gr;
+	    # [Changed by Claude under the guidance of Michael McClennen: the pattern is
+	    # generated from $subgenus_name, as for the genus above. The result of the
+	    # substitution was discarded, so $subgenus_re was left empty.]
+	    
+	    $subgenus_re = $subgenus_name =~ s/%/[a-zA-Z]*/gr;
 	    $subgenus_re =~ s/_/[a-zA-Z]/g;
 	}
 	
@@ -1108,9 +1112,14 @@ sub matchIdentifiedName {
 	{
 	    foreach my $match ( @$result )
 	    {
+		# [Changed by Claude under the guidance of Michael McClennen: $component is
+		# declared once here. The 'elsif' below declared it a second time.]
+		
+		my $component;
+		
 		# If a subgenus was specified, and we have a double match, discard the single.
 	    
-		if ( my $component = $match->{is_single} )
+		if ( $component = $match->{is_single} )
 		{
 		    if ( $component eq $subgenus_name && $doubles{$component} )
 		    {
@@ -1121,7 +1130,7 @@ sub matchIdentifiedName {
 		# If a subgenus was not specified, and we have a single match, discard the
 		# double.
 	    
-		elsif ( my $component = $match->{is_double} )
+		elsif ( $component = $match->{is_double} )
 		{
 		    if ( $component eq $genus_name && $singles{$component} &&
 			 ! $subgenus_name || $subgenus_name ne $component )

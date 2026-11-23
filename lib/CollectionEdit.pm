@@ -1658,6 +1658,12 @@ sub validate_occ_action {
 		      $existing_data->{species_name}, $existing_data->{species_reso},
 		      $existing_data->{subspecies_name}, $existing_data->{subspecies_reso});
 	}
+	
+	# [Added by Claude under the guidance of Michael McClennen: the comment above says
+	# that this case returns, but it did not, so a delete went on through the checks
+	# below.]
+	
+	return;
     }
     
     
@@ -1712,7 +1718,11 @@ sub validate_occ_action {
 	    {
 		if ( $rr eq $reference_no )
 		{
-		    $edt->add_condition('E_BAD_VALUE', 'reference_no',
+		    # [Changed by Claude under the guidance of Michael McClennen: the field is
+		    # reported as 'reference_id', the name used in records and in the other
+		    # conditions for this field.]
+		    
+		    $edt->add_condition('E_BAD_VALUE', 'reference_id',
 					"A reidentification of this occurrence already uses " .
 					"this reference");
 		}
@@ -1754,7 +1764,9 @@ sub validate_occ_action {
     
     my $identified_name = $action->record_value('identified_name');
     my $taxon_no = $action->record_value('taxon_id');
-    my $collection_no = $action->get_attr('collection_no');
+    
+    # [Removed by Claude under the guidance of Michael McClennen: a second declaration of
+    # $collection_no, with the same value as the one at the top of this method.]
     
     if ( defined $identified_name && $identified_name ne '' )
     {
@@ -1861,8 +1873,11 @@ sub validate_occ_action {
 	
 	else
 	{
-	    $existing_value = $reids->{$occurrence_no}{abund_value};
-	    $existing_unit = $reids->{$occurrence_no}{abund_unit};
+	    # [Changed by Claude under the guidance of Michael McClennen: the existing
+	    # reidentification is looked up by $reid_no. $occurrence_no was used.]
+	    
+	    $existing_value = $reids->{$reid_no}{abund_value};
+	    $existing_unit = $reids->{$reid_no}{abund_unit};
 	}
     }
     

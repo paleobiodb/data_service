@@ -130,7 +130,8 @@ our $REFERENCES = "refs";
 our $OCCURRENCES = "occurrences";
 our $SPECIMENS = "specimens";
 our $REIDS = "reidentifications";
-our $SPECIMENS = "specimens";
+# [Removed by Claude under the guidance of Michael McClennen: a second declaration of
+# $SPECIMENS, identical to the one above.]
 our $MEASUREMENTS = "measurements";
 
 set_table_property($COLLECTIONS, PRIMARY_KEY => 'collection_no');
@@ -306,8 +307,13 @@ sub set_table_name {
     unlock_keys(%TABLE);
     unlock_value(%TABLE, $table_specifier) if exists $TABLE{$table_specifier};
     $TABLE{$table_specifier} = $table_name;
-    lock_value(%TABLE, $table_specifier);
+    
+    # [Changed by Claude under the guidance of Michael McClennen: the keys are locked before
+    # the value, to avoid the warning "Cannot usefully lock values in an unlocked hash".
+    # The value was already protected against assignment either way.]
+    
     lock_keys(%TABLE);
+    lock_value(%TABLE, $table_specifier);
     
     return $table_name;
 }

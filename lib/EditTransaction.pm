@@ -812,7 +812,8 @@ sub copy_allowances_from {
 	}
     }
     
-    my ($class, $from_class) = @_;
+    # [Removed by Claude under the guidance of Michael McClennen: a stray copy of the
+    # first line of this method, which redeclared $class and $from_class.]
 }
 
 
