@@ -135,6 +135,14 @@ sub updateCollectionMatrix {
 	
 	my $collection_list = join(',', map { $dbh->quote($_) } @work_list);
 	
+	# [Changed by Claude under the guidance of Michael McClennen: the collections are read
+	# from the COLLECTION_DATA table. The table name 'collections' was used.]
+	# 
+	# [Changed by Claude under the guidance of Michael McClennen: the access level
+	# 'group members' was written as 'research group', which is not one of the values of
+	# the column. A collection with that access level was given the matrix access level 0
+	# (public) even before its release date. The name now matches CollectionTables.pm.]
+	
 	my $sql = "REPLACE INTO $TABLE{COLLECTION_MATRIX}
 		       (collection_no, lng, lat, loc, cc, continent,
 			protected, early_age, late_age,
@@ -150,11 +158,11 @@ sub updateCollectionMatrix {
 			c.reference_no, if(occs.n_occs > 0, occs.n_occs, 0),
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
-				when 'research group' then if(c.release_date < now(), 0, 2)
+				when 'group members' then if(c.release_date < now(), 0, 2)
 				when 'authorizer only' then if(c.release_date < now(), 0, 2)
 				else 0
 			end
-		FROM collections as c
+		FROM $TABLE{COLLECTION_DATA} as c
 		    left join $TABLE{COLLECTION_LOC} as cl using (collection_no)
 		    left join (SELECT collection_no, count(*) as n_occs
 			       FROM $TABLE{OCCURRENCE_DATA} GROUP BY collection_no) as occs
@@ -272,6 +280,9 @@ sub updateOccurrenceMatrix {
 	
 	$dbh->do($sql);
 	
+	# [Changed by Claude under the guidance of Michael McClennen: this statement joined
+	# the table 'coll_matrix' instead of the COLLECTION_MATRIX table.]
+	
 	$sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso,
@@ -288,7 +299,7 @@ sub updateOccurrenceMatrix {
 			re.plant_organ,
 			ei.early_age, li.late_age, if(re.reference_no > 0, re.reference_no, 0),
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
-		FROM $TABLE{REID_DATA} as re JOIN coll_matrix as c using (collection_no)
+		FROM $TABLE{REID_DATA} as re JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
 			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
@@ -327,6 +338,9 @@ sub updateOccurrenceMatrixReids {
 	
 	my $reid_list = join(',', map { $dbh->quote($_) } @work_list);
 	
+	# [Changed by Claude under the guidance of Michael McClennen: this statement joined
+	# the table 'coll_matrix' instead of the COLLECTION_MATRIX table.]
+	
 	$sql = "REPLACE INTO $TABLE{OCCURRENCE_MATRIX}
 		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
 			genus_name, genus_reso, subgenus_name, subgenus_reso,
@@ -343,7 +357,7 @@ sub updateOccurrenceMatrixReids {
 			re.plant_organ,
 			ei.early_age, li.late_age, if(re.reference_no > 0, re.reference_no, 0),
 			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
-		FROM $TABLE{REID_DATA} as re JOIN coll_matrix as c using (collection_no)
+		FROM $TABLE{REID_DATA} as re JOIN $TABLE{COLLECTION_MATRIX} as c using (collection_no)
 			LEFT JOIN $TABLE{INTERVAL_DATA} as ei on ei.interval_no = c.early_int_no
 			LEFT JOIN $TABLE{INTERVAL_DATA} as li on li.interval_no = c.late_int_no
 			LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)

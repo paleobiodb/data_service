@@ -44,6 +44,9 @@ my ($NUMBER_RE) = qr/^\d+[.]\d*$|^[.]\d+$|^\d+$/;
 my (%OCC_RESO, %OCC_RESO_RE);
 
 {
+    # [Changed by Claude under the guidance of Michael McClennen: corrected the spelling of
+    # 'specimens' in E_CANNOT_DELETE.]
+    
     CollectionEdit->register_conditions(
        C_DUPLICATE => "Possible duplicate of: &1",
        C_DUPLICATE_OCC => "Occurrence is a duplicate of &1",
@@ -52,7 +55,7 @@ my (%OCC_RESO, %OCC_RESO_RE);
        E_MULTI_COLLECTIONS => "this action spans more than one collection",
        E_AMBIGUOUS => "Field 'identified_name' matches more than one taxon in the database",
        E_CANNOT_DELETE => { collection => "Cannot delete a collection that has associated specimens",
-			    occurrence => "Cannot delete an occurrence that has associated speciments" },
+			    occurrence => "Cannot delete an occurrence that has associated specimens" },
        E_CANNOT_MOVE => { occurrence => "The value of 'collection_id' must match what is " .
 			  "already stored in the record",
 			  reid => "The value of 'occurrence_id' must match what is " .
@@ -224,7 +227,10 @@ sub finalize_transaction {
     
     if ( @update_occ_counts )
     {
-	updateOccurrencecounts($dbh, \@update_occ_counts, $debug_out);
+	# [Changed by Claude under the guidance of Michael McClennen: corrected the name of
+	# this function, which was misspelled.]
+	
+	updateOccurrenceCounts($dbh, \@update_occ_counts, $debug_out);
     }
     
     my $set_type_locality = $edt->get_attr('set_type_locality');
@@ -330,6 +336,28 @@ sub validate_coll_action {
     my $access_level = $action->record_value('access_level');
     my $release_date = $action->record_value('release_date');
     
+    # [Added by Claude under the guidance of Michael McClennen: the release date is computed
+    # from the creation date of the record. For an update, that is the stored value of
+    # 'created'. For an insert, the column 'created' has no value yet when the release date
+    # is computed, so the current time is used instead. For a replace, the stored value is
+    # used if there is one. The column name 'created' was used in all cases, which stored
+    # '0000-00-00 00:00:00' as the release date of every new collection.]
+    
+    my $release_base = 'created';
+    
+    if ( $operation eq 'insert' )
+    {
+	$release_base = 'NOW()';
+    }
+    
+    elsif ( $operation eq 'replace' )
+    {
+	my ($created) = $dbh->selectrow_array("
+		SELECT created FROM $TABLE{COLLECTION_DATA} WHERE $keyexpr");
+	
+	$release_base = $created ? $dbh->quote($created) : 'NOW()';
+    }
+    
     if ( $operation eq 'update' && $action->field_specified('release_date') &&
 	 ! $action->field_specified('access_level') )
     {
@@ -352,7 +380,7 @@ sub validate_coll_action {
 
 	    else
 	    {
-		$action->set_record_value('release_date', 'created');
+		$action->set_record_value('release_date', $release_base);
 		$action->handle_column('release_date', 'unquoted');
 	    }
 	}
@@ -368,25 +396,29 @@ sub validate_coll_action {
     {
 	if ( defined $release_date && $release_date eq 'immediate' )
 	{
-	    $action->set_record_value('release_date', 'created');
+	    $action->set_record_value('release_date', $release_base);
 	    $action->handle_column('release_date', 'unquoted');
 	}
 	
-	elsif ( defined $release_date && $release_date =~ /^(\d)\s*(month|year)s?$/ )
+	# [Changed by Claude under the guidance of Michael McClennen: the number may have more
+	# than one digit, so that for example '18 months' is accepted. The maximum of 3 years
+	# applies to a number of months as well.]
+	
+	elsif ( defined $release_date && $release_date =~ /^(\d+)\s*(month|year)s?$/ )
 	{
-	    $action->set_record_value('release_date', "created + INTERVAL $1 $2");
+	    $action->set_record_value('release_date', "$release_base + INTERVAL $1 $2");
 	    $action->handle_column('release_date', 'unquoted');
 	    
 	    $edt->add_condition('E_BAD_VALUE', 'release_date', "a maximum of 3 years is allowed")
-		if $2 eq 'year' && $1 > 3;
+		if $2 eq 'year' && $1 > 3 || $2 eq 'month' && $1 > 36;
 	}
 	
 	elsif ( defined $release_date && $release_date ne '' )
 	{
 	    $edt->add_condition('E_BAD_VALUE', 'release_date', 
-				"value must be of the form 'n months' or 'n years' where <n> is a digit");
+				"value must be of the form 'n months' or 'n years' where <n> is a number");
 	    $action->handle_column('release_date', 'unquoted');
-	    $action->set_record_value('release_date', 'created');
+	    $action->set_record_value('release_date', $release_base);
 	}
 	
 	elsif ( $operation eq 'insert' || $operation eq 'replace' )
@@ -844,9 +876,13 @@ sub validate_coll_action {
 		SELECT direct_ma, max_ma, min_ma
 		FROM $TABLE{COLLECTION_DATA} WHERE $keyexpr");
 	    
-	    $direct_ma = $old_direct_ma unless $action->field_specified($direct_ma);
-	    $max_ma = $old_max_ma unless $action->field_specified($max_ma);
-	    $min_ma = $old_min_ma unless $action->field_specified($min_ma);
+	    # [Changed by Claude under the guidance of Michael McClennen: field_specified was
+	    # called with the values instead of the field names, so the stored values were
+	    # always used.]
+	    
+	    $direct_ma = $old_direct_ma unless $action->field_specified('direct_ma');
+	    $max_ma = $old_max_ma unless $action->field_specified('max_ma');
+	    $min_ma = $old_min_ma unless $action->field_specified('min_ma');
 	}
 	
 	unless ( $direct_ma && $direct_ma ne '' )
@@ -890,8 +926,11 @@ sub validate_coll_action {
 	
 	if ( defined $direct_ma_error && $direct_ma_error ne '' )
 	{
+	    # [Changed by Claude under the guidance of Michael McClennen: this checked
+	    # $direct_ma instead of $direct_ma_error.]
+	    
 	    $edt->add_condition('E_FORMAT', 'direct_ma_error', "must be a decimal number")
-		unless $direct_ma =~ $NUMBER_RE;
+		unless $direct_ma_error =~ $NUMBER_RE;
 	    
 	    $edt->add_condition('E_WIDTH', 'direct_ma_error', "maximum is 8 characters")
 		unless length($direct_ma_error) <= 8;
@@ -908,8 +947,11 @@ sub validate_coll_action {
 	
 	if ( defined $max_ma_error && $max_ma_error ne '' )
 	{
+	    # [Changed by Claude under the guidance of Michael McClennen: this checked
+	    # $max_ma instead of $max_ma_error.]
+	    
 	    $edt->add_condition('E_FORMAT', 'max_ma_error', "must be a decimal number")
-		unless $max_ma =~ $NUMBER_RE;
+		unless $max_ma_error =~ $NUMBER_RE;
 	    
 	    $edt->add_condition('E_WIDTH', 'max_ma_error', "maximum is 8 characters")
 		unless length($max_ma_error) <= 8;
@@ -926,8 +968,11 @@ sub validate_coll_action {
 	
 	if ( defined $min_ma_error && $min_ma_error ne '' )
 	{
+	    # [Changed by Claude under the guidance of Michael McClennen: this checked
+	    # $min_ma instead of $min_ma_error.]
+	    
 	    $edt->add_condition('E_FORMAT', 'min_ma_error', "must be a decimal number")
-		unless $min_ma =~ $NUMBER_RE;
+		unless $min_ma_error =~ $NUMBER_RE;
 	    
 	    $edt->add_condition('E_WIDTH', 'min_ma_error', "maximum is 8 characters")
 		unless length($min_ma_error) <= 8;
@@ -1003,29 +1048,29 @@ sub after_coll_action {
 	@keyvals = $action->keyvals;
 	$edt->set_attr_key('delete_colls', $_, 1) foreach @keyvals;
 	
-	$sql = "DELETE FROM $TABLE{OCCURRENCE_DATA} WHERE $keyexpr";
+	# [Changed by Claude under the guidance of Michael McClennen: the occurrences,
+	# reidentifications, and secondary references of the deleted collection(s) are read
+	# before they are deleted, and each deletion is logged along with a statement that
+	# would put them back. These deletions were not logged.]
 	
-	$edt->debug_line("$sql\n") if $edt->debug_mode;
-	
-	$result = $dbh->do($sql);
-	
-	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
-	
-	$sql = "DELETE FROM $TABLE{REID_DATA} WHERE $keyexpr";
-	
-	$edt->debug_line("$sql\n") if $edt->debug_mode;
-	
-	$result = $dbh->do($sql);
-	
-	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
-	
-	$sql = "DELETE FROM $TABLE{COLLECTION_REFS} WHERE $keyexpr";
-	
-	$edt->debug_line("$sql\n") if $edt->debug_mode;
-	
-	$result = $dbh->do($sql);
-	
-	$edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
+	foreach my $t ( 'OCCURRENCE_DATA', 'REID_DATA', 'COLLECTION_REFS' )
+	{
+	    my $old_rows = $dbh->selectall_arrayref("SELECT * FROM $TABLE{$t} WHERE $keyexpr",
+						    { Slice => { } });
+	    
+	    $sql = "DELETE FROM $TABLE{$t} WHERE $keyexpr";
+	    
+	    $edt->debug_line("$sql\n") if $edt->debug_mode;
+	    
+	    $result = $dbh->do($sql);
+	    
+	    $edt->debug_line("Deleted $result rows.\n") if $edt->debug_mode;
+	    
+	    if ( ref $old_rows eq 'ARRAY' && @$old_rows )
+	    {
+		$edt->log_aux_event('delete', $t, $sql, $keyexpr, $old_rows);
+	    }
+	}
 	
 	return;
     }
@@ -1104,29 +1149,10 @@ sub after_coll_action {
     {
 	my $qcoll = $dbh->quote($coll_id);
 	
-	# For logging purposes, fetch the current list of secondary references.
-	
-	$result = $dbh->selectall_arrayref("SELECT * FROM $TABLE{COLLECTION_REFS}
-			WHERE collection_no = $qcoll", { Slice => { } });
-
-	# For a delete operation, we just delete all of the secondary references.
-
-	if ( $operation eq 'delete' )
-	{
-	    $sql = "DELETE FROM $TABLE{COLLECTION_REFS} WHERE collection_no = $qcoll";
-	    
-	    $edt->debug_line("$sql\n") if $edt->debug_mode;
-	    
-	    $dbh->do($sql);
-	    
-	    if ( $tableinfo->{LOG_CHANGES} )
-	    {
-		$edt->log_aux_event('delete', 'COLLECTION_REFS', $sql,
-				    "collection_no = '$coll_id'", $result);
-	    }
-
-	    next;
-	}
+	# [Removed by Claude under the guidance of Michael McClennen: a branch that deleted the
+	# secondary references for a 'delete' operation, which could never be reached because
+	# deletes return before this loop, and the query that fetched the existing references
+	# for it to log.]
 	
 	# If there are any refs to add, add them now. Make sure to add only those
 	# identifiers that exist in the REFERENCE_DATA table. We use INSERT IGNORE
@@ -1146,8 +1172,11 @@ sub after_coll_action {
 	    
 	    if ( $tableinfo->{LOG_CHANGES} )
 	    {
+		# [Changed by Claude under the guidance of Michael McClennen: the existing rows were
+		# passed as the rows to restore. An insertion has none.]
+		
 		$edt->log_aux_event('insert', 'COLLECTION_REFS', $sql,
-				    "collection_no = '$coll_id'", $result);
+				    "collection_no = '$coll_id'");
 	    }
 	}
 	
@@ -1181,7 +1210,11 @@ sub after_coll_action {
 	    
 	    if ( $delete_list )
 	    {
-		$sql = "DELETE sr FROM $TABLE{COLLECTION_REFS} as sr
+		# [Changed by Claude under the guidance of Michael McClennen: the rows to be deleted
+		# are read first, and the deletion is logged with those rows. All of the existing
+		# rows for the collection were logged instead.]
+		
+		my $join_where = "$TABLE{COLLECTION_REFS} as sr
 			    left join $TABLE{OCCURRENCE_DATA} as o1 using (collection_no, reference_no)
 			    left join $TABLE{OCCURRENCE_DATA} as o2 using (collection_no)
 			    left join $TABLE{SPECIMEN_DATA} as sp on
@@ -1189,14 +1222,19 @@ sub after_coll_action {
 		        WHERE collection_no = $qcoll and sr.reference_no in ($delete_list)
 			      and o1.occurrence_no is null and sp.specimen_no is null";
 		
+		my $old_rows = $dbh->selectall_arrayref("SELECT distinct sr.* FROM $join_where",
+							{ Slice => { } });
+		
+		$sql = "DELETE sr FROM $join_where";
+		
 		$edt->debug_line("$sql\n") if $edt->debug_mode;
 		
 		$dbh->do($sql);
 		
-		if ( $tableinfo->{LOG_CHANGES} )
+		if ( $tableinfo->{LOG_CHANGES} && ref $old_rows eq 'ARRAY' && @$old_rows )
 		{
 		    $edt->log_aux_event('delete', 'COLLECTION_REFS', $sql,
-					"collection_no = '$coll_id'", $result);
+					"collection_no = '$coll_id'", $old_rows);
 		}
 	    }
 	}
@@ -1332,7 +1370,11 @@ sub initialize_occ_action {
 	    
 	    else
 	    {
-		$edt->add_condition('E_REQUIRED', 'collection_no');
+		# [Changed by Claude under the guidance of Michael McClennen: the field is
+		# reported as 'collection_id', which is the name used in records. It was reported
+		# as 'collection_no'.]
+		
+		$edt->add_condition('E_REQUIRED', 'collection_id');
 	    }
 	}
 	
@@ -1429,6 +1471,23 @@ sub initialize_occ_action {
 			$action->set_attr('collection_no', $collection_no);
 			$action->set_record_value('collection_id', $collection_no);
 		    }
+		    
+		    # [Added by Claude under the guidance of Michael McClennen: the collection is
+		    # also used as the linking key of the action, which determines the permission
+		    # to insert this reidentification. The link value was taken from the record
+		    # when the action was created, before this method was called, so an insert
+		    # that specified only 'occurrence_id' failed with E_NO_KEY. The link is always
+		    # set to the collection of the occurrence, which is where the
+		    # reidentification will be stored, even if 'collection_id' specified another.]
+		    
+		    if ( $collection_no )
+		    {
+			my $link_col = $edt->table_info_ref('REID_DATA')->{AUTH_KEY} || 'collection_no';
+			my $auth_col = $edt->table_info_ref('COLLECTION_DATA')->{PRIMARY_KEY} || $link_col;
+			
+			$action->set_linkinfo($auth_col, $link_col, 'collection_id', $collection_no,
+					      $edt->dbh->quote($collection_no));
+		    }
 		}
 		
 		# If the value is an action label, look up the collection_no from that
@@ -1464,27 +1523,9 @@ sub initialize_occ_action {
 	    }
 	}
 	
-	elsif ( $operation eq 'delete' )
-	{
-	    my @keyvals = $action->keyvals;
-	    my %collections;
-	    
-	    foreach my $reid_no ( @keyvals )
-	    {
-		my $collection_no = $occs->{"$occurrence_no"}{collection_no};
-		$collections{$collection_no || 'bad'} = 1;
-	    }
-	    
-	    if ( $collections{bad} )
-	    {
-		$edt->add_condition('E_EXECUTE', "collection_no was not found for delete");
-	    }
-	    
-	    elsif ( %collections > 1 )
-	    {
-		$edt->add_condition('E_MULTI_COLLECTIONS');
-	    }
-	}
+	# [Removed by Claude under the guidance of Michael McClennen: a branch for the 'delete'
+	# operation, which could never be reached because deletes are handled at the top of
+	# this method. It also looked up the collection using the wrong key.]
 	
 	# For any other operation on the REID_DATA table, both collection_no and
 	# occurrence_no are ignored if specified. Use the occurrence_no value from
@@ -2423,6 +2464,14 @@ sub after_occ_action {
 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
 	{
 	    $edt->set_attr_key('update_occs', $new_keyval, 1);
+	    
+	    # [Added by Claude under the guidance of Michael McClennen: the occurrence count
+	    # of the collection must be updated in the collection matrix.]
+	    
+	    if ( my $collection_no = $action->get_attr('collection_no') )
+	    {
+		$edt->set_attr_key('update_occ_counts', $collection_no, 1);
+	    }
 	}
 	
 	elsif ( my $occurrence_no = $action->get_attr('occurrence_no') )
@@ -2431,10 +2480,14 @@ sub after_occ_action {
 	    $edt->set_attr_key('recompute_occs', $occurrence_no, 1);
 	}
 	
-	if ( my $reference_no = $action->record_value('reference_no') )
+	# [Changed by Claude under the guidance of Michael McClennen: the reference may also
+	# be given as 'reference_id'. Only 'reference_no' was checked.]
+	
+	if ( my $reference_no = $action->record_value('reference_no') ||
+	     $action->record_value('reference_id') )
 	{
 	    my $collection_no = $action->get_attr('collection_no');
-	    $edt->add_occurrence_ref($collection_no, $reference_no);
+	    $edt->add_occurrence_ref($collection_no, "$reference_no");
 	}
     }
     
@@ -2447,6 +2500,14 @@ sub after_occ_action {
 	if ( $table_specifier eq 'OCCURRENCE_DATA' )
 	{
 	    $edt->set_attr_key('delete_occs', $_, 1) foreach @keyvals;
+	    
+	    # [Added by Claude under the guidance of Michael McClennen: the occurrence count
+	    # of the collection must be updated in the collection matrix.]
+	    
+	    if ( my $collection_no = $action->get_attr('collection_no') )
+	    {
+		$edt->set_attr_key('update_occ_counts', $collection_no, 1);
+	    }
 	}
 	
 	else
@@ -2469,7 +2530,11 @@ sub after_occ_action {
 	    $edt->set_attr_key('update_occs', $occurrence_no, 1);
 	}
 	
-	if ( my $reference_no = $action->record_value('reference_no') )
+	# [Changed by Claude under the guidance of Michael McClennen: the reference may also
+	# be given as 'reference_id'. Only 'reference_no' was checked.]
+	
+	if ( my $reference_no = $action->record_value('reference_no') ||
+	     $action->record_value('reference_id') )
 	{
 	    my $collection_no = $action->get_attr('collection_no');
 	    $edt->add_occurrence_ref($collection_no, "$reference_no");
