@@ -243,6 +243,10 @@ use ResourceDefs;
     set_column_property('SPECIMEN_DATA', 'specimen_id', ALTERNATE_ONLY => 1);
     set_column_property('SPECIMEN_DATA', 'reference_no', REQUIRED => 1);
     set_column_property('SPECIMEN_DATA', 'reference_no', ALTERNATE_NAME => 'reference_id');
+    # [Added by Claude under the guidance of Michael McClennen: taxon_no accepts both
+    # 'txn' and 'var' identifiers, as it does for occurrences. Without this, it would get
+    # the type 'VAR' from PBDBFields.pm, which accepts only 'var'.]
+    set_column_property('SPECIMEN_DATA', 'taxon_no', EXTID_TYPE => 'TID');
     set_column_property('SPECIMEN_DATA', 'instcoll_no', IGNORE => 1);
     set_column_property('SPECIMEN_DATA', 'inst_code', IGNORE => 1);
     set_column_property('SPECIMEN_DATA', 'coll_code', IGNORE => 1);

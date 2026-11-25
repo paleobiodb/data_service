@@ -51,6 +51,12 @@ our %IDP = ( URN => '(?:(?:urn:lsid:)?paleobiodb.org:|pbdb:)',	# standard prefix
 	     ETG => 'etg',		# educational resource tags
 	     PRS => 'prs' );		# database members and guests
 
+# The types for which generate_identifier cannot generate an identifier: the two standard
+# prefixes, and each type with more than one prefix. [Changed by Claude under the guidance
+# of Michael McClennen: the types with more than one prefix are added below, from %IDP.]
+
+our %DO_NOT_GENERATE = ( URN => 1, UMS => 1 );
+
 our %IDRE;
 our %IDVALID;
 
@@ -84,6 +90,11 @@ my $key_expr = '';
 foreach my $key ( keys %IDP )
 {
     next if $key eq 'URN' || $key eq 'UMS';
+    
+    # [Added by Claude under the guidance of Michael McClennen: an identifier cannot be
+    # generated for a type with more than one prefix.]
+    
+    $DO_NOT_GENERATE{$key} = 1 if $IDP{$key} =~ /[|]/;
     
     if ( $key eq 'CLM' || $key eq 'UNT' )
     {
@@ -121,10 +132,20 @@ sub valid_identifier {
     # specified type, then return the integer identifier extracted from it.
     # The rest of the value can be safely ignored.
     
+    # [Changed by Claude under the guidance of Michael McClennen: an identifier with
+    # 'ERROR' in place of the number, which generate_identifier produces for a bad value,
+    # gets an error message. It was given the number -1, which PBDB::ExtIdent->new
+    # rejects, so this function threw an exception.]
+    
     if ( $value =~ $IDRE{$type} )
     {
 	my $idtype = $1 || $type;
-	my $idnum = ($2 eq 'ERROR') ? -1 : $2;
+	my $idnum = $2;
+	
+	if ( $idnum eq 'ERROR' )
+	{
+	    return { error => "Field {param}: the value {value} is not a valid identifier" };
+	}
 	
 	return { value => PBDB::ExtIdent->new($idtype, $idnum) };
     }
@@ -164,6 +185,15 @@ sub valid_identifier {
 	$msg = "Field {param}: must be a single value";
     }
     
+    # [Changed by Claude under the guidance of Michael McClennen: for the type 'ANY',
+    # which has no entry in %IDP, the message names the type that was given. It named
+    # none.]
+    
+    elsif ( $value =~ $IDRE{LOOSE} && $type eq 'ANY' )
+    {
+	$msg = "Field {param}: identifier type '$1' is not accepted$insert";
+    }
+    
     elsif ( $value =~ $IDRE{LOOSE} )
     {
 	$msg = "Field {param}: external identifier must have type $IDP{$type}$insert";
@@ -199,10 +229,15 @@ sub extract_identifier {
 
     my ($type, $value) = @_;
     
-    if ( $value =~ $IDRE{$type} )
+    # [Changed by Claude under the guidance of Michael McClennen: an identifier with
+    # 'ERROR' in place of the number is not an identifier of a record, so undefined is
+    # returned. It was given the number -1, which PBDB::ExtIdent->new rejects, so this
+    # function threw an exception.]
+    
+    if ( $value =~ $IDRE{$type} && $2 ne 'ERROR' )
     {
 	my $type = $1;
-	my $num = ($2 eq 'ERROR') ? -1 : $2;
+	my $num = $2;
 	
 	return PBDB::ExtIdent->new($type, $num);
     }
@@ -235,17 +270,31 @@ sub extract_num {
 # Generate a valid identifier of the specified type.  If the id is 0, then
 # return the empty string.  If it is a positive integer, return the proper
 # identifier string.  Otherwise, return an indication of a bad value.
+# [Added by Claude under the guidance of Michael McClennen: throw an exception if the type
+# is unknown or has more than one prefix, such as 'TID'.]
 
 sub generate_identifier {
     
     my ($type, $value) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the type must have a
+    # single prefix. An unknown type gave an identifier with an empty prefix, such as
+    # ':5', and a type with several prefixes gave one such as 'txn|var:5'. Neither could
+    # be read back.]
+    
+    croak "generate_identifier: bad identifier type '" . ($type // '') . "'"
+	unless defined $type && $IDP{$type} && ! $DO_NOT_GENERATE{$type};
     
     if ( ref $value eq 'ARRAY' )
     {
 	map { $_ = generate_identifier($type, $_) } @$value;
     }
 
-    elsif ( defined $value && $value > 0 )
+    # [Changed by Claude under the guidance of Michael McClennen: the value must be a
+    # whole number. A value such as '12abc' or 1.5 was taken as a number, and comparing a
+    # string as a number gave a warning.]
+    
+    elsif ( defined $value && $value =~ /^\d+$/ && $value > 0 )
     {
 	return "$IDP{$type}:$value";
     }
@@ -260,7 +309,10 @@ sub generate_identifier {
 	return "$IDP{$type}:$value";
     }
     
-    elsif ( $value =~ $IDRE{ANY} )
+    # [Changed by Claude under the guidance of Michael McClennen: an undefined value is
+    # not matched, which gave a warning.]
+    
+    elsif ( defined $value && $value =~ $IDRE{ANY} )
     {
 	return $value;
     }
@@ -286,7 +338,12 @@ sub new {
     
     my ($class, $type, $num) = @_;
     
-    croak "bad call to new: missing arguments\n" unless defined $num && $num >= 0;
+    # [Changed by Claude under the guidance of Michael McClennen: the number is checked
+    # with a pattern. An unknown taxon has a number such as 'NA12', and comparing it as a
+    # number gave a warning.]
+    
+    croak "bad call to new: missing arguments\n"
+	unless defined $num && $num =~ /^(?:\d+|[UN][A-Z]\d*)$/;
     
     $type = lc ($type // 'unk');
     

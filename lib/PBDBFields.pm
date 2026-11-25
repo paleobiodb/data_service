@@ -52,7 +52,7 @@ our %FOREIGN_KEY_COL = ( authorizer_no => 'person_no',
 			 enterer_no => 'person_no',
 			 modifier_no => 'person_no' );
 
-our %COMMON_FIELD_IDTYPE = ( taxon_no => 'TID',
+our %COMMON_FIELD_IDTYPE = ( taxon_no => 'VAR',   # Changed by Michael McClennen from 'TID'
 			     orig_no => 'TXN',
 			     reference_no => 'REF',
 			     collection_no => 'COL',

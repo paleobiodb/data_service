@@ -16,7 +16,8 @@ use PB2::IntervalData;
 # [Removed by Claude under the guidance of Michael McClennen: 'use PB2::TimescaleData'. That
 # module was deleted; no route used it, and the timescale routes use PB2::IntervalData.]
 use PB2::TaxonData;
-use PB2::PlaceData;
+# [Removed by Claude under the guidance of Michael McClennen: 'use PB2::PlaceData'. That
+# module was obsolete and has been deleted; no route used it.]
 use PB2::CollectionData;
 use PB2::OccurrenceData;
 use PB2::SpecimenData;
@@ -1095,31 +1096,9 @@ our ($DROP_TABLE);
 	"The operation B<C<taxa/refs>> returns information about the references from which",
 	"the selected taxonomic names were entered.");    
     
-    # Geographic places
-    
-    # $ds2->define_node({ path => 'places',
-    # 			title => 'Geographic places',
-    # 			place => 3,
-    # 			role => 'PB2::PlaceData' },
-    # 	"The collections and specimens in the database are associated with specific geographic locations,",
-    # 	"which can be queried separately from other operations.");
-    
-    # $ds2->define_node({ path => 'places/single',
-    # 			title => 'Single geographic place',
-    # 			place => 1,
-    # 			method => 'get_place',
-    # 			output => '1.2:places:basic' },
-    # 	"This operation returns information about a single geographic place, either",
-    # 	"a collection record, a locality record, or a geographic name record, specified",
-    # 	"by its unique identifier.");
-    
-    # $ds2->define_node({ path => 'places/list',
-    # 			title => 'List of geographic places',
-    # 			place => 2,
-    # 			method => 'list_places',
-    # 			output => '1.2:places:basic' },
-    # 	"This operation returns a list of geographic place records matching the",
-    # 	"parameters you specify.");
+    # [Removed by Claude under the guidance of Michael McClennen: the commented-out nodes
+    # 'places', 'places/single', and 'places/list', whose module PB2::PlaceData was
+    # obsolete and has been deleted.]
     
     # Educational resources
     
