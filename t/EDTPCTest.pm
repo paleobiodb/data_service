@@ -55,10 +55,11 @@ our (%MODULE_TABLES) = (
 		       'AUTHORITY_DATA', 'OPINION_DATA', 'INTERVAL_DATA', 'SCALE_DATA' ],
     # [Changed by Claude under the guidance of Michael McClennen: CollectionEdit also reads
     # SPECIMEN_DATA before deleting collections and occurrences, and the collection matrix
-    # is computed in part from COLLECTION_LOC.]
+    # is computed in part from COLLECTION_LOC. It also writes SPECIMEN_MATRIX, through
+    # MatrixBase, when the identifications of an occurrence change.]
     CollectionEdit => [ 'COLLECTION_DATA', 'COLLECTION_MATRIX', 'COLLECTION_REFS',
 			'OCCURRENCE_DATA', 'OCCURRENCE_MATRIX', 'REID_DATA',
-			'AUTHORITY_DATA', 'SPECIMEN_DATA', 'COLLECTION_LOC' ],
+			'AUTHORITY_DATA', 'SPECIMEN_DATA', 'COLLECTION_LOC', 'SPECIMEN_MATRIX' ],
     );
 
 

@@ -7,9 +7,9 @@
 #
 # edtpc-06-collections.t : Test CollectionEdit, which handles collections, occurrences, and
 #                          reidentifications: coordinates and intervals, validation,
-#                          secondary references, taxonomic names, the collection and
-#                          occurrence matrices, type localities, deletion, permissions, and
-#                          logging.
+#                          secondary references, taxonomic names, the collection,
+#                          occurrence, and specimen matrices, type localities, deletion,
+#                          permissions, and logging.
 #
 # Added by Claude under the guidance of Michael McClennen.
 #
@@ -17,7 +17,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 12;
+use Test::More tests => 14;
 
 use File::Temp qw(tempdir);
 
@@ -30,6 +30,7 @@ use EditTester qw(ok_new_edt ok_commit ok_failed_commit ok_has_one_condition ok_
 
 use OccurrenceBase;
 use IntervalBase;
+use MatrixBase qw(updateSpecimenMatrix deleteFromSpecimenMatrix);
 
 
 # Establish the tester and select the test tables.
@@ -609,6 +610,148 @@ subtest 'reidentifications' => sub {
     ok_failed_commit("a guest cannot insert a reidentification");
     
     ok_has_condition('E_PERMISSION', "the refusal was reported");
+};
+
+
+# The specimen matrix has a row for each identification of the occurrence of each
+# specimen. When a reidentification is inserted, updated, or deleted, the rows of the
+# specimens of its occurrence follow. The specimen is written directly to the test tables,
+# as SpecimenEdit would write it. [Added by Claude under the guidance of Michael
+# McClennen.]
+
+subtest 'specimens of reidentified occurrences' => sub {
+    
+    my $coll = new_collection();
+    
+    ok( $coll, "a collection was inserted" ) || return;
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus sp.' });
+    
+    ok_commit("an occurrence was inserted") || return;
+    
+    my ($occ) = $edt->inserted_keys;
+    
+    # A specimen of the occurrence, which does not give its own taxon.
+    
+    sql_command("INSERT INTO <<SPECIMEN_DATA>> (occurrence_no, taxon_no, reference_no,
+		authorizer_no, enterer_no, specimen_id) VALUES ($occ, NULL, 5, 39998, 39997, 'edtpc06-reid')");
+    
+    my ($spec) = sql_fetchrow("SELECT specimen_no FROM <<SPECIMEN_DATA>> WHERE specimen_id = 'edtpc06-reid'");
+    
+    updateSpecimenMatrix($T->dbh, $spec);
+    
+    is( rows('SPECIMEN_MATRIX', 'reid_no, latest_ident, taxon_no', "specimen_no = $spec"), "0,1,$GENUS_NO",
+	"the specimen has one row, for the identification of its occurrence" );
+    
+    # Reidentify the occurrence.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'REID_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->insert_record('REID_DATA', { occurrence_id => $occ, collection_id => $coll,
+				       reference_id => 6, identified_name => 'Tyrannosaurus rex' });
+    
+    ok_commit("a reidentification was inserted") || return;
+    
+    my ($reid) = $edt->inserted_keys;
+    
+    is( rows('SPECIMEN_MATRIX', 'reid_no, latest_ident, taxon_no', "specimen_no = $spec"),
+	"0,0,$GENUS_NO; $reid,1,$SPECIES_NO",
+	"the specimen has a row for the reidentification, which is the latest" );
+    
+    # Change the name of the reidentification.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'REID_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { $reid => 1 });
+    
+    $edt->update_record('REID_DATA', { reid_id => $reid, identified_name => 'Tyrannosaurus indet.' });
+    
+    ok_commit("the reidentification was updated");
+    
+    is( rows('SPECIMEN_MATRIX', 'reid_no, latest_ident, taxon_no', "specimen_no = $spec"),
+	"0,0,$GENUS_NO; $reid,1,$GENUS_NO",
+	"the row for the reidentification has its new taxon" );
+    
+    # Delete the reidentification.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'REID_DATA'));
+    
+    $edt->initialize_occs({ }, { $reid => 1 });
+    
+    $edt->delete_record('REID_DATA', { reid_id => $reid });
+    
+    ok_commit("the reidentification was deleted");
+    
+    is( rows('SPECIMEN_MATRIX', 'reid_no, latest_ident, taxon_no', "specimen_no = $spec"), "0,1,$GENUS_NO",
+	"the row for the reidentification is gone, and the original identification is the latest again" );
+    
+    # Remove the specimen, so that it does not prevent the deletion of the occurrence
+    # later.
+    
+    deleteFromSpecimenMatrix($T->dbh, $spec);
+    
+    sql_command("DELETE FROM <<SPECIMEN_DATA>> WHERE specimen_no = $spec");
+};
+
+
+# An occurrence or reidentification identified only to the genus has the species name
+# 'sp.', and is a duplicate of another occurrence with the same name and 'sp.'. [Added by
+# Claude under the guidance of Michael McClennen.]
+
+subtest 'names without a species' => sub {
+    
+    my $coll = new_collection();
+    
+    ok( $coll, "a collection was inserted" ) || return;
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'cf. Tyrannosaurus' });
+    
+    ok_commit("an occurrence without a species was inserted") || return;
+    
+    my ($occ) = $edt->inserted_keys;
+    
+    is( rows('OCCURRENCE_DATA', 'genus_reso, genus_name, species_name, taxon_no', "occurrence_no = $occ"),
+	"cf.,Tyrannosaurus,sp.,$GENUS_NO", "its species name is 'sp.'" );
+    
+    is( rows('OCCURRENCE_MATRIX', 'species_name', "occurrence_no = $occ"), "sp.",
+	"and so it is in the occurrence matrix" );
+    
+    # The same name with 'sp.' duplicates it.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'cf. Tyrannosaurus sp.' });
+    
+    ok_failed_commit("the same name with 'sp.' was rejected");
+    
+    ok_has_one_condition(qr/E_BAD_VALUE.*duplicates another occurrence/, "as a duplicate");
+    
+    # A reidentification without a species.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'REID_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->insert_record('REID_DATA', { occurrence_id => $occ, reference_id => 6,
+				       identified_name => 'aff. Tyrannosaurus' });
+    
+    ok_commit("a reidentification without a species was inserted") || return;
+    
+    my ($reid) = $edt->inserted_keys;
+    
+    is( rows('REID_DATA', 'genus_reso, species_name, taxon_no', "reid_no = $reid"), "aff.,sp.,$GENUS_NO",
+	"its species name is 'sp.'" );
 };
 
 
