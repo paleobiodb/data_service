@@ -46,12 +46,8 @@ sub new {
     
     my $dbh = $instance->dbh;
     
-    eval {
-	($id_bound) = $dbh->selectrow_array("
-		SELECT min(enterer_no) FROM $TABLE{SESSION_DATA} WHERE enterer_no > 0");
-    };
-    
-    my $id_bound;
+    # [Removed by Claude under the guidance of Michael McClennen: a second copy of this
+    # lookup.]
     
     eval {
 	($id_bound) = $dbh->selectrow_array("
