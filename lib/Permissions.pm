@@ -22,7 +22,11 @@ use Carp qw(carp croak);
 use Scalar::Util qw(weaken blessed);
 
 
-our (%PERMISSION_NAME) = ( view => 1, post => 1, edit => 1, delete => 1, insert_key => 1, admin => 1 );
+# [Changed by Claude under the guidance of Michael McClennen: 'modify' replaces 'edit', so
+# that the permission asked for has the same name as the table permission that grants it.]
+
+our (%PERMISSION_NAME) = ( view => 1, post => 1, modify => 1, delete => 1, insert_key => 1,
+			   admin => 1 );
 
 
 # new ( dbh, session_id, table_name, options )
@@ -101,15 +105,7 @@ sub new {
 	    $perms = $dbh->selectrow_hashref($sql);
 	}
 
-	# Update the record_date field in the session record to reflect the time
-	# of the current interaction.
 	
-	my $sql = "UPDATE $TABLE{SESSION_DATA} SET record_date = now()
-		WHERE session_id = $quoted_id";
-	
-	print STDERR "$sql\n\n" if $options->{debug};
-	
-	$dbh->do($sql);
 	
 	# If we retrieved a record that includes a value for
 	# 'user_id', then we have the basis for a valid Permissions object.
@@ -136,6 +132,18 @@ sub new {
 	    $perms->{expired} = 1;
 	    return $perms;
 	}
+	
+	# Update the record_date field in the session record to reflect the time of the
+	# current interaction. [Changed by Claude under the guidance of Michael McClennen:
+	# this is done only for a valid session, after the expiration check above. It was
+	# done first, so that an expired session became valid again on the next request.]
+	
+	my $sql = "UPDATE $TABLE{SESSION_DATA} SET record_date = now()
+		WHERE session_id = $quoted_id";
+	
+	print STDERR "$sql\n\n" if $options->{debug};
+	
+	$dbh->do($sql);
 	
 	# If a table name was specified and we retrieved a specific table permission, add it into
 	# the new object. Otherwise, add the default permission for the specified table.
@@ -252,6 +260,16 @@ sub is_superuser {
 }
 
 
+# table_permission ( table_specifier, permission )
+# table_permissions ( table_specifier )
+# 
+# Return true if the user has the specified permission on the specified table, or return a
+# list of the user's permissions on it. [Changed by Claude under the guidance of Michael
+# McClennen: the permissions are looked up with get_table_permissions. They were looked
+# for under $perms->{$table_specifier} instead of
+# $perms->{table_permission}{$table_specifier}, so that only a superuser was ever found to
+# have a permission.]
+
 sub table_permission {
 
     my ($perms, $table_specifier, $permission) = @_;
@@ -261,8 +279,8 @@ sub table_permission {
 	return 1;
     }
     
-    elsif ( $perms->{$table_specifier} && $permission ) {
-	return $perms->{$table_specifier}{$permission} || '';
+    elsif ( $table_specifier && $permission ) {
+	return $perms->get_table_permissions($table_specifier)->{$permission} || '';
     }
     
     else {
@@ -275,8 +293,9 @@ sub table_permissions {
 
     my ($perms, $table_specifier) = @_;
 
-    if ( $perms->{$table_specifier} ) {
-	return keys $perms->{$table_specifier}->%*;
+    if ( $table_specifier ) {
+	my $tp = $perms->get_table_permissions($table_specifier);
+	return grep { $tp->{$_} } keys $tp->%*;
     }
 
     else {
@@ -387,6 +406,9 @@ sub adjust_table_permissions {
     # # If the user has either 'post' or 'modify', then add 'delete'
     # # and/or 'insert_key' if the table properties allow that.
     
+    # [Note by Claude under the guidance of Michael McClennen: check_record_permission no
+    # longer checks 'no_delete', so the first line below would have no effect.]
+    
     # if ( $this_table->{post} || $this_table->{modify} )
     # {
     # 	$this_table->{no_delete} = 1 if get_table_property($table_specifier,
@@ -468,7 +490,10 @@ sub default_table_permissions {
 	    $tp->{post} = 1;
 	}
 	
-	elsif ( $allow_post eq 'AUTHORIZED' && $perms->{authorizer_no} )
+	# [Changed by Claude under the guidance of Michael McClennen: an enterer_no is
+	# required too, as for CAN_VIEW and CAN_MODIFY below.]
+	
+	elsif ( $allow_post eq 'AUTHORIZED' && $perms->{enterer_no} && $perms->{authorizer_no} )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
 	    $tp->{post} = 1;
@@ -742,7 +767,16 @@ sub check_record_permission {
     {
 	$record = $perms->get_record_authinfo($table_specifier, $key_expr);
 	
-	unless ( ref $record eq 'HASH' && %$record )
+	# [Changed by Claude under the guidance of Michael McClennen: if the table has
+	# neither AUTH_FIELDS nor a primary key, get_record_authinfo cannot look the
+	# record up and returns an empty hash. The check goes on with that, and the
+	# decision comes from the table permissions. Every record in such a table was
+	# reported as not found.]
+	
+	my $can_look_up = get_table_property($table_specifier, 'AUTH_FIELDS') ||
+	    get_table_property($table_specifier, 'PRIMARY_KEY');
+	
+	unless ( ref $record eq 'HASH' && ( %$record || ! $can_look_up ) )
 	{
 	    $perms->debug_line( "$dprefix NOT FOUND\n" ) if $perms->{debug};
 	    return 'notfound';
@@ -780,21 +814,21 @@ sub check_record_permission {
 	return $p;
     }
     
-    # If delete operations are not allowed on this table, reject a 'delete' request by a
-    # non-administrator.
-
-    if ( $requested eq 'delete' && $tp->{no_delete} )
-    {
-	$perms->debug_line( "$dprefix 'delete' DENIED for $dauth\n" );
-	return 'none';
-    }
+    # [Removed by Claude under the guidance of Michael McClennen: a check that rejected a
+    # 'delete' request by a non-administrator if the table permissions included
+    # 'no_delete'. Nothing sets 'no_delete': the code that set it from the DISABLE_DELETE
+    # table property is commented out in adjust_table_permissions, and table_perms cannot
+    # hold it. Deletion is controlled by the table property CAN_DELETE.]
 
     # If insert_key operations are not allowed on this table, reject an 'insert_key' request by a
     # non-administrator.
 
     if ( $requested eq 'insert_key' && ! $tp->{insert_key} )
     {
-	$perms->debug_line( "$dprefix 'insert_key' DENIED for $dauth\n" );
+	# [Changed by Claude under the guidance of Michael McClennen: this and the other
+	# debugging lines below are printed only when debugging, as elsewhere.]
+	
+	$perms->debug_line( "$dprefix 'insert_key' DENIED for $dauth\n" ) if $perms->{debug};
 	return 'none';
     }	
     
@@ -805,20 +839,20 @@ sub check_record_permission {
     
     if ( $record->{admin_lock} )
     {
-	$perms->debug_line( "$dprefix '$requested' DENIED by 'admin_lock'\n" );
+	$perms->debug_line( "$dprefix '$requested' DENIED by 'admin_lock'\n" ) if $perms->{debug};
 	return 'locked';
     }
     
-    # If the requested permission is 'view', 'edit' or 'delete' and the user has 'modify'
-    # permission on the table as a whole, then they can edit or delete this particular record
-    # regardless of who owns it. Without 'modify', they only have permission to edit or delete
-    # records that they entered or authorized. But a locked record can only be unlocked by the
-    # owner or by an administrator.
+    # If the requested permission is 'view', 'modify' or 'delete' and the user has
+    # 'modify' permission on the table as a whole, then they can edit or delete this
+    # particular record regardless of who owns it. Without 'modify', they only have
+    # permission to edit or delete records that they entered or authorized. But a locked
+    # record can only be unlocked by the owner or by an administrator.
     
-    if ( $tp->{modify} && $requested =~ /^edit|^delete|^view/ &&
+    if ( $tp->{modify} && $requested =~ /^modify|^delete|^view/ &&
 	 ( $requested eq 'view' || ! $record->{owner_lock} ) )
     {
-	$perms->debug_line( "$dprefix '$requested' from $dauth\n" );
+	$perms->debug_line( "$dprefix '$requested' from $dauth\n" ) if $perms->{debug};
 	return $requested;
     }
     
@@ -831,7 +865,7 @@ sub check_record_permission {
 	$requested;
     
     # If the user is the person who originally created or authorized the record, then they have
-    # 'view', 'edit', and 'delete' permissions (the latter if allowed for this table).
+    # 'view', 'modify', and 'delete' permissions (the latter if allowed for this table).
     
     if ( $record->{enterer_no} && $perms->{enterer_no} &&
 	 $record->{enterer_no} eq $perms->{enterer_no} )
@@ -869,9 +903,9 @@ sub check_record_permission {
 	return $p;
     }
     
-    # If the user has the same authorizer as the person who originally created the record, then
-    # they have 'view', 'edit' and 'delete' permissions if the table has the 'BY_AUTHORIZER'
-    # property.
+    # If the user has the same authorizer as the person who originally created the record,
+    # then they have 'view', 'modify' and 'delete' permissions if the table has the
+    # 'BY_AUTHORIZER' property.
     
     if ( $record->{authorizer_no} && $perms->{authorizer_no} &&
 	 $record->{authorizer_no} eq $perms->{authorizer_no} &&
@@ -889,7 +923,7 @@ sub check_record_permission {
     # If the user would have been able to modify this record except that it was
     # locked by somebody else, return 'locked'.
     
-    if ( $tp->{modify} && ( $requested eq 'edit' || $requested eq 'delete' ) )
+    if ( $tp->{modify} && ( $requested eq 'modify' || $requested eq 'delete' ) )
     {
 	$perms->debug_line( "$dprefix '$requested' DENIED from owner lock" ) if $perms->{debug};
 	return 'locked';

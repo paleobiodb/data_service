@@ -326,7 +326,11 @@ sub list_resources {
     # records entered by the user.
     
     my $enterer = $request->clean_param('enterer');
-    $enterer = 'me' if $perms && $perms->check_table_permission($TABLE{RESOURCE_QUEUE}, 'view') eq 'own';
+    # [Changed by Claude under the guidance of Michael McClennen: the table is given by
+    # its specifier. Its name was given, so the permission was always 'none' and this
+    # never applied.]
+    
+    $enterer = 'me' if $perms && $perms->check_table_permission('RESOURCE_QUEUE', 'view') eq 'own';
     
     if ( $enterer )
     {

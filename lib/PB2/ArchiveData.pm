@@ -473,10 +473,16 @@ sub process_record {
     
     if ( $request->{my_perms} && $request->{my_perms}{enterer_no} )
     {
+	# [Changed by Claude under the guidance of Michael McClennen: the permission asked
+	# for is 'modify', which replaces 'edit'. The result is reported as 'edit' as
+	# before, so that the output does not change.]
+	
 	$record->{permissions} =
-	    $request->{my_perms}->check_record_permission('ARCHIVES', 'edit',
+	    $request->{my_perms}->check_record_permission('ARCHIVES', 'modify',
 							  "archive_no=$record->{archive_no}",
 							  $record);
+	
+	$record->{permissions} =~ s/^modify/edit/ if defined $record->{permissions};
     }
     
     # If we have a record label hash, fill in those values.
