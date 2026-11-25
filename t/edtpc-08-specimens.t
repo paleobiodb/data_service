@@ -129,6 +129,28 @@ subtest 'specimen without a collection' => sub {
     is( rows('SPECIMEN_MATRIX', 'occurrence_no, reid_no, taxon_no, orig_no', "specimen_no = $key"),
 	"0,0,$SPECIES_NO,$SPECIES_NO", "the specimen matrix has a row for it" );
     
+    # The taxon_id may be a 'txn' or 'var' identifier, but not one of another type.
+    # [Added by Claude under the guidance of Michael McClennen.]
+    
+    foreach my $type ( 'txn', 'var' )
+    {
+	$edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('ENTERER'));
+	
+	$edt->insert_record('SPECIMEN_DATA', { specimen_code => "S-1$type", reference_id => $REF,
+					       taxon_id => PBDB::ExtIdent->new($type, $SPECIES_NO) });
+	
+	ok_commit("a specimen with the taxon_id '$type:$SPECIES_NO' was inserted");
+    }
+    
+    $edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('SPECIMEN_DATA', { specimen_code => "S-1occ", reference_id => $REF,
+					   taxon_id => PBDB::ExtIdent->new('occ', $SPECIES_NO) });
+    
+    ok_failed_commit("a specimen with an occurrence identifier as taxon_id was rejected");
+    
+    ok_has_one_condition(qr/^E_EXTID .*taxon_id/, "the wrong identifier type was reported");
+    
     $edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('ENTERER'));
     
     $edt->insert_record('SPECIMEN_DATA', { specimen_code => 'S-2', taxon_name => 'Tyrannosaurus rex',
