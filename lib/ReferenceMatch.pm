@@ -319,7 +319,10 @@ sub ref_similarity {
 	    
 	    else
 	    {
-		$DEBUG{a1mms} = 1;
+	    # [Changed by Claude under the guidance of Michael McClennen: the flag for a
+	    # failed match is 'a1mmf'.]
+	    
+	    $DEBUG{a1mmf} = 1;
 	    }
 	}
 	
@@ -337,10 +340,10 @@ sub ref_similarity {
 	    # are dissimilar.
 	    
 	    my ($alt_similar_a, $alt_conflict_a) =
-		match_names($auth2last_a, $auth2first_a, @authors_b[0], @authors_b[2..$#authors_b]);
+		match_names($auth2last_a, $auth2first_a, $authors_b[0], @authors_b[2..$#authors_b]);
 	    
 	    my ($alt_similar_b, $alt_conflict_b) =
-		match_names($auth2last_b, $auth2first_b, @authors_a[0], @authors_a[2..$#authors_a]);
+		match_names($auth2last_b, $auth2first_b, $authors_a[0], @authors_a[2..$#authors_a]);
 	    
 	    my $avg_sim = int(($alt_similar_a + $alt_similar_b) / 2);
 	    my $avg_con = int(($alt_conflict_a + $alt_conflict_b) / 2);
@@ -348,7 +351,12 @@ sub ref_similarity {
 	    if ( $avg_sim > $auth2_similar )
 	    {
 		$auth2_similar = min_score(80, $avg_sim);
-		$auth2_conflict = min_score(100 - $auth1_similar, $avg_con);
+		
+		# [Changed by Claude under the guidance of Michael McClennen: the conflict
+		# is limited by the second author's similarity. It was limited by the
+		# first author's.]
+		
+		$auth2_conflict = min_score(100 - $auth2_similar, $avg_con);
 		$DEBUG{a2mms} = 1;
 	    }
 	    
@@ -889,7 +897,11 @@ sub split_title {
     # that $1 is always the first of the two titles no matter which branch of the pattern
     # matches. The terminating right bracket is occasionally missing for unknown reasons.
     
-    if ( $title =~ qr{ ^ \s* (?| \[ (.*) \] | (.*) ) \s* \[ (.*) \]? $ }xs )
+    # [Changed by Claude under the guidance of Michael McClennen: the second title does
+    # not include the closing bracket, and the first does not include the space before the
+    # opening one.]
+    
+    if ( $title =~ qr{ ^ \s* (?| \[ (.*?) \] | (.*\S) ) \s* \[ (.*?) \]? \s* $ }xs )
     {
 	my $first = $1;
 	my $second = $2;
@@ -932,12 +944,11 @@ sub get_authorname {
     
     my $selected;
     
-    # If we have a field 'authors', alias it to 'author'.
+    # If we have a field 'authors', use it as 'author'. [Changed by Claude under the
+    # guidance of Michael McClennen: the record is not changed. The value of 'authors' was
+    # stored under 'author'.]
     
-    if ( $r->{authors} )
-    {
-	$r->{author} = $r->{authors};
-    }
+    my $author_list = $r->{authors} || $r->{author};
     
     # If this is a paleobiodb record, return the first or second author name or else look through
     # otherauthors.
@@ -967,7 +978,7 @@ sub get_authorname {
 		
 		if ( $selected =~ qr{/} )
 		{
-		    $selected =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{\1.}gx;
+		    $selected =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{$1.}gx;
 		}
 	    }
 	}
@@ -976,7 +987,7 @@ sub get_authorname {
     # Otherwise, the authors will be listed under 'author'. Both BibJSON and Crossref use this
     # fieldname. If it is an array, select the specified element.
     
-    elsif ( $r->{author} && ref $r->{author} eq 'ARRAY' )
+    elsif ( $author_list && ref $author_list eq 'ARRAY' )
     {
 	# Some Crossref entries list author affiliations incorrectly by interleaving them with the
 	# author entries. In order to check for this, if the entries are hashrefs we look for a
@@ -984,11 +995,11 @@ sub get_authorname {
 	
 	my $family_field;
 	
-	if ( ref $r->{author}[0] eq 'HASH' )
+	if ( ref $author_list->[0] eq 'HASH' )
 	{
-	    $family_field = $r->{author}[0]{family} ? 'family' :
-		$r->{author}[0]{last} ? 'last' :
-		$r->{author}[0]{lastname} ? 'lastname' : '';
+	    $family_field = $author_list->[0]{family} ? 'family' :
+		$author_list->[0]{last} ? 'last' :
+		$author_list->[0]{lastname} ? 'lastname' : '';
 	}
 	
 	# If we have a family/last name field, we can compensate for the interleaving problem by
@@ -997,7 +1008,7 @@ sub get_authorname {
 	
 	my $count = 0;
 	
-	foreach my $entry ( $r->{author}->@* )
+	foreach my $entry ( $author_list->@* )
 	{
 	    next if $family_field && ! $entry->{$family_field};
 	    next if ++$count < $index;
@@ -1019,9 +1030,9 @@ sub get_authorname {
     # If the author list is a string, we split it into individual names and then select the
     # specified one.
     
-    elsif ( $r->{author} && ! ref $r->{author} )
+    elsif ( $author_list && ! ref $author_list )
     {
-	my @names = split_authorlist(clean_string($r->{author}));
+	my @names = split_authorlist(clean_string($author_list));
 	
 	$selected = $names[$index-1];
     }
@@ -1072,6 +1083,13 @@ sub get_authorlist {
     
     my @result;
     
+    # [Added by Claude under the guidance of Michael McClennen: a field 'authors' is used
+    # as 'author', as in get_authorname. Records with only 'authors' used to depend on
+    # get_authorname having been called first, because it stored the value under
+    # 'author'.]
+    
+    my $author_list = $r->{authors} || $r->{author};
+    
     # If there is an 'author1last' field, this must be a record from the paleobiodb.
     
     if ( $r->{author1last} )
@@ -1111,7 +1129,7 @@ sub get_authorlist {
 	    
 	    if ( $otherlist =~ qr{/} )
 	    {
-		$otherlist =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{\1.}gx;
+		$otherlist =~ s{ ( ^ \pL\pM* | \s \pL\pM* ) [/] }{$1.}gx;
 	    }
 	    
 	    my @othernames = split_authorlist($otherlist);
@@ -1138,14 +1156,29 @@ sub get_authorlist {
     # Otherwise, the authors if any must be listed under 'author' since both Crossref and
     # BibJSON use that field name.
     
-    elsif ( $r->{author} && ref $r->{author} eq 'ARRAY' )
+    elsif ( $author_list && ref $author_list eq 'ARRAY' )
     {
 	# Go through the entries, skipping until we reach $index.
 	
+	# [Added by Claude under the guidance of Michael McClennen: as in get_authorname,
+	# entries without the family/last name field of the first entry are skipped,
+	# because some Crossref records interleave the authors' affiliations with them.]
+	
+	my $family_field = '';
+	
+	if ( ref $author_list->[0] eq 'HASH' )
+	{
+	    $family_field = $author_list->[0]{family} ? 'family' :
+		$author_list->[0]{last} ? 'last' :
+		$author_list->[0]{lastname} ? 'lastname' : '';
+	}
+	
 	my $count = 0;
 	
-	foreach my $entry ( $r->{author}->@* )
+	foreach my $entry ( $author_list->@* )
 	{
+	    next if $family_field && ref $entry eq 'HASH' && ! $entry->{$family_field};
+	    
 	    # Skip name entries up to the position indicated by $index, then parse each subsequent
 	    # name and add a listref of the name components to the result list.
 	    
@@ -1174,17 +1207,17 @@ sub get_authorlist {
     
     # If the 'author' field is a hashref, assume it represents a single name and parse it.
 
-    elsif ( ref $r->{author} eq 'HASH' )
+    elsif ( ref $author_list eq 'HASH' )
     {
-	my @components = clean_string(parse_authorname($r->{author}));
+	my @components = clean_string(parse_authorname($author_list));
 	push @result, \@components if $components[0];
     }
     
     # If the 'author' field is a simple string, we must split it into individual names.
     
-    elsif ( $r->{author} && ! ref $r->{author} )
+    elsif ( $author_list && ! ref $author_list )
     {
-	my @names = split_authorlist(clean_string($r->{author}));
+	my @names = split_authorlist(clean_string($author_list));
 	
 	if ( $index > 1 )
 	{
@@ -1206,9 +1239,10 @@ sub get_authorlist {
 
 # split_authorlist ( authorlist )
 #
-# Given a string composed of one or more author names, split it up into individual names as
-# correctly as we can manage. The argument string must be normalized to Unicode NFD before it is
-# passed in, which can be carried out by passing it through clean_string() first.
+# Given a string composed of one or more author names, split it up into individual names
+# as correctly as we can manage. The argument string should be passed through
+# clean_string() first. [Changed by Claude under the guidance of Michael McClennen: it may
+# be in either NFC or NFD.]
 
 sub split_authorlist {
 
@@ -1309,10 +1343,11 @@ sub split_authorlist {
 
 # parse_authorname ( entry )
 #
-# Given a single entry representing an author name, extract first and last names from it. The
-# argument may either be a hashref, an arrayref, or a string. If it is a string, it should be
-# processed by &clean_string before being passed in. This will normalize it to Unicode
-# NFD. If it is a reference, the result should be processed by &clean_string.
+# Given a single entry representing an author name, extract first and last names from it.
+# The argument may either be a hashref, an arrayref, or a string. If it is a string, it
+# should be processed by &clean_string before being passed in. If it is a reference, the
+# result should be processed by &clean_string. [Changed by Claude under the guidance of
+# Michael McClennen: the name may be in either NFC or NFD.]
 
 sub parse_authorname {
 
@@ -1701,7 +1736,10 @@ sub clean_doi {
     
     # Otherwise, look for /10. or :10. and strip off everything previous.
     
-    elsif ( $doi =~ qr{ [/:] (10[.]*) }x )
+    # [Changed by Claude under the guidance of Michael McClennen: the pattern captures the
+    # whole DOI. It captured only '10.', so that all such DOIs were the same.]
+    
+    elsif ( $doi =~ qr{ [/:] (10[.].*) }x )
     {
 	return $1;
     }
@@ -1774,11 +1812,16 @@ sub extract_json_year {
 # clean_string ( string... )
 #
 # For each nonempty argument, replace any HTML character entity sequences with
-# the corresponding characters and then normalize to NFD. We choose the
-# decomposed normalization so that we can easily compare letters without regard
-# to accent marks. Also replace any HTML tags with spaces, then change any
-# sequence of spaces to a single space. This will properly take care of cases
-# where an HTML tag should have a space before or after but doesn't.
+# the corresponding characters and then normalize to NFC. Also replace any HTML
+# tags with spaces, then change any sequence of spaces to a single space. This
+# will properly take care of cases where an HTML tag should have a space before
+# or after but doesn't. An undefined argument becomes the empty string.
+#
+# [Changed by Claude under the guidance of Michael McClennen: the values are normalized to
+# NFC instead of NFD, because the get_* functions return them to callers that store or
+# display them. The similarity functions normalize their arguments to NFD themselves. Each
+# value is tested instead of $_, which was usually undefined, so that none of this was
+# done.]
 
 sub clean_string {
     
@@ -1786,10 +1829,12 @@ sub clean_string {
     
     foreach my $v ( @values )
     {
-	if ( defined $_ && $_ ne '' )
+	$v //= '';
+	
+	if ( $v ne '' )
 	{
 	    $v =~ s{ &\#(\d+); }{ chr($1) }xge;
-	    $v = NFD($v);
+	    $v = NFC($v);
 	    
 	    if ( $v =~ /<[a-zA-Z]+>/ )
 	    {
@@ -1801,8 +1846,6 @@ sub clean_string {
 	
 	$v =~ s/^\s+//;
 	$v =~ s/\s+$//;
-	
-	$v //= '';
     }
     
     return wantarray ? @values : $values[0];
@@ -1868,8 +1911,9 @@ sub get_publication_type {
 # work. The second is a conflict score from 0-100, representing roughly the percentage chance that
 # the two values represent different works.
 #
-# In order for any of the similarity functions to work correctly, the arguments must be normalized
-# to Unicode NFD before being passed in. The clean_string() function will accomplish this.
+# The similarity functions normalize their arguments to Unicode NFD, so that accent marks
+# can be ignored. [Changed by Claude under the guidance of Michael McClennen: the
+# arguments had to be normalized to NFD before being passed in.]
 
 
 # title_similarity ( title_a, title_b )
@@ -1885,6 +1929,12 @@ our $THREE_LETTERS = qr{ \pL\pM*\pL\pM*\pL }xs;
 sub title_similarity {
     
     my ($title_a, $title_b) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the titles are normalized
+    # to NFD, so that accent marks can be removed below.]
+    
+    $title_a = NFD($title_a) if defined $title_a;
+    $title_b = NFD($title_b) if defined $title_b;
     
     $COUNT{ti_}++;
     
@@ -2004,8 +2054,11 @@ sub title_similarity {
     
     elsif ( $initial_wca || $initial_wcb )
     {
+	# [Changed by Claude under the guidance of Michael McClennen: the second title is
+	# shortened by its own heading length. It was shortened by the first title's.]
+	
 	splice(@words_a, 0, $initial_wca);
-	splice(@words_b, 0, $initial_wca);
+	splice(@words_b, 0, $initial_wcb);
 	
 	if ( initial_words_match(\@words_a, \@words_b, 5, 2) )
 	{
@@ -2051,7 +2104,9 @@ sub title_similarity {
     
     my @diff = sdiff(\@words_a, \@words_b);
     
-    my (@extra_a, @extra_b, @suffix_a, @suffix_b, $misspell_count, $min_words);
+    my (@extra_a, @extra_b, @suffix_a, @suffix_b, $min_words);
+    
+    my $misspell_count = 0;
     
     my $sim = 100;
     my $con = 0;
@@ -2139,7 +2194,11 @@ sub title_similarity {
 		# segment. The subroutine removes the segments corresponding to the extra words in
 		# sequence b, so we don't need to deal with them here.
 		
-		if ( $diff[0][0] eq '+' && $len_a > $len_b + length($diff[0][2]) - 2 )
+		# [Changed by Claude under the guidance of Michael McClennen: the list is
+		# checked to be nonempty, because looking at its first element added an
+		# empty one.]
+		
+		if ( @diff && $diff[0][0] eq '+' && $len_a > $len_b + length($diff[0][2]) - 2 )
 		{
 		    my $edist = match_squashed_word($word_a, $word_b, 'b', \@diff);
 		    
@@ -2166,14 +2225,18 @@ sub title_similarity {
 		# segment. The subroutine removes the segments corresponding to the extra words in
 		# sequence a, so we don't need to deal with them here.
 		
-		if ( $diff[0][0] eq '-' && $len_b > $len_a + length($diff[0][1]) - 2 )
+		if ( @diff && $diff[0][0] eq '-' && $len_b > $len_a + length($diff[0][1]) - 2 )
 		{
 		    my $edist = match_squashed_word($word_b, $word_a, 'a', \@diff);
 
-		    if ( $edist > 0 && $edist < 4 )
+		    # [Changed by Claude under the guidance of Michael McClennen: an exact
+		    # match is accepted, and a misspelling is counted, as for the first
+		    # title above.]
+		    
+		    if ( $edist >= 0 && $edist < 4 )
 		    {
 			$DEBUG{tisqwg}++;
-			$misspell_count if $edist;
+			$misspell_count++ if $edist;
 			next;
 		    }
 		    
@@ -2264,8 +2327,8 @@ sub title_similarity {
     
     my $distinct_count = scalar(@extra_a) + scalar(@extra_b);
     
-    my $sim = $sim - 10 * $distinct_count - 3 * $misspell_count;
-    my $con = $con + 10 * $distinct_count + 3 * $misspell_count;
+    $sim = $sim - 10 * $distinct_count - 3 * $misspell_count;
+    $con = $con + 10 * $distinct_count + 3 * $misspell_count;
     
     if ( $sim <= 0 )
     {
@@ -2291,6 +2354,12 @@ sub title_words {
 
     my ($title, $keep_accents) = @_;
     
+    # [Added by Claude under the guidance of Michael McClennen: the title is normalized to
+    # NFD, so that accent marks can be removed below. If they are kept, the words are
+    # returned in NFC.]
+    
+    $title = NFD($title // '');
+    
     # Start by removing any HTML tags that might be in the title.
     
     $title =~ s{ &lt; .*? &gt; | < .*? > }{}xsg;
@@ -2303,7 +2372,9 @@ sub title_words {
     
     $title =~ s/\pM//g unless $keep_accents;
     
-    return grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN\pM]+/, $title;
+    my @words = grep { ! $STOPWORD{$_} } map { fc } split /[^\pL\pN\pM]+/, $title;
+    
+    return $keep_accents ? map { NFC($_) } @words : @words;
 }
 
 
@@ -2371,7 +2442,7 @@ sub subset_match {
     
     my ($words_ref_a, $words_ref_b) = @_;
     
-    my ($matches_a, $matches_b);
+    my ($matches_a, $matches_b) = (0, 0);
     
   WORD_A:
     for (my $i=0; $i<scalar(@$words_ref_a); $i++)
@@ -2428,9 +2499,13 @@ sub initial_words_match {
     
     my ($match_count, $i, $j);
     
-    for ($i=0; $i<$span; $i++)
+    # [Changed by Claude under the guidance of Michael McClennen: the loops stop at the
+    # end of each list. Past the end, two undefined words were counted as a match, so that
+    # short titles passed this check even if they had no words in common.]
+    
+    for ($i=0; $i<$span && $i<@$words_ref_a; $i++)
     {
-	for ($j=0; $j<$span; $j++)
+	for ($j=0; $j<$span && $j<@$words_ref_b; $j++)
 	{
 	    if ( $words_ref_a->[$i] eq $words_ref_b->[$j] )
 	    {
@@ -2492,7 +2567,10 @@ sub match_squashed_word {
 	
 	# The allowable edit distance varies depending on the length of the shorter word.
 	
-	my $len = min_score($concatenated, $longer);
+	# [Changed by Claude under the guidance of Michael McClennen: the lengths are
+	# compared. The words themselves were compared as numbers.]
+	
+	my $len = min_score(length($concatenated), length($longer));
 	
 	my $max = $len > 9 ? 3
 	    : $len > 5 ? 2
@@ -2523,6 +2601,12 @@ sub match_squashed_word {
 sub short_similarity {
 
     my ($title_a, $title_b) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the titles are normalized
+    # to NFD, so that accent marks can be removed below.]
+    
+    $title_a = NFD($title_a) if defined $title_a;
+    $title_b = NFD($title_b) if defined $title_b;
     
     $COUNT{sh_}++;
     
@@ -2567,7 +2651,9 @@ sub short_similarity {
     
     # If one of the titles is a prefix of the other, return a match.
     
-    if ( my $shorter_wc = prefix_match(\@words_a, \@words_b) )
+    my $shorter_wc;
+    
+    if ( $shorter_wc = prefix_match(\@words_a, \@words_b) )
     {
 	$DEBUG{shpres}++;
 	
@@ -2589,11 +2675,15 @@ sub short_similarity {
     
     # If every word in one title is also in the other title, return a weaker match.
     
-    elsif ( my $shorter_wc = subset_match(\@words_a, \@words_b) )
+    elsif ( $shorter_wc = subset_match(\@words_a, \@words_b) )
     {
 	$DEBUG{shsubs}++;
 	
-	if ( $longer_wc = $shorter_wc || $shorter_wc > 2 && $longer_wc < $shorter_wc * 2 )
+	# [Changed by Claude under the guidance of Michael McClennen: '==' instead of '=',
+	# which made this test always true. $shorter_wc is declared above, not again
+	# here.]
+	
+	if ( $longer_wc == $shorter_wc || $shorter_wc > 2 && $longer_wc < $shorter_wc * 2 )
 	{
 	    return (80, 0);
 	}
@@ -2650,14 +2740,18 @@ sub title_multimatch {
 		$tb = "$tb: $subtitles_b->[$b]";
 	    }
 
-	    elsif ( $subtitles_a && $tb =~ /:/ && $tb !~ /:/ && $subtitles_a->[$a] )
+	    # [Changed by Claude under the guidance of Michael McClennen: the first title
+	    # is the one without a ':'. The test was for the second title both with and
+	    # without one.]
+	    
+	    elsif ( $subtitles_a && $tb =~ /:/ && $ta !~ /:/ && $subtitles_a->[$a] )
 	    {
 		$ta = "$ta: $subtitles_a->[$a]";
 	    }
 
 	    # Compute the similarity and conflict scores.
 
-	    if ( $type eq 'pub' )
+	    if ( defined $type && $type eq 'pub' )
 	    {
 		($sim, $con) = short_similarity($ta, $tb);
 	    }
@@ -2691,6 +2785,12 @@ sub title_multimatch {
 sub title_match_words {
     
     my ($title_r, $title_m) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the titles are normalized
+    # to NFD, so that accent marks can be removed below.]
+    
+    $title_r = NFD($title_r // '');
+    $title_m = NFD($title_m // '');
     
     # Otherwise, start by removing HTML tags, which occasionally appear in Crossref titles.
     
@@ -2748,8 +2848,8 @@ sub title_match_words {
 # are ignored). The second is a conflict score, also normalized to 0-100 with 100 representing no
 # possibility that these values were originally the same.
 #
-# IMPORTANT: In order for this function to return proper results, all arguments must be in Unicode
-# Normalization Form D.
+# [Changed by Claude under the guidance of Michael McClennen: the arguments may be in
+# either NFC or NFD. They had to be in NFD.]
 
 
 our $FIRST_WORD = qr{ ^ \PL* ( \pL\pM* [\pL\pN] [\pL\pN\pM]* ) }xs;
@@ -2764,6 +2864,13 @@ our $LAST_TWO_LETTERS = qr{ (\pL) \PL* (\pL) \PL* $ }xs;
 sub author_similarity {
     
     my ($last_a, $first_a, $last_b, $first_b) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the names are normalized
+    # to NFD, so that accent marks can be ignored below, and missing first names are
+    # empty.]
+    
+    ($last_a, $first_a, $last_b, $first_b) =
+	map { NFD($_ // '') } ($last_a, $first_a, $last_b, $first_b);
     
     my $sim = 0;
     my $con = 0;
@@ -2808,6 +2915,11 @@ sub author_similarity {
     my ($last_init_a) = map { fc($_) } $last_a =~ $FIRST_INITIAL;
     my ($last_init_b) = map { fc($_) } $last_b =~ $FIRST_INITIAL;
 
+    # [Added by Claude under the guidance of Michael McClennen: a missing initial is
+    # empty.]
+    
+    $_ //= '' foreach $first_init_a, $first_init_b, $last_init_a, $last_init_b;
+    
     # Similarity check #1:
     # 
     # If the first letters of $first_a and $last_a cross-match the first letters of $first_b and
@@ -2894,8 +3006,11 @@ sub author_similarity {
     # If the last word of either name is 'jr', 'ii', etc. then discard it. These are sometimes
     # left off by data enterers, so it makes sense to just ignore them.
     
-    pop @words_a if $words_a[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xs;
-    pop @words_b if $words_b[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xs;
+    # [Changed by Claude under the guidance of Michael McClennen: the suffix may be in any
+    # case.]
+    
+    pop @words_a if @words_a && $words_a[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xsi;
+    pop @words_b if @words_b && $words_b[-1] =~ qr{ ^ (?: jr|ii|iii|iv|2nd|3rd|4th ) $ }xsi;
     
     # If the two last names have different numbers of words, we construct two different
     # sequences: one that drops words from the end of the longer one to even them out, and one
@@ -3084,11 +3199,11 @@ sub authname_similarity {
 # position of the matching name in the list, starting with 1. If no name matches, the returned
 # position is zero.
 # 
-# The third and subsequent arguments may be either an array of [last, first], or else the last and
-# first names will be extracted by parse_authorname(). All of the argument values must be
-# normalized to Unicode NFD before being passed in. Any results returned by get_authorname and
-# get_authorlist are normalized, and can be passed as they are. Otherwise, clean_string() can be
-# used.
+# The third and subsequent arguments may be either an array of [last, first], or else the
+# last and first names will be extracted by parse_authorname(). Any results returned by
+# get_authorname and get_authorlist can be passed as they are. [Changed by Claude under
+# the guidance of Michael McClennen: the arguments may be in either NFC or NFD. They had
+# to be in NFD.]
 #
 # The author_similarity procedure is run only for pairs of names where the first initials are
 # equal. This considerably speeds up the execution of this subroutine, but may cause a small
@@ -3098,11 +3213,21 @@ sub match_names {
     
     my ($last, $first, @match_list) = @_;
     
+    # [Added by Claude under the guidance of Michael McClennen: the name is normalized to
+    # NFD, as are the names it is matched against below, so that their initials can be
+    # compared.]
+    
+    $last = NFD($last // '');
+    $first = NFD($first // '');
+    
     # Extract the initial letters from the first and last names. These will be used to speed up
     # the search.
     
     my ($last_init) = $last =~ $FIRST_INITIAL;
     my ($first_init) = $first =~ $FIRST_INITIAL;
+    
+    $last_init //= '';
+    $first_init //= '';
     
     # Iterate through the entries to be matched against, looking for the best match. Start by
     # checking the initial letters, and only run the full similarity procedure if they match.
@@ -3132,8 +3257,17 @@ sub match_names {
 	# trying to match. The last initials must be the same and must not be empty. The first
 	# initials must either be the same or both be empty.
 	
+	$last_i = NFD($last_i // '');
+	$first_i = NFD($first_i // '');
+	
 	my ($last_init_i) = $last_i =~ $FIRST_INITIAL;
 	my ($first_init_i) = $first_i =~ $FIRST_INITIAL;
+	
+	# [Added by Claude under the guidance of Michael McClennen: missing initials are
+	# empty.]
+	
+	$last_init_i //= '';
+	$first_init_i //= '';
 	
 	my $straight_match = $last_init && $last_init_i &&
 			     fc($last_init) eq fc($last_init_i) &&
