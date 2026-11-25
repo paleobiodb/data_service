@@ -106,10 +106,14 @@ sub cache_interval_data {
 	my $scale_no = $sm->{scale_no};
 	my $reference_no = $sm->{reference_no};
 	
-	$sm->{t_age} =~ s/[.]?0+$//;
-	$sm->{b_age} =~ s/[.]?0+$//;
-	$sm->{t_ref} =~ s/[.]?0+$//;
-	$sm->{b_ref} =~ s/[.]?0+$//;
+	# [Changed by Claude under the guidance of Michael McClennen: only defined values
+	# are changed, as for the scales above. Many intervals have no t_ref or b_ref, and
+	# each gave a warning.]
+	
+	$sm->{t_age} =~ s/[.]?0+$// if defined $sm->{t_age};
+	$sm->{b_age} =~ s/[.]?0+$// if defined $sm->{b_age};
+	$sm->{t_ref} =~ s/[.]?0+$// if defined $sm->{t_ref};
+	$sm->{b_ref} =~ s/[.]?0+$// if defined $sm->{b_ref};
 	$sm->{early_age} = $sm->{b_age};
 	$sm->{late_age} = $sm->{t_age};
 	
@@ -139,9 +143,11 @@ sub cache_interval_data {
 	delete $sm->{obsolete} unless $sm->{obsolete};
 	delete $sm->{parent_no} unless $sm->{parent_no};
 	
-	# Keep a list of reference_no values associated with each scale
+	# Keep a list of reference_no values associated with each scale [Changed by Claude
+	# under the guidance of Michael McClennen: a null reference_no is not added. It
+	# put an undefined value in the list.]
 	
-	unless ( $ref_uniq{$scale_no}{$reference_no} )
+	if ( $reference_no && ! $ref_uniq{$scale_no}{$reference_no} )
 	{
 	    push $SDATA{$scale_no}{reflist}->@*, $reference_no;
 	    $ref_uniq{$scale_no}{$reference_no} = 1;
@@ -289,7 +295,12 @@ sub compute_boundary_map {
     if ( $scale_no eq INTL_SCALE )
     {
         my $hbound = $INAME{holocene}{early_age};
-        $boundary_map{default}{$hbound} = $INAME{Holocene};
+	
+	# [Changed by Claude under the guidance of Michael McClennen: the key is
+	# 'holocene'. It was 'Holocene', which is not a key of %INAME, so the map had no
+	# interval for the Holocene.]
+	
+	$boundary_map{default}{$hbound} = $INAME{holocene};
 	$boundary_name{default}{$hbound} = 'Holocene';
     }
     
@@ -322,6 +333,12 @@ sub compute_boundary_map {
 sub classic_scale_map {
     
     my ($scale, $type) = @_;
+    
+    # [Added by Claude under the guidance of Michael McClennen: the type is usually not
+    # given, and comparing it gave a warning.]
+    
+    $scale //= '';
+    $type //= '';
     
     my %map;
     
@@ -360,11 +377,21 @@ sub classic_scale_order {
     
     my ($scale, $type) = @_;
     
+    # [Added by Claude under the guidance of Michael McClennen: the type is usually not
+    # given, and comparing it gave a warning.]
+    
+    $scale //= '';
+    $type //= '';
+    
     my @order;
     
     if ( $scale eq 'periods' || $scale eq '69' )
     {
-	foreach my $interval ( $SSEQUENCE{INTL_SCALE}->@* )
+	# [Changed by Claude under the guidance of Michael McClennen: the constants are
+	# called as functions. Inside the braces they were taken as the strings
+	# 'INTL_SCALE' and 'BIN_SCALE', so the lists were empty.]
+	
+	foreach my $interval ( $SSEQUENCE{INTL_SCALE()}->@* )
 	{
 	    if ( $interval->{type} eq 'period' && $type eq 'names' )
 	    {
@@ -380,7 +407,7 @@ sub classic_scale_order {
     
     elsif ( $scale eq 'bins' || $scale eq 'ten_my_bins' )
     {
-	foreach my $interval ( $SSEQUENCE{BIN_SCALE}->@* )
+	foreach my $interval ( $SSEQUENCE{BIN_SCALE()}->@* )
 	{
 	    push @order, $interval->{interval_name};
 	}
@@ -686,9 +713,13 @@ sub int_type {
 	return $IDATA{$name_or_num}{type};
     }
     
+    # [Changed by Claude under the guidance of Michael McClennen: a name is looked up in
+    # %INAME. It was looked up in %IDATA, which returned nothing and added an empty
+    # record under the name, which the searches by age then returned.]
+    
     elsif ( $name_or_num && $INAME{lc $name_or_num} && $INAME{lc $name_or_num}{interval_no} )
     {
-	return $IDATA{lc $name_or_num}{type};
+	return $INAME{lc $name_or_num}{type};
     }
     
     else
@@ -744,15 +775,22 @@ sub int_container {
     
     my ($name_or_num) = @_;
     
+    # [Changed by Claude under the guidance of Michael McClennen: for a name, the period
+    # is looked up under the interval number. It was looked up under the name, which
+    # returned nothing and added an entry under the name to %ICORR. An interval with no
+    # correlations no longer gets an empty entry either.]
+    
     if ( $name_or_num && $IDATA{$name_or_num} && $IDATA{$name_or_num}{interval_no} )
     {
+	return unless $ICORR{$name_or_num};
 	return $ICORR{$name_or_num}{eon_no} // $ICORR{$name_or_num}{period_no};
     }
     
     elsif ( my $interval_no = $name_or_num && $INAME{lc $name_or_num} && 
 	    $INAME{lc $name_or_num}{interval_no} )
     {
-	return $ICORR{$interval_no}{eon_no} // $ICORR{$name_or_num}{period_no};
+	return unless $ICORR{$interval_no};
+	return $ICORR{$interval_no}{eon_no} // $ICORR{$interval_no}{period_no};
     }
     
     else
@@ -852,7 +890,13 @@ sub ints_by_age {
 		    $overlap = $int->{b_age} - $t_age;
 		}
 		
-		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		# [Changed by Claude under the guidance of Michael McClennen: an interval
+		# whose top and base are the same lies entirely within the range. It
+		# caused a division by zero.]
+		
+		my $length = $int->{b_age} - $int->{t_age};
+		
+		if ( $length <= 0 || $overlap / $length >= 0.5 )
 		{
 		    push @result, { $int->%* };
 		}
@@ -949,7 +993,13 @@ sub ts_intervals_by_age {
 		    $overlap = $int->{b_age} - $t_age;
 		}
 		
-		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		# [Changed by Claude under the guidance of Michael McClennen: an interval
+		# whose top and base are the same lies entirely within the range. It
+		# caused a division by zero.]
+		
+		my $length = $int->{b_age} - $int->{t_age};
+		
+		if ( $length <= 0 || $overlap / $length >= 0.5 )
 		{
 		    push @result, { $int->%* };
 		}
@@ -1039,7 +1089,13 @@ sub interval_nos_by_age {
 		    $overlap = $int->{b_age} - $t_age;
 		}
 		
-		if ( $overlap / ($int->{b_age} - $int->{t_age}) >= 0.5 )
+		# [Changed by Claude under the guidance of Michael McClennen: an interval
+		# whose top and base are the same lies entirely within the range. It
+		# caused a division by zero.]
+		
+		my $length = $int->{b_age} - $int->{t_age};
+		
+		if ( $length <= 0 || $overlap / $length >= 0.5 )
 		{
 		    push @result, $int->{interval_no};
 		}
@@ -1148,7 +1204,10 @@ sub generate_ts_diagram {
 	    
 	    unless ( defined $base && $base =~ AGE_RE )
 	    {
-		push @errors, "could not display '$name': bad base age '$top'";
+		# [Changed by Claude under the guidance of Michael McClennen: the message
+		# shows the base age. It showed the top age.]
+		
+		push @errors, "could not display '$name': bad base age '$base'";
 		next;
 	    }
 	    
@@ -1211,7 +1270,11 @@ sub generate_ts_diagram {
     # the international boundaries which lie in their range. Do not display the whole
     # international scale unless it is the only one being shown.
     
-    if ( defined $b_range && ! defined $options->{b_limit} )
+    # [Changed by Claude under the guidance of Michael McClennen: this is also done when
+    # age limits are given but the international scale is not shown. The range was then
+    # taken from the international scale, which was empty, so nothing was displayed.]
+    
+    if ( defined $b_range && ( ! defined $options->{b_limit} || ! defined $b_intl ) )
     {
 	foreach my $b ( keys %ibound )
 	{
@@ -1236,7 +1299,10 @@ sub generate_ts_diagram {
     # Don't show eras and eons unless the bottom of the displayed range reaches
     # into the Precambrian.
     
-    $remove_eras = 1 if $b_range < 550;
+    # [Changed by Claude under the guidance of Michael McClennen: if no interval can be
+    # displayed, there is no range.]
+    
+    $remove_eras = 1 if ! defined $b_range || $b_range < 550;
     
     # Phase II: Generate the 2-d array
     
