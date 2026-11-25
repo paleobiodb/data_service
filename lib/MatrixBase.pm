@@ -308,6 +308,12 @@ sub updateOccurrenceMatrix {
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	
 	$dbh->do($sql);
+	
+	# [Added by Claude under the guidance of Michael McClennen: the specimen matrix
+	# has a row for each identification of the occurrence of each specimen, so the
+	# rows of the specimens of these occurrences are written again.]
+	
+	refreshSpecimensOfOccurrences($dbh, $occurrence_list, $debug_out);
     }
 }
 
@@ -366,6 +372,12 @@ sub updateOccurrenceMatrixReids {
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	
 	$dbh->do($sql);
+	
+	# [Added by Claude under the guidance of Michael McClennen: the rows of the
+	# specimens of the occurrences of these reidentifications are written again.]
+	
+	refreshSpecimensOfOccurrences($dbh, "SELECT occurrence_no FROM $TABLE{REID_DATA}
+		WHERE reid_no in ($reid_list)", $debug_out);
     }
 }
 
@@ -432,6 +444,18 @@ sub deleteReidsFromOccurrenceMatrix {
 	my $reid_list = join(',', map { $dbh->quote($_) } @work_list);
 	
 	$sql = "DELETE FROM $TABLE{OCCURRENCE_MATRIX} WHERE reid_no in ($reid_list)";
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	$dbh->do($sql);
+	
+	# [Added by Claude under the guidance of Michael McClennen: the rows of the
+	# specimen matrix for these reidentifications are deleted too. The other rows of
+	# their specimens are written again by updateOccurrenceMatrix, which must be
+	# called for the occurrences afterward so that the latest identification is marked
+	# correctly.]
+	
+	$sql = "DELETE FROM $TABLE{SPECIMEN_MATRIX} WHERE reid_no in ($reid_list)";
 	
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	
@@ -515,7 +539,32 @@ sub updateSpecimenMatrix {
 	
 	my $specimen_list = join(',', map { $dbh->quote($_) } @work_list);
 	
-	$sql = "REPLACE INTO $TABLE{SPECIMEN_MATRIX}
+	$sql = specimen_matrix_sql("s.specimen_no in ($specimen_list)");
+	
+	debug_line($debug_out, "$sql\n") if $debug_out;
+	
+	my $result = $dbh->do($sql);
+	
+	$count += $result if $result;
+    }
+    
+    return $count || 0;
+}
+
+
+# specimen_matrix_sql ( condition )
+#
+# Return the SQL statement that writes the rows of the specimen matrix for the specimens
+# that match the condition, which must use the table alias 's' for the specimen table.
+#
+# [Added by Claude under the guidance of Michael McClennen: this statement was part of
+# updateSpecimenMatrix. It is shared with refreshSpecimensOfOccurrences.]
+
+sub specimen_matrix_sql {
+    
+    my ($condition) = @_;
+    
+    return "REPLACE INTO $TABLE{SPECIMEN_MATRIX}
 		       (specimen_no, occurrence_no, reid_no, latest_ident, taxon_no, orig_no,
 			reference_no, authorizer_no, enterer_no, modifier_no, created, modified)
 		SELECT s.specimen_no, ifnull(s.occurrence_no, 0), ifnull(o.reid_no, 0),
@@ -526,16 +575,36 @@ sub updateSpecimenMatrix {
 		       s.created, s.modified
 		FROM $TABLE{SPECIMEN_DATA} as s LEFT JOIN $TABLE{AUTHORITY_DATA} as a using (taxon_no)
 			LEFT JOIN $TABLE{OCCURRENCE_MATRIX} as o on o.occurrence_no = s.occurrence_no
-		WHERE s.specimen_no in ($specimen_list)";
+		WHERE $condition";
+}
+
+
+# refreshSpecimensOfOccurrences ( dbh, occurrence_list, debug_out )
+#
+# Delete and write again the rows of the specimen matrix for the specimens of the
+# specified occurrences, so that they match the identifications of those occurrences in
+# the occurrence matrix. The argument is an SQL list of occurrence_no values, or a SELECT
+# statement that returns them.
+#
+# [Added by Claude under the guidance of Michael McClennen. It is called by
+# updateOccurrenceMatrix and updateOccurrenceMatrixReids, so that the specimen matrix
+# follows the identifications of each occurrence as they are added, changed, and deleted.]
+
+sub refreshSpecimensOfOccurrences {
+    
+    my ($dbh, $occurrence_list, $debug_out) = @_;
+    
+    my $sql = "DELETE FROM $TABLE{SPECIMEN_MATRIX} WHERE occurrence_no in ($occurrence_list)";
 	
 	debug_line($debug_out, "$sql\n") if $debug_out;
 	
-	my $result = $dbh->do($sql);
+    $dbh->do($sql);
 	
-	$count += $result if $result;
-    }
+    $sql = specimen_matrix_sql("s.occurrence_no in ($occurrence_list)");
 
-    return $count || 0;
+    debug_line($debug_out, "$sql\n") if $debug_out;
+    
+    $dbh->do($sql);
 }
 
 

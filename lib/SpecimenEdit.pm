@@ -33,7 +33,8 @@ use CoreTableDefs;
 # [Added by Claude under the guidance of Michael McClennen: used to create the occurrence of a
 # specimen and to keep the matrices up to date.]
 
-use OccurrenceBase qw(splitTaxonName parseIdentifiedName matchIdentifiedName matchExactName);
+use OccurrenceBase qw(splitTaxonName parseIdentifiedName matchIdentifiedName matchExactName
+		      defaultSpeciesName);
 use MatrixBase qw(updateOccurrenceMatrix deleteFromOccurrenceMatrix updateOccurrenceCounts
 		  updateSpecimenMatrix deleteFromSpecimenMatrix);
 
@@ -377,25 +378,8 @@ sub validate_specimen {
 }
 
 
-# default_species ( taxon_no )
-# 
-# Return the species name for an occurrence that is identified to the specified taxon, but
-# not to a species: 'sp.' if the taxon is a genus or subgenus, and 'indet.' if it is above the
-# genus level. A name that does not match any taxon is taken to be a genus.
-# 
-# [Added by Claude under the guidance of Michael McClennen]
-
-sub default_species {
-    
-    my ($edt, $taxon_no) = @_;
-    
-    return 'sp.' unless $taxon_no;
-    
-    my ($rank) = $edt->dbh->selectrow_array("
-		SELECT taxon_rank FROM $TABLE{AUTHORITY_DATA} WHERE taxon_no = $taxon_no");
-    
-    return ! $rank || $rank eq 'genus' || $rank eq 'subgenus' ? 'sp.' : 'indet.';
-    }
+# [Removed by Claude under the guidance of Michael McClennen: the method default_species,
+# which is now the function defaultSpeciesName in OccurrenceBase.pm.]
     
     
 # match_taxon_name ( action, parsed_name )
@@ -510,9 +494,10 @@ sub validate_collection {
     # occurrence is looked up, and created, with all eight name fields, so that for example
     # 'cf. rex' and 'rex' are different occurrences.]
     # 
-    # [Added by Claude under the guidance of Michael McClennen: an occurrence of a taxon at the
-    # genus or subgenus level has the species name 'sp.', and one above the genus level has the
-    # name of the taxon as its genus name and the species name 'indet.' See default_species.]
+    # [Added by Claude under the guidance of Michael McClennen: an occurrence of a taxon
+    # at the genus or subgenus level has the species name 'sp.', and one above the genus
+    # level has the name of the taxon as its genus name and the species name 'indet.' See
+    # defaultSpeciesName in OccurrenceBase.pm.]
     
     # If the specimen was given a taxon_name, its occurrence has that name as parsed, with its
     # modifiers, and the taxon_no of the matching taxon if there is one. [Changed by Claude
@@ -524,7 +509,7 @@ sub validate_collection {
 	
 	$taxon_no = $record->{taxon_id} ? $record->{taxon_id} + 0 : 0;
 	
-	$name{species_name} ||= $edt->default_species($taxon_no);
+	$name{species_name} ||= defaultSpeciesName($edt->dbh, $taxon_no);
 	
 	my @exprs = map { defined $name{$_} && $name{$_} ne '' ?
 			      "oc.$_ = " . $dbh->quote($name{$_}) :
@@ -552,7 +537,7 @@ sub validate_collection {
 	    splitTaxonName($taxon_name);
 	
 	$name{genus_name} ||= $taxon_name;
-	$name{species_name} ||= $edt->default_species($taxon_no);
+	$name{species_name} ||= defaultSpeciesName($edt->dbh, $taxon_no);
 	
 	$lookup_sql = "SELECT occurrence_no FROM $TABLE{OCCURRENCE_DATA} as oc
 			join $TABLE{AUTHORITY_DATA} as a1 using (taxon_no)

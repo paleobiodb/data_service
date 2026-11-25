@@ -24,7 +24,7 @@ use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use IntervalBase qw(int_defined int_bounds);
 use OccurrenceBase qw(parseIdentifiedName matchExactName matchIdentifiedName findParentTaxon
-		      computeTaxonMatch hashIdentification);
+		      computeTaxonMatch hashIdentification defaultSpeciesName);
 use MatrixBase qw(updateCollectionMatrix updateOccurrenceMatrix
 		  deleteFromCollectionMatrix deleteFromOccurrenceMatrix
 		  deleteReidsFromOccurrenceMatrix deleteCollsFromOccurrenceMatrix
@@ -2042,8 +2042,12 @@ sub validate_identification {
     {
 	no warnings 'uninitialized';
 	
+	# [Changed by Claude under the guidance of Michael McClennen: a missing species
+	# name is checked as 'sp.', because that is how it will be stored. See below.]
+	
 	my $name_check = join('|', $genus_name, $genus_reso, $subgenus_name, $subgenus_reso,
-			      $species_name, $species_reso, $subspecies_name, $subspecies_reso, '#');
+			      $species_name || 'sp.', $species_reso, $subspecies_name,
+			      $subspecies_reso, '#');
 	
 	if ( $edt->get_attr_2key('occ_names', $collection_no, $name_check) )
 	{
@@ -2074,11 +2078,23 @@ sub validate_identification {
     
     my $new_taxon_no = $taxon_no ? "$taxon_no" : '';
     
-    $edt->validate_taxon_no($action, $new_taxon_no, $collection_no,
+    # [Changed by Claude under the guidance of Michael McClennen: validate_taxon_no
+    # returns the taxon that the name was matched to. A name without a species is stored
+    # with the species name 'sp.' if that taxon is a genus or subgenus, or if there is
+    # none, and 'indet.' if it is above the genus level. The species name is set after the
+    # name has been matched, because the validation hash is computed from the name as it
+    # was given.]
+    
+    my $matched_no = $edt->validate_taxon_no($action, $new_taxon_no, $collection_no,
 			    $genus_name || '', $genus_reso,
 			    $subgenus_name || '', $subgenus_reso,
 			    $species_name || '', $species_reso,
 			    $subspecies_name || '', $subspecies_reso);
+    
+    unless ( $species_name )
+    {
+	$action->set_record_value('species_name', defaultSpeciesName($edt->dbh, $matched_no));
+    }
 }
 
 
@@ -2086,7 +2102,9 @@ sub validate_identification {
 #
 # Put the taxon name back together from its individual components without modifiers, and
 # link it up to its corresponding authority record if the name has already been entered
-# into the database.
+# into the database. Return the taxon_no of that record, 0 if there is none, or undef if
+# the name could not be matched. [Changed by Claude under the guidance of Michael
+# McClennen: it returns the taxon_no.]
 
 sub validate_taxon_no {
 
@@ -2099,7 +2117,7 @@ sub validate_taxon_no {
     if ( $genus_reso eq 'informal' )
     {
 	$action->set_record_value('taxon_id', 0);
-	return;
+	return 0;
     }
     
     # Otherwise, if we were provided with both a taxon_no value and a validation hash
@@ -2133,7 +2151,7 @@ sub validate_taxon_no {
 					  $subspecies_name, $subspecies_reso);
 	    }
 	    
-	    return;
+	    return $new_taxon_no;
 	}
     }
     
@@ -2225,6 +2243,8 @@ sub validate_taxon_no {
 				  $species_name, $species_reso,
 				  $subspecies_name, $subspecies_reso);
     }
+    
+    return $new_taxon_no;
 }
 
 

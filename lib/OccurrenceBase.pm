@@ -13,7 +13,7 @@ use base 'Exporter';
 
 our (@EXPORT_OK) = qw(initializeModifiers parseIdentifiedName constructIdentifiedName
 		      matchIdentifiedName matchExactName findParentTaxon
-		      splitTaxonName computeTaxonMatch hashIdentification);
+		      splitTaxonName computeTaxonMatch hashIdentification defaultSpeciesName);
 
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
@@ -93,14 +93,24 @@ sub initializeModifiers {
 	
 	# The regex for 'subspecies' should match an optional period after 'var',
 	# 'forma', 'morph', and 'mut', and should match prefixes of these as well.
+	# [Changed by Claude under the guidance of Michael McClennen: a prefix of 'morph'
+	# must be at least 'mo', and one of 'mut' at least 'mu', because 'm' could be
+	# either.]
 	
 	elsif ( $field eq 'subspecies' )
 	{
 	    $regex_source =~ s/var/va?r?[.]?/;
 	    $regex_source =~ s/forma/fo?r?m?a?[.]?/;
 	    $regex_source =~ s/morph/mor?p?h?[.]?/;
-	    $regex_source =~ s/mut/mu?t?[.]?/;
-	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s*(.*)};
+	    $regex_source =~ s/mut/mut?[.]?/;
+	    
+	    # [Changed by Claude under the guidance of Michael McClennen: the modifier
+	    # must end with a period or question mark, or be followed by whitespace or the
+	    # end of the name. Otherwise the abbreviations matched the beginning of a
+	    # subspecies name, so that 'vulgaris', for example, became the modifier 'v'
+	    # and the name 'ulgaris'.]
+	    
+	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)(?:(?<=[.?])|(?=\s|$))\s*(.*)};
 	}
     }
 }
@@ -273,6 +283,15 @@ sub parseIdentifiedName {
 	$name = $2;
 	
 	$genus_reso = 'ex gr.' if $genus_reso eq 'ex. gr.';
+	
+	# [Added by Claude under the guidance of Michael McClennen: two modifiers in a row
+	# are an error. The second was taken to be the genus name, which gave the message
+	# "Bad capitalization on genus name".]
+	
+	if ( $name =~ $OCC_RESO_RE{genus} )
+	{
+	    return { error => "You cannot specify '$genus_reso' and '$1' together" };
+	}
     }
     
     if ( $options->{wildcards} && $name =~ /^\s*[A-Z][.]\s/ )
@@ -292,7 +311,11 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^\s*("?)([A-Za-z%_]+)("?)\s*(.*)/ )
+    # [Changed by Claude under the guidance of Michael McClennen: the name must be
+    # followed by whitespace, a parenthesis, or the end. A name such as 'Tyrann0saurus'
+    # was split after the letters, and the rest was reported as an invalid species name.]
+    
+    elsif ( $name =~ /^\s*("?)([A-Za-z%_]+)("?)(?=[\s(]|$)\s*(.*)/ )
     {
 	if ( $1 || $3 || $allquotes )
 	{
@@ -336,6 +359,19 @@ sub parseIdentifiedName {
     
     # Continue with a possible subgenus and preceding qualifier.
     
+    # [Added by Claude under the guidance of Michael McClennen: two modifiers in a row
+    # before a subgenus are an error. They gave the message "Could not resolve subgenus".]
+    
+    if ( $name =~ $OCC_RESO_RE{species} )
+    {
+	my ($first, $rest) = ($1, $2);
+	
+	if ( $rest =~ $OCC_RESO_RE{subgenus} )
+	{
+	    return { error => "You cannot specify '$first' and '$1' together" };
+	}
+    }
+    
     if ( $name =~ $OCC_RESO_RE{subgenus} )
     {
 	if ( $subgenus_reso )
@@ -378,9 +414,34 @@ sub parseIdentifiedName {
 	$name = $4;
     }
     
-    elsif ( $name =~ /^[(](\S+)/ )
+    # [Changed by Claude under the guidance of Michael McClennen: the message names what
+    # is inside the parentheses. It named the first word after the '(', including the ')'
+    # or anything else that followed. A modifier inside the parentheses gets a hint, and a
+    # missing ')' is reported as such.]
+    
+    elsif ( $name =~ /^[(]\s*([^)]*?)\s*[)]/ )
     {
-	return { error => "Invalid subgenus name '$1'" };
+	my $content = $1;
+	
+	return { error => "Missing subgenus name" } if $content eq '';
+	
+	if ( $content =~ /^(.*\S)\s+([A-Za-z]+)$/ )
+	{
+	    my ($modifier, $subgenus) = ($1, $2);
+	    
+	    if ( "$modifier ($subgenus)" =~ $OCC_RESO_RE{subgenus} )
+	    {
+		return { error => "The modifier '$modifier' must come before the parenthesis, " .
+			     "as in '$modifier ($subgenus)'" };
+	    }
+	}
+	
+	return { error => "Invalid subgenus name '$content'" };
+    }
+    
+    elsif ( $name =~ /^[(]\s*(\S*)/ )
+    {
+	return { error => "Missing ')' after the subgenus name '$1'" };
     }
     
     elsif ( $name =~ /[(]/ )
@@ -424,6 +485,14 @@ sub parseIdentifiedName {
 	
 	$species_reso = $1;
 	$name = $2;
+	
+	# [Added by Claude under the guidance of Michael McClennen: two modifiers in a row
+	# are an error. The second was taken to be the species name.]
+	
+	if ( $name =~ $OCC_RESO_RE{species} )
+	{
+	    return { error => "You cannot specify '$species_reso' and '$1' together" };
+	}
     }
     
     if ( ($species_reso eq 'cf.' || $species_reso eq 'aff.') &&
@@ -449,7 +518,11 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^("?)([A-Za-z%_.]+)("?)\s*(.*)/ )
+    # [Changed by Claude under the guidance of Michael McClennen: the name must be
+    # followed by whitespace or the end. A name such as 'rex0' was split after the
+    # letters.]
+    
+    elsif ( $name =~ /^("?)([A-Za-z%_.]+)("?)(?=\s|$)\s*(.*)/ )
     {
 	if ( $1 || $3 || $allquotes )
 	{
@@ -473,7 +546,13 @@ sub parseIdentifiedName {
 	return { error => "Invalid species name '$1'" };
     }
     
-    elsif ( ! $options->{loose} )
+    # [Changed by Claude under the guidance of Michael McClennen: a genus without a
+    # species is accepted, with or without modifiers, as it is by
+    # quickParseIdentifiedName. For example, 'cf. Tyrannosaurus' was rejected although
+    # 'Tyrannosaurus' was not. A species modifier without a species name, and a new genus
+    # or subgenus without a species, are still errors, even with 'loose'.]
+    
+    elsif ( $species_reso || $genus_reso eq 'n. gen.' || $subgenus_reso eq 'n. subgen.' )
     {
 	return { error => "Missing species name" };
     }
@@ -493,12 +572,17 @@ sub parseIdentifiedName {
 		$species_name = 'indet.';
 	    }
 	    
-	    elsif ( $species_name =~ /^ss?p[.]?/i )
+	    # [Changed by Claude under the guidance of Michael McClennen: these two
+	    # patterns are anchored at the end. Without that, the first one matched 'spp.'
+	    # as well, which became 'sp.', and any other word ending in a period that
+	    # began with 'sp' did too.]
+	    
+	    elsif ( $species_name =~ /^ss?p[.]?$/i )
 	    {
 		$species_name = 'sp.';
 	    }
 
-	    elsif ( $species_name =~ /^ss?pp[.]?/i )
+	    elsif ( $species_name =~ /^ss?pp[.]?$/i )
 	    {
 		$species_name = 'spp.';
 	    }
@@ -539,11 +623,38 @@ sub parseIdentifiedName {
 	
 	# Remove any trailing period from 'var', 'forma', 'morph' and 'mut',
 	# because the database stores them bare.
+	# [Changed by Claude under the guidance of Michael McClennen: an abbreviation such
+	# as 'v.' or 'f.' is stored as the full word, because the database accepts only
+	# those. It was stored as given.]
 	
-	if ( $subspecies_reso =~ qr{^(var|forma|morph|mut)[.]$}xs )
+	if ( $subspecies_reso =~ qr{^(va?r?|fo?r?m?a?|mor?p?h?|mut?)[.]?$}xs )
 	{
-	    $subspecies_reso = $1;
+	    my $abbrev = $1;
+	    
+	    $subspecies_reso = $abbrev =~ /^v/  ? 'var'
+			     : $abbrev =~ /^f/  ? 'forma'
+			     : $abbrev =~ /^mo/ ? 'morph'
+			     :                    'mut';
 	}
+	
+	# [Added by Claude under the guidance of Michael McClennen: two modifiers in a row
+	# are an error. Only a whole word counts as the second one, because the subspecies
+	# pattern also matches the beginning of some names.]
+	
+	my ($word) = $name =~ /^\s*(\S+)/;
+	
+	if ( defined $word && $word =~ $OCC_RESO_RE{subspecies} && $2 eq '' )
+	{
+	    return { error => "You cannot specify '$subspecies_reso' and '$1' together" };
+	}
+	}
+    
+    # [Added by Claude under the guidance of Michael McClennen: 'm' or 'm.' is an error,
+    # because it could be either 'morph' or 'mut'.]
+    
+    if ( $name =~ /^\s*(m[.]?)(?=\s|$)/ )
+    {
+	return { error => "Ambiguous subspecies modifier '$1': use 'morph' or 'mut'" };
     }
     
     if ( $name =~ /^<(.*?\S.*?)>\s*(.*)/ )
@@ -558,7 +669,11 @@ sub parseIdentifiedName {
 	$name = $2;
     }
     
-    elsif ( $name =~ /^("?)([A-Za-z%_]+)("?)\s*(.*)/ )
+    # [Changed by Claude under the guidance of Michael McClennen: the name must be
+    # followed by whitespace or the end. A name such as 'nob1lis' was split after the
+    # letters.]
+    
+    elsif ( $name =~ /^("?)([A-Za-z%_]+)("?)(?=\s|$)\s*(.*)/ )
     {
 	if ( $1 || $3 || $allquotes )
 	{
@@ -567,9 +682,13 @@ sub parseIdentifiedName {
 		return { error => "Conflicting subspecies modifiers '$subspecies_reso' and '\"\"'" };
 	    }
 	    
+	    # [Changed by Claude under the guidance of Michael McClennen: the modifier is
+	    # '"', as for the other components. It was set to the quotation mark captured
+	    # by the pattern, which is empty when the whole name is in quotation marks.]
+	    
 	    else
 	    {
-		$subspecies_reso = $1;
+		$subspecies_reso = '"';
 	    }
 	}
 	
@@ -582,9 +701,12 @@ sub parseIdentifiedName {
 	return { error => "Could not resolve species" };
     }
     
-    elsif ( $name && $name !~ /^\s+$/ )
+    # [Changed by Claude under the guidance of Michael McClennen: the message names the
+    # first word, and says 'subspecies name' as the messages for the other components do.]
+    
+    elsif ( $name && $name =~ /^\s*(\S+)/ )
     {
-	return { error => "Invalid subspecies '$name'" };
+	return { error => "Invalid subspecies name '$1'" };
     }
     
     elsif ( $subspecies_reso )
@@ -703,7 +825,12 @@ sub parseIdentifiedName {
 	    $genus_reso = $sensu;
 	}
 	
-	elsif ( $species_name !~ /[.]$/ && ! $species_reso )
+	# [Changed by Claude under the guidance of Michael McClennen: the modifier goes
+	# with the species only if there is a species name. A name without a species, such
+	# as 'cf. Tyrannosaurus s.l.', put it there, and it was lost when the name was put
+	# back together.]
+	
+	elsif ( $species_name && $species_name !~ /[.]$/ && ! $species_reso )
 	{
 	    $species_reso = $sensu;
 	}
@@ -720,7 +847,11 @@ sub parseIdentifiedName {
 	
 	else
 	{
-	    my $conflict = $subspecies_reso || $subgenus_reso || $species_reso;
+	    # [Changed by Claude under the guidance of Michael McClennen: added the genus
+	    # modifier, which is the conflict when no other modifier is set. The message
+	    # named an empty modifier.]
+	    
+	    my $conflict = $subspecies_reso || $subgenus_reso || $species_reso || $genus_reso;
 	    
 	    return { error => "Conflicting modifiers '$conflict' and '$sensu'" };
 	}
@@ -751,10 +882,12 @@ sub quickParseIdentifiedName {
 
     my ($name) = @_;
     
-    # Check the name against the overall pattern.
+    # Check the name against the overall pattern. [Changed by Claude under the guidance of
+    # Michael McClennen: a species or subspecies name must have at least three characters,
+    # as in the full parser. Shorter ones were accepted here, and rejected there.]
     
     if ( $name =~  / ^ \s* ([A-Z%_][a-z%_]+) (?: \s+ [(]([A-Z%_][a-z%_]+)[)] )?
-		     (?: \s+ ([a-z%_]+|indet[.]|spp?[.]) )? (?: \s+ ([a-z%_]+) )? \s* $ /xs )
+		     (?: \s+ ([a-z%_]{3,}|indet[.]|spp?[.]) )? (?: \s+ ([a-z%_]{3,}) )? \s* $ /xs )
     {
 	my $genus = $1;
 	my $subgenus = $2;
@@ -787,6 +920,30 @@ sub quickParseIdentifiedName {
     {
 	return ();
     }
+}
+
+
+# defaultSpeciesName ( dbh, taxon_no )
+#
+# Return the species name for an occurrence, reidentification, or specimen that is
+# identified to the specified taxon but not to a species: 'sp.' if the taxon is a genus or
+# subgenus, and 'indet.' if it is above the genus level. A name that does not match any
+# taxon is taken to be a genus.
+#
+# [Added by Claude under the guidance of Michael McClennen: moved here from
+# SpecimenEdit.pm, where it was the method default_species, so that CollectionEdit can use
+# it too.]
+
+sub defaultSpeciesName {
+    
+    my ($dbh, $taxon_no) = @_;
+    
+    return 'sp.' unless $taxon_no && $taxon_no =~ /^\d+$/;
+    
+    my ($rank) = $dbh->selectrow_array("
+		SELECT taxon_rank FROM $TABLE{AUTHORITY_DATA} WHERE taxon_no = $taxon_no");
+    
+    return ! $rank || $rank eq 'genus' || $rank eq 'subgenus' ? 'sp.' : 'indet.';
 }
 
 
@@ -1146,8 +1303,13 @@ sub matchIdentifiedName {
 	    
 		elsif ( $component = $match->{is_double} )
 		{
+		    # [Changed by Claude under the guidance of Michael McClennen: added
+		    # the parentheses around the last two clauses. Without them, the
+		    # double was discarded whenever no subgenus was given, even if there
+		    # was no single match to keep instead.]
+		    
 		    if ( $component eq $genus_name && $singles{$component} &&
-			 ! $subgenus_name || $subgenus_name ne $component )
+			 ( ! $subgenus_name || $subgenus_name ne $component ) )
 		    {
 			$match->{score} = 0;
 		    }
@@ -1188,6 +1350,15 @@ sub matchIdentifiedName {
     # Sort the matches in order, discarding any with a score of 0.
     
     @matches = sort { $b->{score} <=> $a->{score} } grep { $_->{score} > 0 } @$result;
+    
+    # If both a genus and a subgenus of that genus were matched, discard the genus,
+    # because the subgenus is the more specific match. [Added by Claude under the guidance
+    # of Michael McClennen: the two have scores in the same class, so both were returned,
+    # and a new species in a known subgenus, for example, was reported as ambiguous.]
+    
+    my %subgenus_of = map { $_->{taxon_name} =~ /^(\S+) [(][^)]+[)]$/ ? ($1 => 1) : () } @matches;
+    
+    @matches = grep { ! $subgenus_of{$_->{taxon_name}} } @matches if %subgenus_of;
     
     # Then compute the match class of the best score and then return only those
     # matches in the same class.
@@ -1359,7 +1530,10 @@ sub matchOrigName {
     
     $result = $dbh->selectall_arrayref($sql, { Slice => {} });
 
-    return @$result;
+    # [Changed by Claude under the guidance of Michael McClennen: the orig_no values are
+    # returned, as described above. The rows were returned.]
+    
+    return map { $_->{orig_no} } @$result;
 }
 
 
@@ -1368,6 +1542,11 @@ sub matchOrigName {
 # Split the specified name into genus, subgenus, species, and subspecies components.
 # Return this list of four strings. All of them will be defined, and at least the first
 # will be nonempty unless the entire name is empty.
+#
+# [Changed by Claude under the guidance of Michael McClennen: the components are always
+# defined, as described above; missing ones were undefined in the first case. The second
+# pattern has the whitespace before the subspecies, so a name with a subspecies can be
+# split by it.]
 
 sub splitTaxonName {
 
@@ -1378,14 +1557,14 @@ sub splitTaxonName {
     if ( $name && $name =~ / ^ \s* ([A-Z][a-z]+) (?: \s+ [(]([A-Z][a-z]+)[)] )?
 			     (?: \s+ ([a-z.]+) )? (?: \s+ ([a-z.]+) )? \s* $ /xs )
     {
-        return ($1, $2, $3, $4);
+        return ($1, $2 // '', $3 // '', $4 // '');
     }
     
     # If that didn't work, try for a looser match, ignoring capitalization and allowing
     # the wildcard symbols % and _. Give the result the proper capitalization.
     
     elsif ( $name && $name =~ / ^ ([a-z%_]+) (?: \s+ [(]([a-z%_]+)[)] )?
-				(?: \s+ ([a-z%_.]+) )? (?: ([a-z%_.]+) )? $ /xsi )
+				(?: \s+ ([a-z%_.]+) )? (?: \s+ ([a-z%_.]+) )? $ /xsi )
     {
 	return (ucfirst(lc($1)), ucfirst(lc($2)), lc($3), lc($4));
     }
@@ -1530,7 +1709,15 @@ sub hashIdentification {
 
     my ($identified_name, $identified_no) = @_;
 
-    return (unpack("%32L*", $identified_name) + $identified_no) % $HASH_MODULUS;
+    # [Changed by Claude under the guidance of Michael McClennen: the name is padded with
+    # null bytes to a multiple of four bytes. The checksum adds up the name four bytes at
+    # a time and ignores any that are left over, so names that differed only in their last
+    # one to three bytes got the same value. Names whose length is already a multiple of
+    # four get the same value as before.]
+    
+    my $padded = $identified_name . ("\0" x ((4 - length($identified_name) % 4) % 4));
+    
+    return (unpack("%32L*", $padded) + $identified_no) % $HASH_MODULUS;
 }
 
 1;
