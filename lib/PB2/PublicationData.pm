@@ -8,6 +8,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# PUBLICATIONS is now PUBLICATION_DATA.]
+
 use lib '..';
 
 package PB2::PublicationData;
@@ -89,7 +92,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:pubs:basic', 'PUBLICATIONS');
+    complete_output_block($ds, $dbh, '1.2:pubs:basic', 'PUBLICATION_DATA');
 }
 
 
@@ -123,7 +126,7 @@ sub get_publication {
     my $pub_id = $dbh->quote($id);
     
     $request->{main_sql} = "
-	SELECT pub.* FROM $TABLE{PUBLICATIONS} as pub
+	SELECT pub.* FROM $TABLE{PUBLICATION_DATA} as pub
         WHERE pub_no = $pub_id";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -208,7 +211,7 @@ sub list_publications {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc pub.* FROM $TABLE{PUBLICATIONS} as pub
+	SELECT $calc pub.* FROM $TABLE{PUBLICATION_DATA} as pub
         WHERE $filter_string
 	ORDER BY pub.pub_no desc $limit";
     

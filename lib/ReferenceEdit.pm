@@ -32,6 +32,14 @@ with 'EditTransaction::Mod::PaleoBioDB';
 use namespace::clean;
 
 
+# The tables written by this module, including those written through MatrixBase and by
+# the data service operations that use it. The pe2 tests switch every one of them to the
+# test database with PBDBTester::select_module_tables, so a table written by new code
+# must be added here. [Added by Claude under the guidance of Michael McClennen]
+
+our (@MODULE_WRITES) = qw(REFERENCE_DATA REFERENCE_AUTHORS REFERENCE_EDITORS);
+
+
 our (@CARP_NOT) = qw(EditTransaction);
 
 {
@@ -142,9 +150,14 @@ sub validate_action {
 	
 	my (@authorname, @authorfirst, @authorlast);
 	
+	# [Changed by Claude under the guidance of Michael McClennen: each string in a
+	# list is split on semicolons, as a single string is. The data service always
+	# passes a list, so a string of names separated by semicolons was taken as a
+	# single name.]
+	
 	if ( ref $author_list eq 'ARRAY' )
 	{
-	    @authorname = $author_list->@*;
+	    @authorname = map { ref $_ ? $_ : split /\s*;\s*/ } $author_list->@*;
 	}
 	
 	elsif ( ref $author_list )
@@ -321,9 +334,12 @@ sub validate_action {
 	my $editor_list = $record->{editors};
 	my (@editorname, @editorfirst, @editorlast);
 	
+	# [Changed by Claude under the guidance of Michael McClennen: each string in a
+	# list is split on semicolons, as for the authors.]
+	
 	if ( ref $editor_list eq 'ARRAY' )
 	{
-	    @editorname = $editor_list->@*;
+	    @editorname = map { ref $_ ? $_ : split /\s*;\s*/ } $editor_list->@*;
 	}
 	
 	else

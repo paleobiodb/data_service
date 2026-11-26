@@ -134,11 +134,24 @@ sub initialize {
 	{ optional => 'comments', note => 'textarea' },
 	    "Commands and/or remarks about this bibliographic reference");
     
+    # [Added by Claude under the guidance of Michael McClennen: the records to delete may
+    # be given in the request body, with this ruleset, if no identifiers are given in the
+    # URL. The identifier in the delete ruleset is optional for that reason.]
+    
+    $ds->define_ruleset('1.2:refs:delete_body' =>
+	{ param => 'reference_id', valid => VALID_IDENTIFIER('REF'),
+	  alias => ['ref_id', 'reference_no', 'id', 'oid'] },
+	    "The identifier of a record to be deleted.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "You may provide a label for each record, which will be included with any",
+	    "errors or warnings generated from it.");
+    
     $ds->define_ruleset('1.2:refs:delete' =>
-	{ param => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',',
+	{ optional => 'ref_id', valid => VALID_IDENTIFIER('REF'), list => ',',
 	  alias => ['reference_no', 'id', 'reference_id', 'oid'] },
 	    "The identifier(s) of the record(s) to be deleted. You may specify",
-	    "multiple identifiers as a comma-separated list.",
+	    "multiple identifiers as a comma-separated list. If none are given, the",
+	    "records to be deleted are read from the request body.",
 	{ optional => 'allow', valid => '1.2:refs:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
 	{ allow => '1.2:special_params' },
@@ -266,12 +279,18 @@ sub addupdate_refs {
     {
 	my @deleted_keys = $edt->deleted_keys;
 	
-	$request->list_deleted_items('reference_no', \@deleted_keys, $edt->key_labels)
+	# [Changed by Claude under the guidance of Michael McClennen: the labels are
+	# those of the table REFERENCE_DATA.]
+	$request->list_deleted_items('reference_no', \@deleted_keys,
+				     $edt->key_labels('REFERENCE_DATA'))
 	    if @deleted_keys;
 	
 	my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
 	
-	$request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+	# [Changed by Claude under the guidance of Michael McClennen: the labels are
+	# those of the table REFERENCE_DATA.]
+	$request->list_updated_refs($dbh, \@existing_keys,
+				    $edt->key_labels('REFERENCE_DATA')) if @existing_keys;
     }
 }
 
@@ -303,8 +322,12 @@ sub list_updated_refs {
     
     my $calc = $request->sql_count_clause;
     
+    # [Changed by Claude under the guidance of Michael McClennen: the table is
+    # $TABLE{REFERENCE_DATA}. It was given as 'refs', so that in test mode the response
+    # came from the real table.]
+    
     my $sql = "SELECT $calc $fields
-		FROM refs as r
+		FROM $TABLE{REFERENCE_DATA} as r
 		    $join_list
 		WHERE $filter_string
 		ORDER BY reference_no";
@@ -377,9 +400,18 @@ sub delete_refs {
     
     my $dbh = $request->get_connection;
     
-    # First get the parameters from the URL.
+    # First get the parameters from the URL. [Changed by Claude under the guidance of
+    # Michael McClennen: if there are none, the records to delete are read from the
+    # request body.]
     
     my (@id_list) = $request->clean_param_list('ref_id');
+    
+    unless ( @id_list )
+    {
+	@id_list = $request->parse_body_records({ }, '1.2:refs:delete_body');
+	
+	die $request->exception(400, "Bad request") if $request->errors;
+    }
     
     # Check for any allowances.
     
@@ -423,7 +455,10 @@ sub delete_refs {
     
     my @deleted_keys = $edt->deleted_keys;
     
-    $request->list_deleted_items('reference_no', \@deleted_keys, $edt->key_labels)
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table REFERENCE_DATA.]
+    $request->list_deleted_items('reference_no', \@deleted_keys,
+				 $edt->key_labels('REFERENCE_DATA'))
 	if @deleted_keys;
 
     my $a = 1;

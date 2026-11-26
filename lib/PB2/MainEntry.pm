@@ -743,7 +743,10 @@ sub initialize {
 			title => 'Delete existing bibliographic references',
 			place => 12,
 			usage => ["/refs/delete.json?id=1234"],
-			allow_method => 'GET,DELETE',
+			# [Changed by Claude under the guidance of
+			# Michael McClennen: PUT and POST, with the
+			# records to delete in the request body.]
+			allow_method => 'GET,PUT,POST,DELETE',
 			tag => 'entry',
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::ReferenceEntry',

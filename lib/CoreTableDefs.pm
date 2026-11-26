@@ -145,8 +145,13 @@ use ResourceDefs;
     
     set_table_name(COLLECTION_UNITS_STATIC => 'coll_units_static');
     
+    # [Changed by Claude under the guidance of Michael McClennen: COLLECTION_REFS is in
+    # this group. It is written by CollectionEdit, and without a group it could not be
+    # switched to the test database.]
+    
     set_table_group('collection_data' => 'COLLECTION_DATA', 'COLLECTION_MATRIX',
-		    'COLLECTION_LOC', 'COLLECTION_INTS', 'COLLECTION_STRATA',
+		    'COLLECTION_REFS', 'COLLECTION_LOC', 'COLLECTION_INTS',
+		    'COLLECTION_STRATA',
 		    'STRATA_NAMES', 'STRAT_RAW', 'STRAT_NAMES', 'STRAT_CONCEPTS',
 		    'COLLECTION_UNITS');
     
@@ -301,28 +306,35 @@ use ResourceDefs;
 		    'PCOORD_BINS_DATA', 'PCOORD_BINS_STATIC');
     
     # Publications and archives
+    # 
+    # [Changed by Claude under the guidance of Michael McClennen: the specifiers are
+    # PUBLICATION_DATA and ARCHIVE_DATA, for consistency with the other tables. They were
+    # PUBLICATIONS and ARCHIVES. Each is in a table group of its own, so that the test
+    # server can switch it to the test database.]
     
-    set_table_name(PUBLICATIONS => 'pubs');
-    set_table_property('PUBLICATIONS', PRIMARY_KEY => 'pub_no');
-    set_table_property('PUBLICATIONS', PRIMARY_FIELD => 'pub_no');
-    set_table_property('PUBLICATIONS', LOG_CHANGES => 1);
-    set_table_property('PUBLICATIONS', CAN_POST => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
-    set_table_property('PUBLICATIONS', CAN_MODIFY => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
-    set_column_property('PUBLICATIONS', 'pub_no', EXTID_TYPE => 'PUB');
+    set_table_name(PUBLICATION_DATA => 'pubs');
+    set_table_group('publication_data' => 'PUBLICATION_DATA');
+    set_table_property('PUBLICATION_DATA', PRIMARY_KEY => 'pub_no');
+    set_table_property('PUBLICATION_DATA', PRIMARY_FIELD => 'pub_no');
+    set_table_property('PUBLICATION_DATA', LOG_CHANGES => 1);
+    set_table_property('PUBLICATION_DATA', CAN_POST => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
+    set_table_property('PUBLICATION_DATA', CAN_MODIFY => 'ADMIN');	# [Added by Claude under the guidance of Michael McClennen]
+    set_column_property('PUBLICATION_DATA', 'pub_no', EXTID_TYPE => 'PUB');
     
-    set_table_name(ARCHIVES => 'data_archives');
-    set_table_property('ARCHIVES', PRIMARY_KEY => 'archive_no');
-    set_table_property('ARCHIVES', PRIMARY_FIELD => 'archive_id');
-    set_table_property('ARCHIVES', LOG_CHANGES => 1);
-    set_column_property('ARCHIVES', 'archive_no', EXTID_TYPE => 'DAR');	# [Added by Claude under the guidance of Michael McClennen]
+    set_table_name(ARCHIVE_DATA => 'data_archives');
+    set_table_group('archive_data' => 'ARCHIVE_DATA');
+    set_table_property('ARCHIVE_DATA', PRIMARY_KEY => 'archive_no');
+    set_table_property('ARCHIVE_DATA', PRIMARY_FIELD => 'archive_id');
+    set_table_property('ARCHIVE_DATA', LOG_CHANGES => 1);
+    set_column_property('ARCHIVE_DATA', 'archive_no', EXTID_TYPE => 'DAR');	# [Added by Claude under the guidance of Michael McClennen]
     
     # [Added by Claude under the guidance of Michael McClennen: without these, edits to archives
     # were not permission-checked. Any database member may create an archive, and only its
     # owner or an administrator may modify or delete it.]
     
-    set_table_property('ARCHIVES', CAN_POST => 'MEMBERS');
-    set_table_property('ARCHIVES', CAN_DELETE => 'OWNER');
-    # set_table_property('ARCHIVES', BY_AUTHORIZER => 1);
+    set_table_property('ARCHIVE_DATA', CAN_POST => 'MEMBERS');
+    set_table_property('ARCHIVE_DATA', CAN_DELETE => 'OWNER');
+    # set_table_property('ARCHIVE_DATA', BY_AUTHORIZER => 1);
     
     set_table_name(APP_STATE => 'navigator_states');
     set_table_property('APP_STATE', PRIMARY_KEY => 'id');

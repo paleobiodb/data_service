@@ -9,6 +9,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# ARCHIVES is now ARCHIVE_DATA.]
+
 use lib '..';
 
 package PB2::ArchiveEntry;
@@ -86,7 +89,7 @@ sub initialize {
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
 	"The fields in each record must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<$TABLE{ARCHIVES}>> table",
+	"the value must match the corresponding column in the C<B<$TABLE{ARCHIVE_DATA}>> table",
 	"in the database.",
 	{ allow => '1.2:archives:entry' });
     
@@ -116,7 +119,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    complete_ruleset($ds, $dbh, '1.2:archives:entry', 'ARCHIVES');
+    complete_ruleset($ds, $dbh, '1.2:archives:entry', 'ARCHIVE_DATA');
 }
 
 
@@ -132,7 +135,7 @@ sub update_archives {
     my $allowances = { };
     
     my $main_params = $request->get_main_params($allowances, '1.2:archives:specifier');
-    my $perms = $request->require_authentication('ARCHIVES');
+    my $perms = $request->require_authentication('ARCHIVE_DATA');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -147,14 +150,14 @@ sub update_archives {
     # If we get here without any errors being detected so far, create a new ArchiveEdit object to
     # handle this operation.
     
-    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', $allowances);
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVE_DATA', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
     
     foreach my $r (@records)
     {
-	$edt->process_record('ARCHIVES', $r);
+	$edt->process_record('ARCHIVE_DATA', $r);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -195,11 +198,17 @@ sub update_archives {
     
     my @deleted_keys = $edt->deleted_keys;
     
-    $request->list_deleted_archives(\@deleted_keys, $edt->key_labels) if @deleted_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table ARCHIVE_DATA.]
+    $request->list_deleted_archives(\@deleted_keys,
+				    $edt->key_labels('ARCHIVE_DATA')) if @deleted_keys;
     
     my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
     
-    $request->list_updated_archives($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table ARCHIVE_DATA.]
+    $request->list_updated_archives($dbh, \@existing_keys,
+				    $edt->key_labels('ARCHIVE_DATA')) if @existing_keys;
 }
 
 
@@ -228,7 +237,7 @@ sub list_updated_archives {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc arch.* FROM $TABLE{ARCHIVES} as arch
+	SELECT $calc arch.* FROM $TABLE{ARCHIVE_DATA} as arch
 	WHERE arch.archive_no in ($key_list)
 	ORDER BY arch.archive_no";
     
@@ -267,7 +276,11 @@ sub delete_archives {
     
     # Check for any allowances.
     
-    my $allowances = { MULTI_DELETE => 1 };
+    # [Changed by Claude under the guidance of Michael McClennen: no allowance is set by
+    # default. MULTI_DELETE was set, which EditTransaction does not define, so that every
+    # delete returned a W_BAD_ALLOWANCE warning.]
+    
+    my $allowances = { };
     
     if ( my @allowance = $request->clean_param_list('allow') )
     {
@@ -276,27 +289,33 @@ sub delete_archives {
     
     # Determine our authentication info, and then create an ArchiveEdit object.
     
-    my $perms = $request->require_authentication('ARCHIVES');
+    my $perms = $request->require_authentication('ARCHIVE_DATA');
     
-    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', $allowances);
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVE_DATA', $allowances);
     
     # Then go through the records and handle each one in turn.
     
     foreach my $id (@id_list)
     {
-	$edt->delete_record('ARCHIVES', $id);
+	$edt->delete_record('ARCHIVE_DATA', $id);
     }
     
-    # After the deletion(s) are done, adjust the auto_increment value of the table to one more
-    # than the new maximum archive_no, whatever that may be.
+    # [Removed by Claude under the guidance of Michael McClennen: the auto_increment
+    # value of the table was reset after the deletions, so that a deleted number could be
+    # given to a new record. The ALTER TABLE statement also committed the transaction
+    # implicitly.]
     
-    $edt->do_sql("ALTER TABLE $TABLE{ARCHIVES} auto_increment=1");
+    # $edt->do_sql("ALTER TABLE $TABLE{ARCHIVE_DATA} auto_increment=1");
     
     # If no errors have been detected so far, execute the queued actions inside a database
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    # [Changed by Claude under the guidance of Michael McClennen: commit, not execute,
+    # which left the transaction uncommitted, so that it was rolled back and nothing was
+    # deleted.]
+    
+    $edt->commit;
     
     # Now handle any errors or warnings that may have been generated.
     
@@ -317,7 +336,10 @@ sub delete_archives {
     
     my @deleted_keys = $edt->deleted_keys;
     
-    $request->list_deleted_archives(\@deleted_keys, $edt->key_labels) if @deleted_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table ARCHIVE_DATA.]
+    $request->list_deleted_archives(\@deleted_keys,
+				    $edt->key_labels('ARCHIVE_DATA')) if @deleted_keys;
 }
 
 
@@ -329,6 +351,14 @@ sub list_deleted_archives {
     {
 	my $archive_id = $request->{block_hash}{extids} ? generate_identifier('DAR', $key) : $key;
 	my $record = { archive_no => $archive_id, status => 'deleted' };
+	
+	# [Added by Claude under the guidance of Michael McClennen: the label of the
+	# record, if one was given.]
+	
+	my $label = ref $labels_ref eq 'HASH' ? $labels_ref->{$key} : undef;
+	
+	$record->{_label} = $label if $label && $label !~ /^[#]/;
+	
 	$request->add_result($record);
     }
 }
@@ -354,7 +384,7 @@ sub check_archive {
     
     if ( my $title = $request->clean_param('archive_title') )
     {
-	my $perms = $request->PB2::Authentication::require_authentication('ARCHIVES');
+	my $perms = $request->PB2::Authentication::require_authentication('ARCHIVE_DATA');
 	my $enterer_no = $perms->{enterer_no};
 	
 	# Creating a data archive is only allowed for logged-in users that have an enterer number.
@@ -373,7 +403,7 @@ sub check_archive {
 	
 	my $quoted_title = $dbh->quote($title);
 	
-	$sql = "SELECT archive_no, doi FROM $TABLE{ARCHIVES}
+	$sql = "SELECT archive_no, doi FROM $TABLE{ARCHIVE_DATA}
 		WHERE title = $quoted_title and enterer_no = $enterer_no";
 	
 	$request->debug_line("$sql\n\n");
@@ -437,7 +467,7 @@ sub open_archive {
     # allowance lets us create a new record if we don't already have an archive_no for this
     # request.
     
-    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVES', { CREATE => 1,
+    my $edt = ArchiveEdit->new($request, $perms, 'ARCHIVE_DATA', { CREATE => 1,
 							       IMMEDIATE_EXECUTION => 1 });
     
     # If we are replacing the contents of an existing archive record, the user can also update the
@@ -472,13 +502,18 @@ sub open_archive {
     
     if ( $archive_no )
     {
-	$edt->update_record('ARCHIVES', $record);
+	$edt->update_record('ARCHIVE_DATA', $record);
     }
     
     else
     {
-	$result = $edt->insert_record('ARCHIVES', $record);
-	$archive_no = $request->{my_archive_no} = $result;
+	# [Changed by Claude under the guidance of Michael McClennen: insert_record
+	# returns a reference to the action, and the key of the new record is its keyval,
+	# which is known because the action is executed immediately. The reference was
+	# used as the archive number, so that the file name and the response were wrong.]
+	
+	$result = $edt->insert_record('ARCHIVE_DATA', $record);
+	$archive_no = $request->{my_archive_no} = $edt->action_keyval($result);
     }
     
     # We are going to ignore warnings, but we need to abort if an error occurs.
@@ -497,13 +532,23 @@ sub open_archive {
     # writable (or that the directory is writable if the file doesn't exist) because the open will
     # not generally fail in that case.
     
-    my $outdir = "/var/paleomacro/archives";
-    my $outfile = "/var/paleomacro/archives/$archive_no.gz";
+    # [Changed by Claude under the guidance of Michael McClennen: the file name is given
+    # by archive_file_base, which starts it with 'T' if the archive table is in the test
+    # database.]
+    
+    my $outdir = $PB2::ArchiveData::ARCHIVE_DIR;
+    my $outfile = PB2::ArchiveData::archive_file_base($archive_no) . ".gz";
     my $outfh;
     
     my $is_writable = -w $outfile || (-w $outdir && ! -e $outfile);
     
-    if ( $is_writable && open($outfh, '|-', "gzip -9 > $outfile") )
+    # [Changed by Claude under the guidance of Michael McClennen: the file name is quoted,
+    # so that the shell cannot interpret any character in it.]
+    
+    my $quoted_outfile = $outfile;
+    $quoted_outfile =~ s/'/'\\''/g;
+    
+    if ( $is_writable && open($outfh, '|-', "gzip -9 > '$quoted_outfile'") )
     {
 	$ds->output_to_file($request, $outfh, \&archive_response);
         $edt->commit;
@@ -559,6 +604,21 @@ sub archive_response {
     my $archive_no = $request->{my_archive_no};
     my $format = $request->output_format;
     my $message = "Created archive dar:$archive_no";
+    
+    # [Added by Claude under the guidance of Michael McClennen: this hook is called after
+    # the archive file has been written and closed, so the archive is marked 'complete' if
+    # its file is not empty. Nothing set the status since the archiving system was
+    # rewritten in 2021, so that new archives stayed at 'loading'.]
+    
+    my $file = PB2::ArchiveData::archive_file_base($archive_no) . ".gz";
+    
+    if ( $archive_no && $archive_no =~ /^\d+$/ && -s $file )
+    {
+	my $dbh = $request->get_connection;
+	
+	$dbh->do("UPDATE $TABLE{ARCHIVE_DATA} SET status = 'complete'
+		WHERE archive_no = $archive_no");
+    }
     
     if ( $format eq 'json' )
     {

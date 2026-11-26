@@ -11,6 +11,9 @@ package PB2::PublicationEntry;
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# PUBLICATIONS is now PUBLICATION_DATA.]
+
 use PBDBEdit;  # [Changed by Claude under the guidance of Michael McClennen: PbdbEdit was merged into PBDBEdit]
 use TableDefs qw(%TABLE);
 use ExternalIdent qw(generate_identifier VALID_IDENTIFIER);
@@ -80,7 +83,7 @@ sub initialize {
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
 	"The fields in each record must be as specified below. If no specific documentation is given",
-	"the value must match the corresponding column in the C<B<$TABLE{PUBLICATIONS}>> table",
+	"the value must match the corresponding column in the C<B<$TABLE{PUBLICATION_DATA}>> table",
 	"in the database.",
 	{ allow => '1.2:pubs:entry' });
     
@@ -108,7 +111,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    complete_ruleset($ds, $dbh, '1.2:pubs:entry', 'PUBLICATIONS');
+    complete_ruleset($ds, $dbh, '1.2:pubs:entry', 'PUBLICATION_DATA');
 }
 
 
@@ -127,7 +130,7 @@ sub update_publications {
     my $allowances = { };
     
     my $main_params = $request->get_main_params($allowances);
-    my $perms = $request->require_authentication('PUBLICATIONS');
+    my $perms = $request->require_authentication('PUBLICATION_DATA');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
@@ -142,14 +145,14 @@ sub update_publications {
     # If we get here without any errors being detected so far, create a new PBDBEdit object to
     # handle this operation.
     
-    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATION_DATA', $allowances);
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
     
     foreach my $r (@records)
     {
-	$edt->process_record('PUBLICATIONS', $r);
+	$edt->process_record('PUBLICATION_DATA', $r);
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -190,11 +193,19 @@ sub update_publications {
     
     my @deleted_keys = $edt->deleted_keys;
     
-    $request->list_deleted_publications(\@deleted_keys, $edt->key_labels) if @deleted_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table PUBLICATION_DATA.]
+    $request->list_deleted_publications(\@deleted_keys,
+					$edt->key_labels('PUBLICATION_DATA'))
+	if @deleted_keys;
     
     my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
     
-    $request->list_updated_publications($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table PUBLICATION_DATA.]
+    $request->list_updated_publications($dbh, \@existing_keys,
+					$edt->key_labels('PUBLICATION_DATA'))
+	if @existing_keys;
 }
 
 
@@ -223,7 +234,7 @@ sub list_updated_publications {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc pub.* FROM $TABLE{PUBLICATIONS} as pub
+	SELECT $calc pub.* FROM $TABLE{PUBLICATION_DATA} as pub
 	WHERE pub.pub_no in ($key_list)
 	ORDER BY pub.pub_no";
     
@@ -271,27 +282,26 @@ sub delete_publications {
     
     # Determine our authentication info, and then create a PBDBEdit object.
     
-    my $perms = $request->require_authentication('PUBLICATIONS');
+    my $perms = $request->require_authentication('PUBLICATION_DATA');
     
-    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATIONS', $allowances);
+    my $edt = PBDBEdit->new($request, $perms, 'PUBLICATION_DATA', $allowances);
 
     # Then go through the records and handle each one in turn.
     
     foreach my $id (@id_list)
     {
-	$edt->delete_record('PUBLICATIONS', $id);
+	$edt->delete_record('PUBLICATION_DATA', $id);
     }
 
-    # After the deletion(s) are done, adjust the auto_increment value of the table to one more
-    # than the new maximum pub_no, whatever that may be.
-    
-    $edt->do_sql("ALTER TABLE $TABLE{PUBLICATIONS} auto_increment=1");
-    
     # If no errors have been detected so far, execute the queued actions inside a database
     # transaction. If any errors occur during that process, the transaction will be automatically
     # rolled back. Otherwise, it will be automatically committed.
     
-    $edt->execute;
+    # [Changed by Claude under the guidance of Michael McClennen: commit, not execute,
+    # which left the transaction uncommitted, so that it was rolled back and nothing was
+    # deleted.]
+    
+    $edt->commit;
     
     # Now handle any errors or warnings that may have been generated.
     
@@ -306,13 +316,29 @@ sub delete_publications {
     	die $request->exception(400, "Bad request");
     }
     
+    # After the deletion(s) are done, adjust the auto_increment value of the table to one
+    # more than the new maximum pub_no, whatever that may be, so that publication numbers
+    # stay consecutive whenever possible. [Changed by Claude under the guidance of Michael
+    # McClennen: this is done after the transaction has been committed. It was queued with
+    # do_sql inside the transaction, and an ALTER TABLE statement commits the transaction
+    # implicitly.]
+    
+    if ( $edt->deleted_keys )
+    {
+	$dbh->do("ALTER TABLE $TABLE{PUBLICATION_DATA} auto_increment=1");
+    }
+    
     # Then return one result record for each deleted database record.
     
     $request->extid_check;
     
     my @deleted_keys = $edt->deleted_keys;
     
-    $request->list_deleted_publications(\@deleted_keys, $edt->key_labels) if @deleted_keys;
+    # [Changed by Claude under the guidance of Michael McClennen: the labels are
+    # those of the table PUBLICATION_DATA.]
+    $request->list_deleted_publications(\@deleted_keys,
+					$edt->key_labels('PUBLICATION_DATA'))
+	if @deleted_keys;
 }
 
 
@@ -324,6 +350,14 @@ sub list_deleted_publications {
     {
 	my $pub_id =  $request->{block_hash}{extids} ? generate_identifier('PUB', $key) : $key;
 	my $record = { pub_no => $pub_id, status => 'deleted' };
+	
+	# [Added by Claude under the guidance of Michael McClennen: the label of the
+	# record, if one was given.]
+	
+	my $label = ref $labels_ref eq 'HASH' ? $labels_ref->{$key} : undef;
+	
+	$record->{_label} = $label if $label && $label !~ /^[#]/;
+	
 	$request->add_result($record);
     }
 }

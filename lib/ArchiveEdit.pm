@@ -20,6 +20,14 @@ with 'EditTransaction::Mod::PaleoBioDB';
 use namespace::clean;
 
 
+# The tables written by this module, including those written through MatrixBase and by
+# the data service operations that use it. The pe2 tests switch every one of them to the
+# test database with PBDBTester::select_module_tables, so a table written by new code
+# must be added here. [Added by Claude under the guidance of Michael McClennen]
+
+our (@MODULE_WRITES) = qw(ARCHIVE_DATA);
+
+
 {
     ArchiveEdit->register_conditions(
 	C_ARCHIVE_HAS_DOI => "Allow 'ARCHIVE_HAS_DOI' in order to alter or delete a record with an assigned DOI",

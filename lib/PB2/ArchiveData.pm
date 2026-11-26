@@ -8,13 +8,16 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# ARCHIVES is now ARCHIVE_DATA.]
+
 use lib '..';
 
 package PB2::ArchiveData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE $TEST_DB);
 use ExternalIdent qw(VALID_IDENTIFIER generate_identifier);
 use TableData qw(complete_output_block);
 
@@ -111,7 +114,7 @@ sub initialize {
     
     my $dbh = $ds->get_connection;
     
-    complete_output_block($ds, $dbh, '1.2:archives:basic', 'ARCHIVES');
+    complete_output_block($ds, $dbh, '1.2:archives:basic', 'ARCHIVE_DATA');
 }
 
 
@@ -157,7 +160,7 @@ sub get_archive {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT arch.* FROM $TABLE{ARCHIVES} as arch
+	SELECT arch.* FROM $TABLE{ARCHIVE_DATA} as arch
         WHERE $query_string LIMIT 1";
     
     print STDERR "$request->{main_sql}\n\n" if $request->debug;
@@ -176,9 +179,9 @@ sub get_archive {
     unless ( $request->{main_record}{is_public} )
     {
 	my $archive_no = $request->{main_record}{archive_no};
-	my $perms = $request->require_authentication('ARCHIVES');
+	my $perms = $request->require_authentication('ARCHIVE_DATA');
 
-	my $p = $perms->check_record_permission('ARCHIVES', 'view', "archive_no=$archive_no",
+	my $p = $perms->check_record_permission('ARCHIVE_DATA', 'view', "archive_no=$archive_no",
 						$request->{main_record});
 	
 	unless ( $p =~ /view|admin/ )
@@ -210,7 +213,7 @@ sub retrieve_archive {
     my $archive_id = $dbh->quote($id);
     
     my $sql = "
-	SELECT arch.* FROM $TABLE{ARCHIVES} as arch
+	SELECT arch.* FROM $TABLE{ARCHIVE_DATA} as arch
         WHERE archive_no = $archive_id";
     
     print STDERR "$sql\n\n" if $request->debug;
@@ -223,9 +226,9 @@ sub retrieve_archive {
     
     unless ( $record->{is_public} )
     {
-	my $perms = $request->require_authentication('ARCHIVES');
+	my $perms = $request->require_authentication('ARCHIVE_DATA');
 
-	my $p = $perms->check_record_permission('ARCHIVES', 'view', "archive_no=$id", $record);
+	my $p = $perms->check_record_permission('ARCHIVE_DATA', 'view', "archive_no=$id", $record);
 	
 	unless ( $p =~ /view|admin/ )
 	{
@@ -237,30 +240,34 @@ sub retrieve_archive {
     # 404. The presence of the archive metadata record means that a missing file is an internal
     # error rather than a resource not found.
     
+    # [Changed by Claude under the guidance of Michael McClennen: the file name is given
+    # by archive_file_base.]
+    
     my $filename;
     my $encoding;
+    my $base = archive_file_base($id);
     
-    if ( -r "/var/paleomacro/archives/$id.gz" )
+    if ( -r "$base.gz" )
     {
-	$filename = "/var/paleomacro/archives/$id.gz";
+	$filename = "$base.gz";
 	$encoding = "gzip";
     }
     
-    elsif ( -r "/var/paleomacro/archives/$id.bz2" )
+    elsif ( -r "$base.bz2" )
     {
-	$filename = "/var/paleomacro/archives/$id.bz2";
+	$filename = "$base.bz2";
 	$encoding = "application/x-bzip2";
     }
     
-    elsif ( -r "/var/paleomacro/archives/$id" )
+    elsif ( -r $base )
     {
-	$filename = "/var/paleomacro/archives/$id";
+	$filename = $base;
 	$encoding = undef;
     }
     
     else
     {
-	print STDERR "ERROR: missing or unreadable archive file /var/paleomacro/archives/$id.gz|bz2\n";
+	print STDERR "ERROR: missing or unreadable archive file $base.gz|bz2\n";
 	die $request->exception('500', "Missing or unreadable archive data file");
     }
     
@@ -443,7 +450,7 @@ sub list_archives {
     # Generate the main query.
     
     $request->{main_sql} = "
-	SELECT $calc arch.* FROM $TABLE{ARCHIVES} as arch
+	SELECT $calc arch.* FROM $TABLE{ARCHIVE_DATA} as arch
         WHERE $filter_string
 	ORDER BY arch.archive_no desc $limit";
     
@@ -478,7 +485,7 @@ sub process_record {
 	# before, so that the output does not change.]
 	
 	$record->{permissions} =
-	    $request->{my_perms}->check_record_permission('ARCHIVES', 'modify',
+	    $request->{my_perms}->check_record_permission('ARCHIVE_DATA', 'modify',
 							  "archive_no=$record->{archive_no}",
 							  $record);
 	
@@ -502,6 +509,25 @@ sub process_record {
 	$record->{archive_no} = generate_identifier('DAR', $record->{archive_no})
 	    if $record->{archive_no};
     }
+}
+
+
+# archive_file_base ( archive_no )
+# 
+# [Added by Claude under the guidance of Michael McClennen.] Return the path of the file
+# holding the specified archive, without a suffix. If the archive table is in the test
+# database, the file name starts with 'T', so that a test archive cannot overwrite the
+# file of a real archive with the same number.
+
+our ($ARCHIVE_DIR) = "/var/paleomacro/archives";
+
+sub archive_file_base {
+    
+    my ($archive_no) = @_;
+    
+    my $is_test = $TEST_DB && $TABLE{ARCHIVE_DATA} =~ /^$TEST_DB[.]/;
+    
+    return $is_test ? "$ARCHIVE_DIR/T$archive_no" : "$ARCHIVE_DIR/$archive_no";
 }
 
 

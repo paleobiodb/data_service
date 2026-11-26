@@ -27,4 +27,12 @@ with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
+
+# The tables written by the data service operations that use this module. This module
+# writes whatever table it is given, so this lists only those of the operations, which
+# the pe2 tests switch to the test database with PBDBTester::select_module_tables.
+# [Added by Claude under the guidance of Michael McClennen]
+
+our (@MODULE_WRITES) = qw(PUBLICATION_DATA);
+
 1;

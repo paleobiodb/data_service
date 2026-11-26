@@ -36,6 +36,14 @@ with 'EditTransaction::Mod::PaleoBioDB';
 
 use namespace::clean;
 
+
+# The tables written by this module, including those written through MatrixBase and by
+# the data service operations that use it. The pe2 tests switch every one of them to the
+# test database with PBDBTester::select_module_tables, so a table written by new code
+# must be added here. [Added by Claude under the guidance of Michael McClennen]
+
+our (@MODULE_WRITES) = qw(RESOURCE_QUEUE RESOURCE_ACTIVE RESOURCE_IMAGES RESOURCE_TAGS);
+
 # [Changed by Claude under the guidance of Michael McClennen: these have the same defaults as
 # in 'configure', so that they are defined even if it has not been called.]
 
