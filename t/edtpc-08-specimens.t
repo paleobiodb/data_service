@@ -303,6 +303,21 @@ subtest 'occurrences' => sub {
     ok_failed_commit("a specimen in an unknown collection was rejected");
     
     ok_has_one_condition('E_KEY_NOT_FOUND', "the unknown collection was reported");
+    
+    # A specimen may not be linked to an occurrence that does not exist. [Added by Claude
+    # under the guidance of Michael McClennen]
+    
+    $edt = ok_new_edt(class => 'SpecimenEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('SPECIMEN_DATA', { specimen_code => 'S-y', occurrence_id => 99999999,
+					   reference_id => $REF });
+    
+    ok_failed_commit("a specimen of an unknown occurrence was rejected");
+    
+    ok_has_one_condition(qr/^E_KEY_NOT_FOUND .*'occurrence_id'/,
+			 "the unknown occurrence was reported");
+    
+    ok_no_record('SPECIMEN_DATA', "specimen_id = 'S-y'", "the specimen was not stored");
 };
 
 

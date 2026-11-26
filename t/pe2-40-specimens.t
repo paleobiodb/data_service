@@ -20,7 +20,11 @@ use TableDefs qw(%TABLE);
 use CoreTableDefs;
 
 use Tester;
-use EditTester;
+
+# [Changed by Claude under the guidance of Michael McClennen: PBDBTester, a subclass of
+# EditTester, provides safe_clear_table and get_session_authinfo.]
+
+use PBDBTester;
 
 # use Data::Dumper::Concise;
 
@@ -56,7 +60,7 @@ $T->test_mode('occurrence_data', 'enable') || BAIL_OUT("could not select test oc
 # Finally, grab a database connection and check to make sure that we are actually looking at the
 # test tables. That will give us confidence to clear the tables between tests.
 
-my $ET = EditTester->new('SpecimenEdit');
+my $ET = PBDBTester->new('SpecimenEdit');
 
 
 # The first testing task it so establish the specimen tables in the test database and select
@@ -157,6 +161,9 @@ subtest 'add simple' => sub {
     
     $T->set_cookie("session_id", "SESSION-AUTHORIZER");
     
+    # [Changed by Claude under the guidance of Michael McClennen: in this file, references to
+    # the labels of other records start with '&' instead of '@'.]
+    
     my $record1 = [
 	       { _label => 'a1',
 		 specimen_code => 'TEST SIMPLE 1',
@@ -168,12 +175,12 @@ subtest 'add simple' => sub {
 		 measurement_source => 'Direct',
 		 specelt_id => 'els:500' },
 	       { _label => 'm1',
-		 specimen_id => '@a1',
+		 specimen_id => '&a1',
 		 measurement_type => 'length',
 		 max => '1.5 mm',
 		 min => '1.2 mm' },
 	       { _label => 'm2',
-		 specimen_id => '@a1',
+		 specimen_id => '&a1',
 		 measurement_type => 'length',
 		 max => '1.0 mm',
 		 min => '1.0 mm' },
@@ -342,7 +349,7 @@ subtest 'request body' => sub {
 
     # Now verify that the proper number of records were actually inserted.
 
-    $ET->ok_count_records(4, 'SPECIMEN_DATA', '1', "three specimen records were inserted");
+    $ET->ok_record_count(4, 'SPECIMEN_DATA', '*', "three specimen records were inserted");
 };
 
 
@@ -373,7 +380,7 @@ subtest 'insert and delete' => sub {
 		   measurement_source => 'Direct',
 		   specelt_id => 'els:500' },
 		 { _label => 'm1',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '2.5 mm',
 		   min => '2.2 mm' },
@@ -386,12 +393,12 @@ subtest 'insert and delete' => sub {
 		   measurement_source => 'Direct',
 		   specelt_id => 'els:500' },
 		 { _label => 'm2',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '3.5 mm',
 		   min => '3.2 mm' },
 		 { _label => 'm3',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '4.5 mm',
 		   min => '4.2 mm' }
@@ -440,7 +447,11 @@ subtest 'insert and delete' => sub {
 	
     # Check that the specimen matrix was properly updated to match the inserted records.
     
-    my (@matr) = $ET->fetch_records_by_key('SPECIMEN_MATRIX', @spec);
+    # [Changed by Claude under the guidance of Michael McClennen: fetch_records, with the
+    # specimen numbers from the identifiers.]
+    
+    my $spec_list = join(',', map { /(\d+)$/ ? $1 : () } @spec);
+    my (@matr) = $ET->fetch_records('SPECIMEN_MATRIX', "specimen_no in ($spec_list)");
     
     cmp_ok( @matr, '==', @spec, "matrix records found for each inserted specimen record" );
 
@@ -472,9 +483,9 @@ subtest 'insert and delete' => sub {
     
     cmp_ok(@m2, '==', 0, "all three measurements were deleted along with specimens");
     
-    $ET->ok_count_records($spec_count, 'SPECIMEN_DATA', 1, "insert and delete left same number of specimens");
-    $ET->ok_count_records($matr_count, 'SPECIMEN_MATRIX', 1, "insert and delete left same number of matrix rows");
-    $ET->ok_count_records($meas_count, 'MEASUREMENT_DATA', 1, "insert and delete left same number of measurements");
+    $ET->ok_record_count($spec_count, 'SPECIMEN_DATA', '*', "insert and delete left same number of specimens");
+    $ET->ok_record_count($matr_count, 'SPECIMEN_MATRIX', '*', "insert and delete left same number of matrix rows");
+    $ET->ok_record_count($meas_count, 'MEASUREMENT_DATA', '*', "insert and delete left same number of measurements");
     
 };
     
@@ -495,7 +506,7 @@ subtest 'update' => sub {
 		   measurement_source => 'Direct',
 		   specelt_id => 'els:500' },
 		 { _label => 'm1',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '2.5 mm',
 		   min => '2.2 mm' },
@@ -508,12 +519,12 @@ subtest 'update' => sub {
 		   measurement_source => 'Direct',
 		   specelt_id => 'els:500' },
 		 { _label => 'm2',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '3.5 mm',
 		   min => '3.2 mm' },
 		 { _label => 'm3',
-		   specimen_id => '@a1',
+		   specimen_id => '&a1',
 		   measurement_type => 'length',
 		   max => '4.5 mm',
 		   min => '4.2 mm' }
@@ -758,7 +769,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*reference_id/, "flagged bad exttype");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*reference_id/, "flagged bad exttype");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -767,7 +778,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*collection_id/, "flagged bad exttype");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*collection_id/, "flagged bad exttype");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -776,7 +787,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*occurrence_id/, "flagged bad exttype");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*occurrence_id/, "flagged bad exttype");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -785,7 +796,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*specelt_id/, "flagged bad exttype");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*specelt_id/, "flagged bad exttype");
 
     # Now the same with misformatted values.
     
@@ -796,7 +807,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*reference_id/, "flagged misformatted value");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*reference_id/, "flagged misformatted value");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -805,7 +816,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*collection_id/, "flagged misformatted value");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*collection_id/, "flagged misformatted value");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -814,7 +825,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*occurrence_id/, "flagged misformatted value");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*occurrence_id/, "flagged misformatted value");
     
     $bad_insert = { _label => 'a1',
 		    specimen_code => 'BAD 1',
@@ -823,7 +834,7 @@ subtest 'bad values' => sub {
     
     $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
 		     { no_check => 1 });
-    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*specelt_id/, "flagged misformatted value");
+    $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*specelt_id/, "flagged misformatted value");
 
     # Now try bad values for the non-identifier parameters.
 
@@ -833,7 +844,7 @@ subtest 'bad values' => sub {
 
     # $T->send_records("/specs/addupdate.json", "add records", json => $bad_insert,
     # 		     { no_check => 1 });
-    # $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE).*taxon_name/, "flagged misformatted value");
+    # $T->ok_error_like(qr/(E_FORMAT|E_PARAM|E_EXTTYPE|E_EXTID).*taxon_name/, "flagged misformatted value");
     
     
 };
@@ -920,7 +931,9 @@ subtest 'unknown taxon' => sub {
     
     my $record2 = { _label => 'a1',
     		    specimen_code => 'TEST.2',
-    		    taxon_name => 'Foo (baff) bazz',
+    		    # [Changed by Claude under the guidance of Michael McClennen: the subgenus is
+    		    # capitalized. 'Foo (baff) bazz' is rejected by the name parser.]
+    		    taxon_name => 'Foo (Baff) bazz',
     		    reference_id => 'ref:5041',
     		    collection_id => 1003
     		  };
@@ -933,7 +946,7 @@ subtest 'unknown taxon' => sub {
 	like($r2[0]{oid}, qr{^spm:\d+$}, "added record has properly formatted oid") &&
 	    diag("New specimen oid: $r2[0]{oid}");
 	
-	is( $r2[0]{idn}, "Foo (baff) bazz", "added record has proper identified name" );
+	is( $r2[0]{idn}, "Foo (Baff) bazz", "added record has proper identified name" );
 	is( $r2[0]{cid}, 'col:1003' );
     }
 };

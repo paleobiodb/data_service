@@ -165,16 +165,19 @@ subtest 'unknown taxa' => sub {
 };
 
 
-# In a data entry request, a value starting with '@' refers to the label of another
-# record, and is returned as it is.
+# In a data entry request, a value starting with '&' refers to the label of another
+# record, and is returned as it is. [Changed by Claude under the guidance of Michael
+# McClennen: the prefix is '&', which EditTransaction recognizes, and '@' is rejected.]
 
 subtest 'labels' => sub {
     
     my $entry = { request => { is_data_entry => 1 } };
     
-    is( check('TXN', '@new1', $entry), 'value @new1', "a label in a data entry request" );
-    like( check('TXN', '@new1'), qr{^ERROR}, "but not in another request" );
-    like( check('TXN', '@new1', { request => { } }), qr{^ERROR}, "or one that is not data entry" );
+    is( check('TXN', '&new1', $entry), 'value &new1', "a label in a data entry request" );
+    like( check('TXN', '&new1'), qr{^ERROR}, "but not in another request" );
+    like( check('TXN', '&new1', { request => { } }), qr{^ERROR}, "or one that is not data entry" );
+    like( check('TXN', '@new1', $entry), qr{^ERROR}, "the old prefix '\@' is rejected" );
+    like( check('TXN', '&', $entry), qr{^ERROR}, "a label must not be empty" );
 };
 
 

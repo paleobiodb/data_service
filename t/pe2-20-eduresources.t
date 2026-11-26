@@ -707,9 +707,13 @@ subtest 'invalid' => sub {
     my $errors = [ { _label => 'e1', author => 'somebody' },	# 'title' not specified
 		   { _label => 'e2', title => 'Error 2',		# 'author' too long
 		     author => 'abcdefg' x 100 },
-		   { _label => 'e3', title => 'Error 3',		# bad value for 'orcid'
-		     orcid => '1234-5678-9012-345',			# and for 'is_video'
+		   { _label => 'e3', title => 'Error 3',		# bad value for 'is_video'
 		     is_video => 'foo' },
+		   # [Changed by Claude under the guidance of Michael McClennen: the bad
+		   # 'orcid' is in a record of its own. 'is_video' is checked by the ruleset,
+		   # and a record that fails it is not checked further.]
+		   { _label => 'e7', title => 'Error 7',		# bad value for 'orcid'
+		     orcid => '1234-5678-9012-345' },
 		   { _label => 'e4', title => 'Error 4',		# bad tags
 		     tags => 'foo, bar, api' },
 		   { _label => 'e5', title => 'Error 5',		# bad image data
@@ -723,8 +727,11 @@ subtest 'invalid' => sub {
     $T->ok_response_code($m1, '400', "insert with errors got 400 response");
     $T->ok_error_like($m1, qr{E_REQUIRED \(e1\):.*title}i, "error for missing title");
     $T->ok_error_like($m1, qr{E_WIDTH \(e2\):.*characters}i, "error for too long author");
-    $T->ok_error_like($m1, qr{E_FORMAT \(e3\):.*orcid.*valid}i, "error for bad orcid");
-    $T->ok_error_like($m1, qr{E_FORMAT \(e3\):.*is_video.*1}i, "error for bad is_video");
+    # [Changed by Claude under the guidance of Michael McClennen: a bad 'is_video' is an
+    # E_PARAM from the ruleset, and the bad 'orcid' is in record e7.]
+    
+    $T->ok_error_like($m1, qr{E_FORMAT \(e7\):.*orcid.*valid}i, "error for bad orcid");
+    $T->ok_error_like($m1, qr{E_PARAM \(e3\):.*is_video.*1}i, "error for bad is_video");
     $T->ok_error_like($m1, qr{E_FORMAT \(e5\):.*format}i, "error for bad image data");
     $T->ok_warning_like($m1, qr{W_TAG_NOT_FOUND \(e4\):.*foo}i, "warning for bad tag 'foo'");
     $T->ok_warning_like($m1, qr{W_TAG_NOT_FOUND \(e4\):.*bar}i, "warning for bad tag 'bar'");
@@ -741,11 +748,18 @@ subtest 'invalid' => sub {
     ok( $label{'e4'}, "inserted record e4" );
     ok( $label{'e6'}, "inserted record e6" );
     
-    $T->ok_warning_like($m2, qr{F_REQUIRED}, "warning for missing title");
-    $T->ok_warning_like($m2, qr{F_WIDTH.*'author'}, "warning for too long author");
-    $T->ok_warning_like($m2, qr{F_FORMAT.*'orcid'}, "warning for bad orcid");
-    $T->ok_warning_like($m2, qr{F_FORMAT.*'is_video'}, "warning for bad is_video");
-    $T->ok_warning_like($m2, qr{F_FORMAT.*image_data}, "warning for bad image data");
+    # [Changed by Claude under the guidance of Michael McClennen: demoted errors are reported
+    # with their E_ codes, as warnings.]
+    
+    $T->ok_warning_like($m2, qr{E_REQUIRED \(e1\)}, "warning for missing title");
+    $T->ok_warning_like($m2, qr{E_WIDTH \(e2\).*'author'}, "warning for too long author");
+    $T->ok_warning_like($m2, qr{E_FORMAT \(e7\).*'orcid'}, "warning for bad orcid");
+    $T->ok_warning_like($m2, qr{E_PARAM \(e3\).*'is_video'}, "warning for bad is_video");
+    $T->ok_warning_like($m2, qr{E_FORMAT \(e5\).*image_data}, "warning for bad image data");
+    
+    ok( ! $T->get_errors($m2), "no errors with PROCEED" );
+    
+    ok( ! $label{$_}, "record $_ was not inserted" ) foreach qw(e1 e2 e3 e5 e7);
 };
 
 
