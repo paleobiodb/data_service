@@ -86,7 +86,10 @@ our (%UNS_NAME) = ( 'NS' => 'NO_SPECIES_SPECIFIED',
 		    'NK' => 'NO_KINGDOM_SPECIFIED',
 		    'NT' => 'NO_TAXON_SPECIFIED' );
 
-our (%UNS_RANK) = ( 'NF' => 3, 'NG' => 5, 'NF' => 9, 'NO' => 13, 'NC' => 17, 'NP' => 20,
+# [Changed by Claude under the guidance of Michael McClennen: the first key is 'NS'. It
+# was 'NF', which the later 'NF' => 9 replaced, so that 'NS' had no rank.]
+
+our (%UNS_RANK) = ( 'NS' => 3, 'NG' => 5, 'NF' => 9, 'NO' => 13, 'NC' => 17, 'NP' => 20,
 		    'NK' => 23, 'NT' => 0 );
 
 # The status codes and various subsets

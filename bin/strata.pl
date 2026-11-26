@@ -235,8 +235,11 @@ our (%no_bracket_code) = ( 'Australian Capital Territory' => 'ACT', 'New South W
 			   'Queensland' => 'QLD', 'Tasmania' => 'TAS', 'Victoria' => 'VIC',
 			   'Antarctica' => 'ATA' );
 
+# [Changed by Claude under the guidance of Michael McClennen: removed strat_name_refs,
+# which is obsolete. Nothing in this script updated it.]
+
 our (%is_table_name) = ( all => 1, views => 1,
-			 strat_names => 1, strat_name_attrs => 1, strat_name_refs => 1,
+			 strat_names => 1, strat_name_attrs => 1,
 			 strat_names_view => 1,
 			 strat_concepts => 1, strat_concept_ccs => 1, strat_concepts_view => 1,
 			 strat_opinions => 1, strat_opinion_refs => 1, strat_opinions_view => 1,

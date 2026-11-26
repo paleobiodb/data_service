@@ -130,7 +130,8 @@ use ResourceDefs;
     set_table_name(STRAT_RAW => 'strat_raw');
     set_table_name(STRAT_NAMES => 'strat_names');
     set_table_name(STRAT_NATTRS => 'strat_name_attrs');
-    set_table_name(STRAT_NREFS => 'strat_name_refs');
+    # [Removed by Claude under the guidance of Michael McClennen: STRAT_NREFS, for the
+    # table 'strat_name_refs', which is obsolete.]
     set_table_name(STRAT_CONCEPTS => 'strat_concepts');
     set_table_name(STRAT_CONCEPT_CCS => 'strat_concept_ccs');
     set_table_name(STRAT_OPINIONS => 'strat_opinions');
@@ -272,7 +273,9 @@ use ResourceDefs;
     # set_column_property('MEASUREMENT_DATA', 'real_error', IGNORE => 1);
     
     set_table_property('SPECIMEN_MATRIX', PRIMARY_KEY => "specimen_no");
-    set_table_property(SPEC_MATRIX => TABLE_COMMENT =>
+    # [Changed by Claude under the guidance of Michael McClennen: the specifier is
+    # SPECIMEN_MATRIX. It was misspelled as SPEC_MATRIX.]
+    set_table_property(SPECIMEN_MATRIX => TABLE_COMMENT =>
 		       "This table should not be modified directly, but only through automatic processes");
     
     # [Removed by Claude under the guidance of Michael McClennen: a second block of interval

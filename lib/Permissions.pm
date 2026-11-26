@@ -499,6 +499,18 @@ sub default_table_permissions {
 	    $tp->{post} = 1;
 	}
 	
+	# [Added by Claude under the guidance of Michael McClennen: NOT_STUDENT is the
+	# same as AUTHORIZED, except for users whose role is 'student'. Students may enter
+	# collections, occurrences, and specimens, but not taxonomic names or opinions.
+	# This value was not handled, so nobody had the permission by default.]
+	
+	elsif ( $allow_post eq 'NOT_STUDENT' && $perms->{enterer_no} && $perms->{authorizer_no} &&
+		($perms->{role} // '') ne 'student' )
+	{
+	    $perms->{auth_diag}{$table_specifier} = 'NOT_STUDENT';
+	    $tp->{post} = 1;
+	}
+	
 	elsif ( $allow_post eq 'ALL' || $allow_post eq 'ANY' )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'ALL';
@@ -529,6 +541,16 @@ sub default_table_permissions {
 		$perms->{enterer_no} && $perms->{authorizer_no} )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
+	    $tp->{view} = 1;
+	}
+	
+	# [Added by Claude under the guidance of Michael McClennen: NOT_STUDENT, as
+	# above.]
+	
+	elsif ( $allow_view eq 'NOT_STUDENT' && $perms->{enterer_no} && $perms->{authorizer_no} &&
+		($perms->{role} // '') ne 'student' )
+	{
+	    $perms->{auth_diag}{$table_specifier} = 'NOT_STUDENT';
 	    $tp->{view} = 1;
 	}
 	
@@ -563,6 +585,16 @@ sub default_table_permissions {
 		$perms->{enterer_no} && $perms->{authorizer_no} )
 	{
 	    $perms->{auth_diag}{$table_specifier} = 'AUTHORIZED';
+	    $tp->{modify} = 1;
+	}
+	
+	# [Added by Claude under the guidance of Michael McClennen: NOT_STUDENT, as
+	# above.]
+	
+	elsif ( $allow_modify eq 'NOT_STUDENT' && $perms->{enterer_no} && $perms->{authorizer_no} &&
+		($perms->{role} // '') ne 'student' )
+	{
+	    $perms->{auth_diag}{$table_specifier} = 'NOT_STUDENT';
 	    $tp->{modify} = 1;
 	}
 	
