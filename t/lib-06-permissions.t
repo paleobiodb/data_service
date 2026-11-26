@@ -51,6 +51,9 @@ my %PROP = ( LIB06_POST_LOGGED_IN => [ CAN_POST => 'LOGGED_IN' ],
 	     LIB06_VIEW_ANY => [ CAN_VIEW => 'ANY' ],
 	     LIB06_MODIFY_LOGGED_IN => [ CAN_MODIFY => 'LOGGED_IN' ],
 	     LIB06_MODIFY_AUTHORIZED => [ CAN_MODIFY => 'AUTHORIZED' ],
+	     LIB06_POST_NOT_STUDENT => [ CAN_POST => 'NOT_STUDENT' ],
+	     LIB06_VIEW_NOT_STUDENT => [ CAN_VIEW => 'NOT_STUDENT' ],
+	     LIB06_MODIFY_NOT_STUDENT => [ CAN_MODIFY => 'NOT_STUDENT' ],
 	     LIB06_BYAUTH => [ CAN_POST => 'AUTHORIZED', BY_AUTHORIZER => 1 ],
 	     LIB06_OPEN => [ ] );
 
@@ -200,7 +203,8 @@ subtest 'expired sessions' => sub {
 # Without specific table permissions, the permissions come from the table's CAN_POST,
 # CAN_VIEW, and CAN_MODIFY properties: LOGGED_IN means anyone with a login, MEMBERS means
 # a database member (with an enterer_no), AUTHORIZED means a member with an authorizer,
-# and ALL or ANY means everyone. A table with none of these properties is unrestricted.
+# NOT_STUDENT means the same except for students, and ALL or ANY means everyone. A table
+# with none of these properties is unrestricted.
 
 subtest 'default permissions' => sub {
     
@@ -215,6 +219,12 @@ subtest 'default permissions' => sub {
 	LIB06_MODIFY_LOGGED_IN => { '' => '', GUEST => 'modify', UNAUTH => 'modify,post,view',
 				    ENTERER => 'modify,post,view' },
 	LIB06_MODIFY_AUTHORIZED => { '' => '', GUEST => '', UNAUTH => '', ENTERER => 'modify,post,view' },
+	LIB06_POST_NOT_STUDENT => { '' => '', GUEST => '', UNAUTH => '', STUDENT => '', ENTERER => 'post',
+				    AUTHORIZER => 'post' },
+	LIB06_VIEW_NOT_STUDENT => { '' => '', GUEST => '', UNAUTH => '', STUDENT => '', ENTERER => 'view',
+				    AUTHORIZER => 'view' },
+	LIB06_MODIFY_NOT_STUDENT => { '' => '', GUEST => '', UNAUTH => '', STUDENT => '',
+				      ENTERER => 'modify,post,view', AUTHORIZER => 'modify,post,view' },
 	LIB06_OPEN => { '' => 'unrestricted', GUEST => 'unrestricted', ENTERER => 'unrestricted' } );
     
     foreach my $table ( sort keys %expected )
@@ -227,6 +237,17 @@ subtest 'default permissions' => sub {
     }
     
     is( tp('ENTERER', 'LIB06_BYAUTH'), 'by_authorizer,post', "BY_AUTHORIZER adds 'by_authorizer'" );
+    
+    # The real definitions: students may enter collections, occurrences, and specimens,
+    # but not taxonomic names or opinions.
+    
+    is( tp('STUDENT', 'LIB06_POST_AUTHORIZED'), 'post', "a student may post to an AUTHORIZED table" );
+    
+    foreach my $t ( 'AUTHORITY_DATA', 'OPINION_DATA' )
+    {
+	is( tp('STUDENT', $t), '', "a student may not post or modify $t" );
+	is( tp('ENTERER', $t), 'modify,post,view', "another member may post and modify $t" );
+    }
     
     # AUTHORIZED requires both an authorizer_no and an enterer_no. No test session has an
     # authorizer without an enterer, so this object is made directly.
