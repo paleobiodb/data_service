@@ -24,6 +24,7 @@ use TaxonDefs;
 use lib 't';
 use Tester;
 use EditTester;
+use PBDBTester;
 use ResourceTables;
 
 use Test::Selection;
@@ -60,10 +61,10 @@ choose_subtests(@ARGV);
 # actually were.
 
 my $T = Tester->new({ prefix => 'data1.2' });
-# [Changed by Claude under the guidance of Michael McClennen: the class is ResourceEdit,
-# whose database methods ok_record_count and count_records use.]
+# [Changed by Claude under the guidance of Michael McClennen: this is a PBDBTester for the
+# class ResourceEdit, whose database methods ok_record_count and count_records use.]
 
-my $E = EditTester->new('ResourceEdit');
+my $E = PBDBTester->new('ResourceEdit');
 
 # Create a second instance of Tester for making requests on the main web
 # server. 
@@ -76,7 +77,11 @@ my $TT; # = Tester->new({ server => '127.0.0.1:80' });
 # two tests in this file.
 
 $T->test_mode('session_data', 'enable') || BAIL_OUT("could not select test session data");
-$T->test_mode('eduresources', 'enable') || BAIL_OUT("could not select test eduresource tables");
+# [Changed by Claude under the guidance of Michael McClennen: every table group that
+# ResourceEdit writes to is switched to the test database by select_module_tables, which
+# bails out if any of its tables cannot be switched.]
+
+$E->select_module_tables($T, 'ResourceEdit');
 
 
 # The first actual testing task is to create the necessary tables in the test database.

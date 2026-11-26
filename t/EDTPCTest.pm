@@ -21,6 +21,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifiers
+# PUBLICATIONS and ARCHIVES are now PUBLICATION_DATA and ARCHIVE_DATA.]
+
 package EDTPCTest;
 
 use TableDefs qw(%TABLE $TEST_DB change_table_db original_table_name);
@@ -40,8 +43,8 @@ use Carp qw(croak);
 # The tables used by each client module.
 
 our (%MODULE_TABLES) = (
-    PBDBEdit => [ 'PUBLICATIONS' ],
-    ArchiveEdit => [ 'ARCHIVES' ],
+    PBDBEdit => [ 'PUBLICATION_DATA' ],
+    ArchiveEdit => [ 'ARCHIVE_DATA' ],
     PhylopicEdit => [ 'PHYLOPIC_CHOICE', 'PHYLOPIC_SEEN', 'PHYLOPIC_NAMES', 'TAXON_ATTRS' ],
     ResourceEdit => [ 'RESOURCE_QUEUE', 'RESOURCE_ACTIVE', 'RESOURCE_IMAGES', 'RESOURCE_TAGS',
 		      'RESOURCE_TAG_NAMES' ],

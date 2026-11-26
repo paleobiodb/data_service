@@ -23,7 +23,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use File::Find;
 
@@ -40,6 +40,19 @@ use ExternalIdent qw(%IDP);
 # module are available.
 
 use PBDBEdit;
+
+# The client modules whose tables are switched to the test database by the pe2 tests. Each
+# one lists the tables it writes in @MODULE_WRITES. [Added by Claude under the guidance of
+# Michael McClennen]
+
+use ResourceEdit;
+use SpecimenEdit;
+use ReferenceEdit;
+use CollectionEdit;
+use ArchiveEdit;
+
+my @CLIENT_MODULES = qw(ResourceEdit SpecimenEdit ReferenceEdit CollectionEdit ArchiveEdit
+			PBDBEdit);
 
 
 my $dbh = connectDB('config.yml');
@@ -243,6 +256,55 @@ subtest 'table groups' => sub {
 
 # PBDBFields: every foreign key table is defined, every foreign key column exists, every
 # identifier type can be generated, and every special field is a known directive.
+
+# Each client module lists the tables it writes in @MODULE_WRITES, which the pe2 tests use
+# to switch those tables to the test database. Every table listed must be defined and be in
+# a table group, or it could not be switched. Every table that the module's own code writes
+# with an SQL statement or a record operation must be listed. Writes made through MatrixBase
+# or by the data service operations are not found this way, and are listed by hand. [Added
+# by Claude under the guidance of Michael McClennen]
+
+subtest 'module writes' => sub {
+    
+    my %in_group = map { $_ => 1 } map { @{$TableDefs::TABLE_GROUP{$_}} }
+	keys %TableDefs::TABLE_GROUP;
+    
+    foreach my $module ( @CLIENT_MODULES )
+    {
+	my @writes = do { no strict 'refs'; @{"${module}::MODULE_WRITES"} };
+	my %listed = map { $_ => 1 } @writes;
+	
+	ok( scalar(@writes), "$module lists the tables it writes" ) || next;
+	
+	check_all( "every table in \@${module}::MODULE_WRITES is defined", \@writes,
+		   sub { exists $TABLE{$_[0]} } );
+	
+	check_all( "every table in \@${module}::MODULE_WRITES is in a table group", \@writes,
+		   sub { $in_group{$_[0]} } );
+	
+	# Read the module's source, leaving out comment lines, and find the tables it writes.
+	
+	(my $path = "lib/$module.pm") =~ s{::}{/}g;
+	
+	open my $fh, '<', $path or do { fail("could not read $path"); next };
+	my $source = join('', grep { ! /^\s*#/ } <$fh>);
+	close $fh;
+	
+	my %written;
+	
+	$written{$1} = 1 while $source =~
+	    / \b (?: INSERT \s+ (?:IGNORE \s+)? INTO | REPLACE \s+ INTO | UPDATE | DELETE \s+ FROM )
+	      \s+ \$TABLE\{(\w+)\} /gxi;
+	
+	$written{$1} = 1 while $source =~
+	    / \b (?: insert | update | replace | delete | insert_update ) _record
+	      \( \s* ['"] (\w+) ['"] /gx;
+	
+	check_all( "every table that $module writes is in its \@MODULE_WRITES",
+		   [ sort keys %written ], sub { $listed{$_[0]} } );
+    }
+};
+
 
 subtest 'PBDBFields' => sub {
     

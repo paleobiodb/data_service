@@ -14,6 +14,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# ARCHIVES is now ARCHIVE_DATA.]
+
 use lib 't', '../lib', 'lib';
 use Test::More tests => 6;
 
@@ -56,7 +59,7 @@ subtest 'establish session data' => sub {
     
     $T->establish_session_data;
     
-    my $perm = $T->new_perm('SESSION-ENTERER', 'ARCHIVES');
+    my $perm = $T->new_perm('SESSION-ENTERER', 'ARCHIVE_DATA');
     
     is_deeply( [ $perm->authorizer_no, $perm->enterer_no ], [ 39998, 39997 ],
 	       "the session data is in place" );
@@ -122,20 +125,20 @@ subtest 'client modules' => sub {
 subtest 'transaction' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit',
-			 permission => $T->new_perm('SESSION-ENTERER', 'ARCHIVES'));
+			 permission => $T->new_perm('SESSION-ENTERER', 'ARCHIVE_DATA'));
     
-    $edt->insert_record('ARCHIVES', { title => 'edtpc-01 archive' });
+    $edt->insert_record('ARCHIVE_DATA', { title => 'edtpc-01 archive' });
     
     ok_commit("an archive was added");
     
     my $record = $T->dbh->selectrow_hashref("
-		SELECT * FROM $TABLE{ARCHIVES} WHERE title = 'edtpc-01 archive'");
+		SELECT * FROM $TABLE{ARCHIVE_DATA} WHERE title = 'edtpc-01 archive'");
     
     is_deeply( [ @{$record}{qw(authorizer_no enterer_no)} ], [ 39998, 39997 ],
 	       "the authorizer and enterer were filled in" );
     
     my ($real_count) = $T->dbh->selectrow_array("
-		SELECT count(*) FROM " . original_table_name($TABLE{ARCHIVES}) . "
+		SELECT count(*) FROM " . original_table_name($TABLE{ARCHIVE_DATA}) . "
 		WHERE title = 'edtpc-01 archive'");
     
     is( $real_count, 0, "the real table was not changed" );
@@ -147,9 +150,9 @@ subtest 'transaction' => sub {
 subtest 'guest' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit',
-			 permission => $T->new_perm('SESSION-GUEST', 'ARCHIVES'));
+			 permission => $T->new_perm('SESSION-GUEST', 'ARCHIVE_DATA'));
     
-    $edt->insert_record('ARCHIVES', { title => 'edtpc-01 guest archive' });
+    $edt->insert_record('ARCHIVE_DATA', { title => 'edtpc-01 guest archive' });
     
     ok_failed_commit("a guest cannot add an archive");
     

@@ -141,6 +141,23 @@ subtest 'insert with authors' => sub {
 		FROM <<REFERENCE_DATA>> WHERE reference_no = $key");
     
     is( "$firstpage|$lastpage", "12|15", "the page range was split without spaces" );
+    
+    # A list of strings is split on semicolons, as a single string is. The data service
+    # always passes a list. [Added by Claude under the guidance of Michael McClennen]
+    
+    $edt = ok_new_edt(class => 'ReferenceEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('REFERENCE_DATA', { %ARTICLE, reftitle => 'Semicolons in a list',
+	authors => [ 'Smith, John A.; Jones, B.' ], editors => [ 'Doe, Jane; Roe, R.' ] });
+    
+    ok_commit("a reference with names separated by semicolons in a list was inserted");
+    
+    ($key) = $edt->inserted_keys;
+    
+    is( names('REFERENCE_AUTHORS', $key), "Smith, John A.; Jones, B.",
+	"the authors in the list were split" );
+    is( names('REFERENCE_EDITORS', $key), "Doe, Jane; Roe, R.",
+	"and so were the editors" );
 };
 
 

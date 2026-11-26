@@ -12,6 +12,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifiers
+# PUBLICATIONS and ARCHIVES are now PUBLICATION_DATA and ARCHIVE_DATA.]
+
 use lib 't', '../lib', 'lib';
 use Test::More tests => 1;
 
@@ -30,8 +33,8 @@ my $perm_a = $T->new_perm('SESSION-WITH-ADMIN');
 
 $T->establish_session_data;
 $T->set_specific_permission('RESOURCE_QUEUE', $perm_a, 'admin');
-$T->set_specific_permission('PUBLICATIONS', $perm_a, 'admin');
-$T->set_specific_permission('ARCHIVES', $perm_a, 'admin');
+$T->set_specific_permission('PUBLICATION_DATA', $perm_a, 'admin');
+$T->set_specific_permission('ARCHIVE_DATA', $perm_a, 'admin');
 # [Changed by Claude under the guidance of Michael McClennen: TIMESCALE_DATA is no longer
 # defined. The same table is SCALE_DATA.]
 # $T->set_specific_permission('SCALE_DATA', $perm_a, 'admin');

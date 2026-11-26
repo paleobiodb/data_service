@@ -956,5 +956,70 @@ sub test_entry_filter {
 }
 
 
-1;
+# select_module_tables ( tester, class )
+# 
+# [Added by Claude under the guidance of Michael McClennen.] Switch every table that the
+# specified client module writes to the test database, both on the server, through the
+# Tester instance $tester, and in this process. This is done by enabling each table group
+# that contains one of those tables. If any of them is in no group, or a group cannot be
+# enabled, bail out, because the server would then write to the real table. Return the
+# list of groups that were enabled.
+# 
+# The tables are listed in the package variable @MODULE_WRITES of the class, which must
+# be loaded already. They include the tables written by MatrixBase and by the data service
+# operations for the class, as well as by the class itself.
 
+sub select_module_tables {
+    
+    my ($T, $tester, $class) = @_;
+    
+    my $tables;
+    
+    {
+	no strict 'refs';
+	$tables = \@{"${class}::MODULE_WRITES"};
+    }
+    
+    croak "no tables are listed in \@${class}::MODULE_WRITES" unless @$tables;
+    
+    # Find the group of each table.
+    
+    my (%group_of, @groups, %seen);
+    
+    foreach my $group ( sort keys %TableDefs::TABLE_GROUP )
+    {
+	$group_of{$_} ||= $group foreach $TableDefs::TABLE_GROUP{$group}->@*;
+    }
+    
+    foreach my $table ( @$tables )
+    {
+	my $group = $group_of{$table} ||
+	    BAIL_OUT("table '$table' written by $class is in no table group");
+	
+	push @groups, $group unless $seen{$group}++;
+    }
+    
+    # Enable each group on the server and locally, and check that every table is now in
+    # the test database.
+    
+    foreach my $group ( @groups )
+    {
+	$tester->test_mode($group, 'enable') ||
+	    BAIL_OUT("could not select the test tables for '$group' on the server");
+	
+	enable_test_mode($group);
+    }
+    
+    my $test_db = configData->{test_db};
+    
+    foreach my $table ( @$tables )
+    {
+	BAIL_OUT("table '$table' is not in the test database")
+	    unless $test_db && $TABLE{$table} =~ /^$test_db[.]/;
+    }
+    
+    return @groups;
+}
+
+
+1;

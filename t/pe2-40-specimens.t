@@ -11,12 +11,12 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::More tests => 17;
+use Test::More tests => 18;
 
 use lib qw(lib ../lib t);
 
 use CoreFunction qw(connectDB configData);
-use TableDefs qw(%TABLE);
+use TableDefs qw(%TABLE original_table_name);
 use CoreTableDefs;
 
 use Tester;
@@ -54,13 +54,23 @@ my $T = Tester->new({ prefix => 'data1.2' });
 # two tests in this file.
 
 $T->test_mode('session_data', 'enable') || BAIL_OUT("could not select test session data");
-$T->test_mode('specimen_data', 'enable') || BAIL_OUT("could not select test specimen tables");
-$T->test_mode('occurrence_data', 'enable') || BAIL_OUT("could not select test occurrence tables");
 
 # Finally, grab a database connection and check to make sure that we are actually looking at the
 # test tables. That will give us confidence to clear the tables between tests.
 
 my $ET = PBDBTester->new('SpecimenEdit');
+
+# [Changed by Claude under the guidance of Michael McClennen: every table group that
+# SpecimenEdit writes to is switched to the test database by select_module_tables, which
+# bails out if any of its tables cannot be switched.]
+
+$ET->select_module_tables($T, 'SpecimenEdit');
+
+
+# The collections copied into the test tables. [Added by Claude under the guidance of
+# Michael McClennen]
+
+my (@TEST_COLLS);
 
 
 # The first testing task it so establish the specimen tables in the test database and select
@@ -76,6 +86,33 @@ subtest 'establish tables' => sub {
     
     $ET->fill_test_table('OCCURRENCE_DATA', "taxon_no = $TAXON_NO_2", 'test');
     $ET->fill_test_table('OCCURRENCE_MATRIX', "taxon_no = $TAXON_NO_2", 'test');
+    
+    # [Added by Claude under the guidance of Michael McClennen: the collection tables are in
+    # the test database too, because adding a specimen to a collection updates the
+    # collection's occurrence count. Three Permian collections are copied from the real
+    # tables, which are only read, along with the collections of the occurrences.]
+    
+    $ET->establish_test_tables('collection_data', 'test') ||
+	BAIL_OUT("could not establish test tables for 'collection_data'");
+    
+    my $real_matrix = original_table_name($TABLE{COLLECTION_MATRIX});
+    
+    @TEST_COLLS = $ET->dbh->selectcol_arrayref("
+		SELECT collection_no FROM $real_matrix WHERE early_age <= 299 and late_age >= 252
+		ORDER BY collection_no LIMIT 3")->@*;
+    
+    cmp_ok( scalar(@TEST_COLLS), '==', 3, "found three Permian collections" ) ||
+	BAIL_OUT("could not find the collections to copy");
+    
+    # The collections of the occurrences copied above are copied as well, so that the
+    # occurrences can be listed.
+    
+    my $coll_list = join(',', @TEST_COLLS);
+    my $coll_expr = "collection_no in ($coll_list) or collection_no in
+		(SELECT collection_no FROM $TABLE{OCCURRENCE_DATA})";
+    
+    $ET->fill_test_table('COLLECTION_DATA', $coll_expr, 'test');
+    $ET->fill_test_table('COLLECTION_MATRIX', $coll_expr, 'test');
     
     $ET->start_test_mode('specimen_data') || BAIL_OUT "could not select test specimen tables locally";
     $ET->start_test_mode('occurrence_data') || BAIL_OUT "could not select test occurrence tables locally";
@@ -574,7 +611,10 @@ subtest 'insert and delete from collection' => sub {
     
     # First fetch a collection.
     
-    my ($coll1) = $T->fetch_records("/colls/list.json?interval=permian&limit=1", "fetched an arbitrary collection");
+    # [Changed by Claude under the guidance of Michael McClennen: the collection is one of
+    # those copied into the test tables.]
+    
+    my ($coll1) = { oid => "col:$TEST_COLLS[0]" };
     
     my $coll_id = $coll1->{oid};
 
@@ -856,8 +896,10 @@ subtest 'change occurrence' => sub {
 
     # First fetch a collection.
     
-    my ($coll2, $coll1) = $T->fetch_records("/colls/list.json?interval=permian&limit=2",
-					    "fetched an arbitrary collection");
+    # [Changed by Claude under the guidance of Michael McClennen: the collections are two of
+    # those copied into the test tables.]
+    
+    my ($coll2, $coll1) = map { { oid => "col:$_" } } @TEST_COLLS[1,2];
     
     my $coll_id = $coll1->{oid};
     
@@ -960,7 +1002,7 @@ subtest 'unknown taxon' => sub {
     		    # capitalized. 'Foo (baff) bazz' is rejected by the name parser.]
     		    taxon_name => 'Foo (Baff) bazz',
     		    reference_id => 'ref:5041',
-    		    collection_id => 1003
+    		    collection_id => "col:$TEST_COLLS[0]"
     		  };
     
     my (@r2) = $T->send_records("/specs/addupdate.json?allow=UNKNOWN_TAXON", "add with unknown taxon",
@@ -972,7 +1014,7 @@ subtest 'unknown taxon' => sub {
 	    diag("New specimen oid: $r2[0]{oid}");
 	
 	is( $r2[0]{idn}, "Foo (Baff) bazz", "added record has proper identified name" );
-	is( $r2[0]{cid}, 'col:1003' );
+	is( $r2[0]{cid}, "col:$TEST_COLLS[0]", "added record has the proper collection id" );
     }
 };
 

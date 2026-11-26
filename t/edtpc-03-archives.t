@@ -15,6 +15,9 @@
 
 use strict;
 
+# [Changed by Claude under the guidance of Michael McClennen: the table specifier
+# ARCHIVES is now ARCHIVE_DATA.]
+
 use lib 't', '../lib', 'lib';
 use Test::More tests => 8;
 
@@ -36,7 +39,7 @@ sub perm {
     
     my ($name) = @_;
     
-    return $T->new_perm("SESSION-$name", 'ARCHIVES');
+    return $T->new_perm("SESSION-$name", 'ARCHIVE_DATA');
 }
 
 
@@ -45,9 +48,9 @@ sub perm {
 
 sub reset_archives {
     
-    clear_table('ARCHIVES');
+    clear_table('ARCHIVE_DATA');
     
-    sql_command("INSERT INTO <<ARCHIVES>> (archive_no, authorizer_no, enterer_no, title,
+    sql_command("INSERT INTO <<ARCHIVE_DATA>> (archive_no, authorizer_no, enterer_no, title,
 		 description, doi) VALUES (1, 39998, 39997, 'with doi', 'desc 1', '10.9999/one'),
 		 (2, 39998, 39997, 'without doi', 'desc 2', '')");
 }
@@ -56,8 +59,8 @@ subtest 'setup' => sub {
     
     reset_archives();
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and doi <> ''");
-    ok_found_record('ARCHIVES', "archive_no = 2 and doi = ''");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and doi <> ''");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 2 and doi = ''");
 };
 
 
@@ -68,7 +71,7 @@ subtest 'insert with doi' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->insert_record('ARCHIVES', { title => 'member doi', doi => '10.9999/member' });
+    $edt->insert_record('ARCHIVE_DATA', { title => 'member doi', doi => '10.9999/member' });
     
     ok_failed_commit("a member cannot create an archive with a doi");
     
@@ -76,7 +79,7 @@ subtest 'insert with doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'));
     
-    $edt->insert_record('ARCHIVES', { title => 'admin doi', doi => '10.9999/admin' });
+    $edt->insert_record('ARCHIVE_DATA', { title => 'admin doi', doi => '10.9999/admin' });
     
     ok_failed_commit("an administrator needs an allowance to create an archive with a doi");
     
@@ -84,12 +87,12 @@ subtest 'insert with doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'), 'ARCHIVE_HAS_DOI');
     
-    $edt->insert_record('ARCHIVES', { title => 'admin doi', doi => '10.9999/admin' });
+    $edt->insert_record('ARCHIVE_DATA', { title => 'admin doi', doi => '10.9999/admin' });
     
     ok_commit("an administrator with the allowance can create an archive with a doi");
     
-    ok_found_record('ARCHIVES', "title = 'admin doi' and doi = '10.9999/admin'");
-    ok_no_record('ARCHIVES', "title = 'member doi'");
+    ok_found_record('ARCHIVE_DATA', "title = 'admin doi' and doi = '10.9999/admin'");
+    ok_no_record('ARCHIVE_DATA', "title = 'member doi'");
 };
 
 
@@ -101,7 +104,7 @@ subtest 'set doi' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, doi => '10.9999/two' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, doi => '10.9999/two' });
     
     ok_failed_commit("the owner cannot set the doi");
     
@@ -109,15 +112,15 @@ subtest 'set doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, title => 'empty doi', doi => '' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, title => 'empty doi', doi => '' });
     
     ok_commit("the owner can submit an empty doi for an archive that has none");
     
-    ok_found_record('ARCHIVES', "archive_no = 2 and title = 'empty doi' and doi = ''");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 2 and title = 'empty doi' and doi = ''");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 1, doi => '' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 1, doi => '' });
     
     ok_failed_commit("the owner cannot remove the doi");
     
@@ -125,7 +128,7 @@ subtest 'set doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, doi => '10.9999/two' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, doi => '10.9999/two' });
     
     ok_failed_commit("an administrator needs an allowance to set the doi");
     
@@ -133,11 +136,11 @@ subtest 'set doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'), 'ARCHIVE_HAS_DOI');
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, doi => '10.9999/two' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, doi => '10.9999/two' });
     
     ok_commit("an administrator with the allowance can set the doi");
     
-    ok_found_record('ARCHIVES', "archive_no = 2 and doi = '10.9999/two'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 2 and doi = '10.9999/two'");
 };
 
 
@@ -150,41 +153,41 @@ subtest 'update with doi' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, title => 'changed title' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, title => 'changed title' });
     
     ok_commit("the owner can change an archive without a doi");
     
-    ok_found_record('ARCHIVES', "archive_no = 2 and title = 'changed title'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 2 and title = 'changed title'");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 1, title => 'changed title' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 1, title => 'changed title' });
     
     ok_failed_commit("the owner cannot change the title of an archive with a doi");
     
     ok_has_one_condition('E_IMMUTABLE', "the archive was reported as immutable");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and title = 'with doi'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and title = 'with doi'");
   
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 1, description => 'changed desc' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 1, description => 'changed desc' });
     
     ok_commit("the owner can change the description of an archive with a doi");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and description = 'changed desc'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and description = 'changed desc'");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->update_record('ARCHIVES', { archive_id => 'dar:1', description => 'second desc' });
+    $edt->update_record('ARCHIVE_DATA', { archive_id => 'dar:1', description => 'second desc' });
     
     ok_commit("the description can be changed when the key is given as archive_id");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and description = 'second desc'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and description = 'second desc'");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 1, title => 'admin title' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 1, title => 'admin title' });
     
     ok_failed_commit("an administrator needs an allowance to change an archive with a doi");
     
@@ -192,11 +195,11 @@ subtest 'update with doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'), 'ARCHIVE_HAS_DOI');
     
-    $edt->update_record('ARCHIVES', { archive_no => 1, title => 'admin title' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 1, title => 'admin title' });
     
     ok_commit("an administrator with the allowance can change an archive with a doi");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and title = 'admin title'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and title = 'admin title'");
 };
 
 
@@ -209,7 +212,7 @@ subtest 'replace with doi' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'));
     
-    $edt->replace_record('ARCHIVES', { archive_no => 1, title => 'replaced',
+    $edt->replace_record('ARCHIVE_DATA', { archive_no => 1, title => 'replaced',
 				       doi => '10.9999/one' });
     
     ok_failed_commit("an administrator needs an allowance to replace an archive with a doi");
@@ -218,14 +221,14 @@ subtest 'replace with doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'), 'ARCHIVE_HAS_DOI');
     
-    $edt->replace_record('ARCHIVES', { archive_no => 1, title => 'replaced',
+    $edt->replace_record('ARCHIVE_DATA', { archive_no => 1, title => 'replaced',
 				       doi => '10.9999/one' });
     
     ok_commit("an administrator with the allowance can replace an archive with a doi");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and title = 'replaced' and doi = '10.9999/one'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and title = 'replaced' and doi = '10.9999/one'");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and enterer_no = 39997 and modifier_no = 39999",
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and enterer_no = 39997 and modifier_no = 39999",
 		    "the owner was kept and the administrator was recorded as the modifier");
 };
 
@@ -238,15 +241,15 @@ subtest 'delete with doi' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->delete_record('ARCHIVES', 2);
+    $edt->delete_record('ARCHIVE_DATA', 2);
     
     ok_commit("the owner can delete an archive without a doi");
     
-    ok_no_record('ARCHIVES', "archive_no = 2");
+    ok_no_record('ARCHIVE_DATA', "archive_no = 2");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('ENTERER'));
     
-    $edt->delete_record('ARCHIVES', 1);
+    $edt->delete_record('ARCHIVE_DATA', 1);
     
     ok_failed_commit("the owner cannot delete an archive with a doi");
     
@@ -254,21 +257,21 @@ subtest 'delete with doi' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'));
     
-    $edt->delete_record('ARCHIVES', 1);
+    $edt->delete_record('ARCHIVE_DATA', 1);
     
     ok_failed_commit("an administrator needs an allowance to delete an archive with a doi");
     
     ok_has_one_condition('C_ARCHIVE_HAS_DOI', "the caution was reported");
     
-    ok_found_record('ARCHIVES', "archive_no = 1");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1");
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('SUPERUSER'), 'ARCHIVE_HAS_DOI');
     
-    $edt->delete_record('ARCHIVES', 1);
+    $edt->delete_record('ARCHIVE_DATA', 1);
     
     ok_commit("an administrator with the allowance can delete an archive with a doi");
     
-    ok_no_record('ARCHIVES', "archive_no = 1");
+    ok_no_record('ARCHIVE_DATA', "archive_no = 1");
 };
 
 
@@ -281,7 +284,7 @@ subtest 'other members' => sub {
     
     my $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('OTHER'));
     
-    $edt->update_record('ARCHIVES', { archive_no => 2, title => 'not mine' });
+    $edt->update_record('ARCHIVE_DATA', { archive_no => 2, title => 'not mine' });
     
     ok_failed_commit("another member cannot change an archive");
     
@@ -289,13 +292,13 @@ subtest 'other members' => sub {
     
     $edt = ok_new_edt(class => 'ArchiveEdit', permission => perm('OTHER'));
     
-    $edt->delete_record('ARCHIVES', 'dar:2');
+    $edt->delete_record('ARCHIVE_DATA', 'dar:2');
     
     ok_failed_commit("another member cannot delete an archive");
     
     ok_has_one_condition('E_PERMISSION', "the refusal was reported as a permission error");
     
-    ok_found_record('ARCHIVES', "archive_no = 2 and title = 'without doi'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 2 and title = 'without doi'");
 };
 
 
@@ -306,7 +309,7 @@ subtest 'positional arguments' => sub {
     
     reset_archives();
     
-    my $edt = ArchiveEdit->new($T->dbh, perm('SUPERUSER'), 'ARCHIVES', { ARCHIVE_HAS_DOI => 1 });
+    my $edt = ArchiveEdit->new($T->dbh, perm('SUPERUSER'), 'ARCHIVE_DATA', { ARCHIVE_HAS_DOI => 1 });
     
     isa_ok( $edt, 'ArchiveEdit', "the transaction" );
     
@@ -316,5 +319,5 @@ subtest 'positional arguments' => sub {
     
     ok_commit($edt, "the record was updated");
     
-    ok_found_record('ARCHIVES', "archive_no = 1 and title = 'positional'");
+    ok_found_record('ARCHIVE_DATA', "archive_no = 1 and title = 'positional'");
 };
