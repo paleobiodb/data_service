@@ -9,7 +9,8 @@
 #                          covered by edt-16 and edt-29: the default permission methods,
 #                          bad superior table configurations, keys of subordinate records,
 #                          references in key and link values, the before_key_column
-#                          hook, and subordinate tables with no primary key.
+#                          hook, subordinate tables with no primary key, and deleting
+#                          subordinate records whose superior record does not exist.
 #
 # Added by Claude under the guidance of Michael McClennen.
 #
@@ -17,7 +18,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 13;
+use Test::More tests => 14;
 
 use ETBasicTest;
 use EditTester qw(ok_new_edt ok_commit ok_failed_commit ok_no_conditions ok_no_errors
@@ -256,6 +257,82 @@ subtest 'subordinate record keys' => sub {
     
     ok( ! (grep { /Linked record/ } $edt->conditions('&_')),
 	"the linked record, which exists, is not reported as missing" );
+};
+
+
+
+# Check deleting a subordinate record whose superior record does not exist. This is
+# allowed if the permission on the record is 'unrestricted', 'admin', or 'admin_unlock',
+# and refused with E_NOT_FOUND naming the missing link value otherwise. Other operations
+# on such a record are always refused. [Added by Claude under the guidance of Michael
+# McClennen]
+
+subtest 'orphaned subordinate records' => sub {
+    
+    reset_tables();
+    
+    sql_command("INSERT INTO <<EDT_SUB>> (aux_no, test_no, name) VALUES
+		 (2, 999, 'orphan two'), (3, 999, 'orphan three'), (4, 999, 'orphan four')");
+    
+    # The default permission method returns 'unrestricted'.
+    
+    my $edt = ok_new_edt;
+    
+    $edt->delete_record('EDT_SUB', 2);
+    
+    ok_no_conditions('&_', "unrestricted delete of an orphaned record has no conditions");
+    
+    ok_commit("the transaction commits");
+    
+    ok_no_record('EDT_SUB', "aux_no = 2", "the orphaned record was deleted");
+    
+    $edt = ok_new_edt;
+    
+    $edt->update_record('EDT_SUB', { aux_no => 3, name => 'changed' });
+    
+    ok_has_one_condition('&_', 'E_NOT_FOUND', qr/Linked record '999' was not found/,
+			 "update of an orphaned record is refused, naming the link value");
+    
+    # Override the permission on the subordinate table, keeping the default for the
+    # superior table so that its record is still not found.
+    
+    my $row_perm;
+    
+    local *ETBasicTest::check_row_permission = sub {
+	return $_[1] eq 'EDT_SUB' ? ($row_perm, 1)
+	    : EditTransaction::Authorization::check_row_permission(@_);
+    };
+    
+    foreach my $perm ( 'owned', 'granted' )
+    {
+	$row_perm = $perm;
+	
+	$edt = ok_new_edt;
+	
+	$edt->delete_record('EDT_SUB', 3);
+	
+	ok_has_one_condition('&_', 'E_NOT_FOUND', qr/Linked record '999' was not found/,
+			     "delete with permission '$perm' is refused");
+	
+	is( $edt->action_ref('&_')->permission, 'notfound', "the action is not authorized" );
+	
+	ok_failed_commit("the transaction fails");
+    }
+    
+    ok_found_record('EDT_SUB', "aux_no = 3", "the orphaned record was not deleted");
+    
+    foreach my $perm ( 'admin', 'admin_unlock' )
+    {
+	$row_perm = $perm;
+	
+	$edt = ok_new_edt;
+	
+	$edt->delete_record('EDT_SUB', $perm eq 'admin' ? 3 : 4);
+	
+	ok_no_errors('&_', "delete with permission '$perm' has no errors");
+	
+	is( $edt->action_ref('&_')->permission, $perm, "the action has permission '$perm'" );
+    }
 };
 
 
