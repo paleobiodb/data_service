@@ -405,12 +405,38 @@ sub authorize_against_table {
 		return $action->set_permission('none');
 	    }
 	    
-	    # If the linking key was not found, add E_NOT_FOUND.
-	    
+	    # If the linking key was not found, add E_NOT_FOUND. The exception is a delete by
+	    # a user whose permission on the records to be deleted is 'unrestricted', 'admin',
+	    # or 'admin_unlock', which lets a superuser or table administrator remove records
+	    # whose superior record does not exist. [Changed by Claude under the guidance of
+	    # Michael McClennen: added the exception, and the condition names the link value.]
+
 	    elsif ( $link_permission eq 'notfound' )
 	    {
-		$edt->add_condition($action, 'E_NOT_FOUND', 'link');
-		return $action->set_permission('notfound');
+		if ( $operation eq 'delete' && $key_expr )
+		{
+		    my ($row_permission, $row_count) =
+			$edt->check_row_permission($table_specifier, 'delete', $key_expr);
+
+		    if ( ref $row_permission eq 'ARRAY' )
+		    {
+			$edt->add_condition($action, $row_permission->@*);
+			return $action->set_permission('none');
+		    }
+
+		    elsif ( $row_permission && $row_permission =~ /^unrestricted$|^admin/ )
+		    {
+			$primary = $row_permission;
+			$count = $row_count;
+		    }
+		}
+
+		unless ( $primary )
+		{
+		    $edt->add_condition($action, 'E_NOT_FOUND', 'link',
+					join(',', $action->linkvalues));
+		    return $action->set_permission('notfound');
+		}
 	    }
 	    
 	    # If permission was denied, add E_PERMISSION.
