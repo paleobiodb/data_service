@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::More tests => 12;
+use Test::More tests => 17;
 
 # use CoreFunction qw(loadConfig configData);
 
@@ -60,7 +60,10 @@ choose_subtests(@ARGV);
 # actually were.
 
 my $T = Tester->new({ prefix => 'data1.2' });
-my $E = EditTester->new;
+# [Changed by Claude under the guidance of Michael McClennen: the class is ResourceEdit,
+# whose database methods ok_record_count and count_records use.]
+
+my $E = EditTester->new('ResourceEdit');
 
 # Create a second instance of Tester for making requests on the main web
 # server. 
@@ -760,6 +763,220 @@ subtest 'invalid' => sub {
     ok( ! $T->get_errors($m2), "no errors with PROCEED" );
     
     ok( ! $label{$_}, "record $_ was not inserted" ) foreach qw(e1 e2 e3 e5 e7);
+};
+
+
+# [Added by Claude under the guidance of Michael McClennen: the following five subtests.]
+
+# Return the eduresource_no from an identifier such as 'edr:12'.
+
+sub resource_no {
+    
+    my ($oid) = @_;
+    
+    return $oid && $oid =~ /(\d+)$/ ? $1 : 0;
+}
+
+
+# A user without administrative privilege may not choose the status of a new record. It is
+# stored as 'pending', with a warning.
+
+subtest 'status by nonadmin' => sub {
+    
+    select_subtest || return;
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my $record = { _label => 's1', title => 'Status Test 1', status => 'active' };
+    
+    my ($m) = $T->send_data("/eduresources/addupdate.json", "nonadmin add with status active",
+			    json => [ $record ]);
+    
+    my ($r) = $T->extract_records($m, "nonadmin add with status active: records");
+    
+    is( $r && $r->{sta}, 'pending', "the status was set to 'pending'" );
+    
+    $T->ok_warning_like($m, qr{W_PERM .*'pending'}, "a warning reports the change of status");
+    
+    $E->ok_record_count(0, 'RESOURCE_ACTIVE', "id = " . resource_no($r && $r->{oid}),
+			"the record is not in the active table");
+};
+
+
+# Tags are assigned to a record in the active table when it is activated, replaced when it is
+# activated again, and removed along with the active record when it is deleted. An update of
+# an active record leaves the active copy alone until the record is activated again.
+
+subtest 'tags and activation' => sub {
+    
+    select_subtest || return;
+    
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+    
+    my $record = { _label => 't1', title => 'Tag Test 1', tags => 'api,tutorial',
+		   status => 'active' };
+    
+    my ($r1) = $T->send_records("/eduresources/addupdate.json", "add active with tags",
+				json => [ $record ]);
+    
+    my $no = resource_no($r1 && $r1->{oid}) || return;
+    
+    $E->ok_record_count(1, 'RESOURCE_ACTIVE', "id = $no", "the record is in the active table");
+    $E->ok_record_count(2, 'RESOURCE_TAGS', "resource_id = $no", "it has two tags");
+    
+    # An update without a status puts the record into 'changes', and leaves the active copy
+    # and its tags as they were.
+    
+    my ($r2) = $T->send_records("/eduresources/update.json", "update tags",
+				json => [ { eduresource_id => "edr:$no", tags => 'web' } ]);
+    
+    is( $r2 && $r2->{sta}, 'changes', "the updated record has status 'changes'" );
+    
+    $E->ok_record_count(2, 'RESOURCE_TAGS', "resource_id = $no",
+			"the active copy still has two tags");
+    
+    # Activating it again copies the new tags.
+    
+    my ($r3) = $T->fetch_records("/eduresources/update.json?id=edr:$no&status=active",
+				 "activate again");
+    
+    is( $r3 && $r3->{sta}, 'active', "the record is active again" );
+    
+    $E->ok_record_count(1, 'RESOURCE_TAGS', "resource_id = $no", "the active copy has one tag");
+    
+    # Deleting the record removes the active copy and its tags.
+    
+    $T->fetch_url("/eduresources/delete.json?id=edr:$no", "delete active record");
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "eduresource_no = $no", "the record was deleted");
+    $E->ok_record_count(0, 'RESOURCE_ACTIVE', "id = $no", "the active copy was deleted");
+    $E->ok_record_count(0, 'RESOURCE_TAGS', "resource_id = $no", "its tags were deleted");
+};
+
+
+# Records can be deleted several at once in the URL, from a request body, and with the
+# DELETE method. Deleting a record that does not exist is an error, and nothing can be
+# deleted or updated without logging in.
+
+subtest 'delete forms' => sub {
+    
+    select_subtest || return;
+    
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+    
+    my @records = map { { _label => "d$_", title => "Delete Form $_" } } 1..4;
+    
+    my (@r) = $T->send_records("/eduresources/addupdate.json", "add four records",
+			       json => \@records);
+    
+    cmp_ok( scalar(@r), '==', 4, "four records were added" ) || return;
+    
+    my @no = map { resource_no($_->{oid}) } @r;
+    
+    $T->fetch_url("/eduresources/delete.json?id=edr:$no[0],edr:$no[1]", "delete two in the URL");
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "eduresource_no in ($no[0],$no[1])",
+			"both were deleted");
+    
+    my (@rb) = $T->send_records("/eduresources/delete.json", "delete with a request body",
+				json => [ { _label => 'x3', eduresource_id => "edr:$no[2]" } ]);
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "eduresource_no = $no[2]",
+			"the record in the body was deleted");
+    
+    is( $rb[0] && $rb[0]{sta}, 'deleted', "the deleted record is reported" );
+    is( $rb[0] && $rb[0]{rlb}, 'x3', "with its label" );
+    
+    $T->server_request('delete', "/eduresources/delete.json?id=edr:$no[3]",
+		       "delete with method DELETE");
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "eduresource_no = $no[3]",
+			"the record was deleted with method DELETE");
+    
+    my ($m1) = $T->fetch_nocheck("/eduresources/delete.json?id=edr:99999999",
+				 "delete a record that does not exist");
+    
+    $T->ok_response_code($m1, '400', "deleting a record that does not exist gets 400");
+    $T->ok_error_like($m1, qr{E_NOT_FOUND}, "and E_NOT_FOUND");
+    
+    $T->set_cookie("session_id", "");
+    
+    my ($m2) = $T->fetch_nocheck("/eduresources/delete.json?id=edr:$no[0]",
+				 "delete without logging in");
+    
+    $T->ok_response_code($m2, '401', "deleting without logging in gets 401");
+    
+    my ($m3) = $T->send_data_nocheck("/eduresources/update.json", "update without logging in",
+				     json => [ { eduresource_id => "edr:$no[0]", title => 'x' } ]);
+    
+    $T->ok_response_code($m3, '401', "updating without logging in gets 401");
+};
+
+
+# A body of the form { records => [...], all => {...} } gives defaults for every record in
+# 'all'. A value in a record takes precedence over a default, including an identifier
+# given in the URL.
+
+subtest 'body forms' => sub {
+    
+    select_subtest || return;
+    
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+    
+    my $body = { all => { description => 'Shared description' },
+		 records => [ { _label => 'b1', title => 'Body Form 1' },
+			      { _label => 'b2', title => 'Body Form 2',
+				description => 'Own description' } ] };
+    
+    my (@r) = $T->send_records("/eduresources/addupdate.json", "add with 'all'", json => $body);
+    
+    cmp_ok( scalar(@r), '==', 2, "two records were added" ) || return;
+    
+    my %by_label = map { $_->{rlb} => $_ } @r;
+    
+    is( $by_label{b1}{description}, 'Shared description', "the first got the default" );
+    is( $by_label{b2}{description}, 'Own description', "the second kept its own value" );
+    
+    # An identifier in a record takes precedence over one in the URL.
+    
+    my ($u) = $T->send_records("/eduresources/update.json?id=$by_label{b1}{oid}",
+			       "update with ids in the URL and the record",
+			       json => [ { eduresource_id => $by_label{b2}{oid},
+					   title => 'Body Form 2 updated' } ]);
+    
+    is( $u && $u->{oid}, $by_label{b2}{oid}, "the record's own identifier was used" );
+    
+    my ($n1) = $E->count_records('RESOURCE_QUEUE', "title = 'Body Form 1'");
+    
+    is( $n1, 1, "the record named in the URL was not changed" );
+};
+
+
+# Updating a record that does not exist, or one with no identifier, is an error.
+
+subtest 'update nonexistent' => sub {
+    
+    select_subtest || return;
+    
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+    
+    my ($m) = $T->send_data_nocheck("/eduresources/update.json", "update a nonexistent record",
+				    json => [ { eduresource_id => 'edr:99999999',
+						title => 'Nonexistent' } ]);
+    
+    $T->ok_response_code($m, '400', "updating a record that does not exist gets 400");
+    $T->ok_error_like($m, qr{E_NOT_FOUND}, "and E_NOT_FOUND");
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "title = 'Nonexistent'", "nothing was stored");
+    
+    # This operation does not insert a record without an identifier.
+    
+    my ($m2) = $T->send_data_nocheck("/eduresources/update.json", "update with no identifier",
+				     json => [ { title => 'No Identifier' } ]);
+    
+    $T->ok_response_code($m2, '400', "updating a record with no identifier gets 400");
+    
+    $E->ok_record_count(0, 'RESOURCE_QUEUE', "title = 'No Identifier'", "nothing was stored");
 };
 
 

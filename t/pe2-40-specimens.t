@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::More tests => 13;
+use Test::More tests => 17;
 
 use lib qw(lib ../lib t);
 
@@ -915,13 +915,38 @@ subtest 'change occurrence' => sub {
 
 # Check that other errors are reported properly.
 
+# [Changed by Claude under the guidance of Michael McClennen: this subtest was a placeholder.]
+
 subtest 'other errors' => sub {
-
-    pass('placeholder');
-
-    # check for /specs/update with no id
-    # check for bad ids
-    # check for 
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    # A record sent to specs/update without a specimen identifier would be a new record,
+    # which this operation does not create.
+    
+    my ($m1) = $T->send_data_nocheck("/specs/update.json", "update with no id",
+				     json => [ { _label => 'u1', specimen_code => 'NO ID',
+						 taxon_id => $TID_2, reference_id => 'ref:5041' } ]);
+    
+    isnt( $T->get_response_code($m1), '200', "update with no id did not succeed" );
+    
+    $ET->ok_record_count(0, 'SPECIMEN_DATA', "specimen_id = 'NO ID'", "nothing was stored");
+    
+    # A specimen identifier that is not of the right form is rejected.
+    
+    my ($m2) = $T->send_data_nocheck("/specs/update.json", "update with a bad id",
+				     json => [ { specimen_id => 'abc', specimen_code => 'BAD ID' } ]);
+    
+    $T->ok_response_code($m2, '400', "update with a bad id gets 400");
+    $T->ok_error_like($m2, qr{specimen_id}, "the error names 'specimen_id'");
+    
+    # So is one of the wrong type.
+    
+    my ($m3) = $T->send_data_nocheck("/specs/update.json", "update with an id of the wrong type",
+				     json => [ { specimen_id => 'occ:1', specimen_code => 'BAD ID' } ]);
+    
+    $T->ok_response_code($m3, '400', "update with an id of the wrong type gets 400");
+    $T->ok_error_like($m3, qr{E_EXTID .*specimen_id}, "and E_EXTID");
 };
     
 
@@ -949,4 +974,208 @@ subtest 'unknown taxon' => sub {
 	is( $r2[0]{idn}, "Foo (Baff) bazz", "added record has proper identified name" );
 	is( $r2[0]{cid}, 'col:1003' );
     }
+};
+
+
+# [Added by Claude under the guidance of Michael McClennen: the following four subtests.]
+
+# Return the number from an identifier such as 'spm:12'.
+
+sub id_no {
+    
+    my ($oid) = @_;
+    
+    return $oid && $oid =~ /(\d+)$/ ? $1 : 0;
+}
+
+
+# The operation specs/addupdate_measurements adds and updates measurements of existing
+# specimens. The parameter 'return' selects the updated measurements, all measurements of
+# each specimen with an updated one, or nothing. The numeric part of each value is stored in
+# the corresponding 'real_' column.
+
+subtest 'measurements endpoint' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my ($spec) = $T->send_records("/specs/addupdate.json", "add a specimen to measure",
+				  json => [ { _label => 's1', specimen_code => 'TEST MEAS 1',
+					      taxon_id => $TID_2, reference_id => 'ref:5041' } ]);
+    
+    my $spec_id = $spec && $spec->{oid} || return;
+    
+    my (@r1) = $T->send_records("/specs/addupdate_measurements.json?return=updated",
+				"add a measurement",
+				json => [ { _label => 'w1', specimen_id => $spec_id,
+					    measurement_type => 'width', average => '2.5 mm',
+					    min => '.5', max => '12.75 mm' } ]);
+    
+    cmp_ok( scalar(@r1), '==', 1, "one measurement was returned" ) || return;
+    
+    is( $r1[0]{sid}, $spec_id, "it belongs to the specimen" );
+    is( $r1[0]{mva}, '2.5 mm', "it has the average as given" );
+    is( $r1[0]{rlb}, 'w1', "it has its label" );
+    
+    my $meas_no = id_no($r1[0]{oid});
+    
+    my ($m) = $ET->fetch_records('MEASUREMENT_DATA', "measurement_no = $meas_no");
+    
+    is( $m && $m->{real_average} + 0, 2.5, "real_average is the number from the average" );
+    is( $m && $m->{real_min} + 0, 0.5, "real_min is the number from '.5'" );
+    is( $m && $m->{real_max} + 0, 12.75, "real_max is the number from the max" );
+    
+    # A second measurement with return=specimen brings back both measurements.
+    
+    my (@r2) = $T->send_records("/specs/addupdate_measurements.json?return=specimen",
+				"add a second measurement",
+				json => [ { specimen_id => $spec_id, measurement_type => 'length',
+					    average => '4 mm' } ]);
+    
+    cmp_ok( scalar(@r2), '==', 2, "both measurements of the specimen were returned" );
+    
+    # An update by measurement_id changes only that measurement.
+    
+    my (@r3) = $T->send_records("/specs/addupdate_measurements.json?return=updated",
+				"update a measurement",
+				json => [ { measurement_id => $r1[0]{oid}, average => '3.0 mm' } ]);
+    
+    is( $r3[0] && $r3[0]{mva}, '3.0 mm', "the measurement was updated" );
+    is( $r3[0] && $r3[0]{mvu}, '12.75 mm', "and its other values were kept" );
+    
+    ($m) = $ET->fetch_records('MEASUREMENT_DATA', "measurement_no = $meas_no");
+    
+    is( $m && $m->{real_average} + 0, 3, "real_average was updated" );
+    
+    # Without 'return', only the updated measurements are returned.
+    
+    my (@r5) = $T->send_records("/specs/addupdate_measurements.json", "add with the default return",
+				json => [ { specimen_id => $spec_id, measurement_type => 'length',
+					    average => '6 mm' } ]);
+    
+    cmp_ok( scalar(@r5), '==', 1, "by default only the new measurement was returned" );
+    
+    # With return=none, nothing is returned.
+    
+    my ($m4) = $T->send_data("/specs/addupdate_measurements.json?return=none",
+			     "add a measurement and return nothing",
+			     json => [ { specimen_id => $spec_id, measurement_type => 'height',
+					 average => '1 mm' } ]);
+    
+    $T->ok_response_code($m4, '200', "the request succeeded");
+    $T->ok_no_records($m4, "and nothing was returned");
+    
+    $ET->ok_record_count(4, 'MEASUREMENT_DATA', "specimen_no = " . id_no($spec_id),
+			 "the specimen has four measurements");
+};
+
+
+# A measurement with no specimen identifier, following a specimen in the same request,
+# belongs to that specimen.
+
+subtest 'measurement follows specimen' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my (@r) = $T->send_records("/specs/addupdate.json", "add a specimen and a measurement",
+			       json => [ { _label => 's2', specimen_code => 'TEST FOLLOW 1',
+					   taxon_id => $TID_2, reference_id => 'ref:5041' },
+					 { _label => 'f1', measurement_type => 'length',
+					   max => '4 mm' } ]);
+    
+    my ($spec) = grep { $_->{oid} && $_->{oid} =~ /^spm/ } @r;
+    my ($meas) = grep { $_->{oid} && $_->{oid} =~ /^mea/ } @r;
+    
+    ok( $spec && $meas, "a specimen and a measurement were added" ) || return;
+    
+    is( $meas->{sid}, $spec->{oid}, "the measurement belongs to the specimen" );
+};
+
+
+# Only the owner of a specimen may delete it, and nobody may without logging in. Several
+# specimens may be deleted at once, and deleting one that does not exist is an error.
+
+subtest 'delete permissions and lists' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my (@r) = $T->send_records("/specs/addupdate.json", "add two specimens",
+			       json => [ map { { _label => "d$_", specimen_code => "TEST DEL $_",
+						 taxon_id => $TID_2, reference_id => 'ref:5041' } }
+					 1..2 ]);
+    
+    cmp_ok( scalar(@r), '==', 2, "two specimens were added" ) || return;
+    
+    my $list = join(',', map { $_->{oid} } @r);
+    my $nos = join(',', map { id_no($_->{oid}) } @r);
+    
+    $T->set_cookie("session_id", "SESSION-OTHER");
+    
+    my ($m1) = $T->fetch_nocheck("/specs/delete.json?specimen_id=$r[0]{oid}",
+				 "delete by somebody else");
+    
+    $T->ok_response_code($m1, '400', "a delete by somebody else gets 400");
+    $T->ok_error_like($m1, qr{E_PERM}, "and E_PERMISSION");
+    
+    $T->set_cookie("session_id", "");
+    
+    my ($m2) = $T->fetch_nocheck("/specs/delete.json?specimen_id=$r[0]{oid}",
+				 "delete without logging in");
+    
+    $T->ok_response_code($m2, '401', "a delete without logging in gets 401");
+    
+    $ET->ok_record_count(2, 'SPECIMEN_DATA', "specimen_no in ($nos)", "neither was deleted");
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my (@d) = $T->fetch_records("/specs/delete.json?specimen_id=$list", "delete both in the URL");
+    
+    cmp_ok( scalar(@d), '==', 2, "both deletions were reported" );
+    
+    $ET->ok_record_count(0, 'SPECIMEN_DATA', "specimen_no in ($nos)", "both were deleted");
+    $ET->ok_record_count(0, 'SPECIMEN_MATRIX', "specimen_no in ($nos)",
+			 "and their matrix rows");
+    
+    my ($m3) = $T->fetch_nocheck("/specs/delete.json?specimen_id=spm:99999999",
+				 "delete a specimen that does not exist");
+    
+    $T->ok_response_code($m3, '400', "deleting a specimen that does not exist gets 400");
+    $T->ok_error_like($m3, qr{E_NOT_FOUND}, "and E_NOT_FOUND");
+};
+
+
+# A specimen is identified by taxon_id, by taxon_name, or by occurrence_id. One with none of
+# these, or with a name that is not in the database and no collection, is rejected.
+
+subtest 'identification' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-AUTHORIZER");
+    
+    my ($occurrence_no) = $ET->dbh->selectrow_array("
+		SELECT occurrence_no FROM $TABLE{OCCURRENCE_DATA} LIMIT 1");
+    
+    ok( $occurrence_no, "found an occurrence in the test table" ) || return;
+    
+    my ($r1) = $T->send_records("/specs/addupdate.json", "add a specimen of an occurrence",
+				json => [ { specimen_code => 'TEST OCC 1', reference_id => 'ref:5041',
+					    occurrence_id => "occ:$occurrence_no" } ]);
+    
+    is( $r1 && $r1->{qid}, "occ:$occurrence_no", "the specimen belongs to the occurrence" );
+    
+    my ($m2) = $T->send_data_nocheck("/specs/addupdate.json", "add with no identification",
+				     json => [ { specimen_code => 'TEST NO IDENT',
+						 reference_id => 'ref:5041' } ]);
+    
+    $T->ok_response_code($m2, '400', "a specimen with no identification gets 400");
+    $T->ok_error_like($m2, qr{E_MISSING_IDENTIFICATION}, "and E_MISSING_IDENTIFICATION");
+    
+    my ($m3) = $T->send_data_nocheck("/specs/addupdate.json", "add with an unknown name",
+				     json => [ { specimen_code => 'TEST UNKNOWN NAME',
+						 taxon_name => 'Nosuchgenus nosuchspecies',
+						 reference_id => 'ref:5041' } ]);
+    
+    $T->ok_response_code($m3, '400', "an unknown name with no collection gets 400");
+    $T->ok_error_like($m3, qr{E_UNREGISTERED_TAXON}, "and E_UNREGISTERED_TAXON");
+    
+    $ET->ok_record_count(0, 'SPECIMEN_DATA', "specimen_id in ('TEST NO IDENT', 'TEST UNKNOWN NAME')",
+			 "neither was stored");
 };
