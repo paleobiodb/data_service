@@ -17,7 +17,10 @@ use CoreFunction qw(loadConfig configData connectDB);
 use TableDefs qw(%TABLE);
 use CoreTableDefs;
 use DBQuery qw(DBHashQuery DBRowQuery DBCommand DBInsert);
-use MatrixBase qw(updateOccurrenceMatrix);
+use MatrixBase qw(updateOccurrenceMatrix updateOccurrenceMatrixReids
+		  deleteFromOccurrenceMatrix deleteReidsFromOccurrenceMatrix
+		  updateOccurrenceCounts);
+use OccurrenceBase qw(defaultSpeciesName);
 
 use Getopt::Long qw(:config bundling no_auto_abbrev permute);
 use Encode qw(encode_utf8);
@@ -44,8 +47,13 @@ my $dbconf = configData('Database');
 
 # Adjust settings depending upon whether we are running inside the 'pbapi' container or
 # on the outside.
+#
+# [Changed by Claude under the guidance of Michael McClennen: this is decided by the file
+# /.dockerenv, which Docker creates in every container. It was decided by $ENV{PWD}, which
+# is set only by a shell, so the test failed when the script was run by 'docker exec'
+# or 'pbdb exec'.]
 
-if ( $ENV{PWD} =~ qr{^/var/paleomacro/pbapi} )
+if ( -e '/.dockerenv' )
 {
     PBDBEdit->log_filename('./datalogs/datalog-DATE.sql');
 }
@@ -63,8 +71,14 @@ die "Could not connect to database: $DBI::errstr\n" unless $pbdb;
 
 # Determine which update to perform based on @ARGV.
 
+# [Changed by Claude under the guidance of Michael McClennen: added 'empty-species',
+# 'unnamed-occs', and 'orphan-reids'.]
+
 our (%update_routine) = ( limestome => \&UpdateLimestome,
-			  'eodp-taxa' => \&UpdateEODPTaxa );
+			  'eodp-taxa' => \&UpdateEODPTaxa,
+			  'empty-species' => \&UpdateEmptySpecies,
+			  'unnamed-occs' => \&DeleteUnnamedOccs,
+			  'orphan-reids' => \&DeleteOrphanReids );
 
 our (@do_update);
 
@@ -343,16 +357,249 @@ sub UpdateEODPTaxa {
     
     $DB::single = 1;
     
+    # [Changed by Claude under the guidance of Michael McClennen: the matrix is updated
+    # for the occurrences of this pass, @occurrence_nos2. It was given @occurrence_nos,
+    # those of the first pass.]
+    
     if ( FinishUpdate($edt) )
     {
 	say "Updating occurrence matrix...";
 	
-	updateOccurrenceMatrix($pbdb, \@occurrence_nos);
+	updateOccurrenceMatrix($pbdb, \@occurrence_nos2);
 	
 	say "Done.";
     }
     
 }
+
+# UpdateEmptySpecies ( )
+#
+# [Added by Claude under the guidance of Michael McClennen.] Some occurrences and
+# reidentifications were entered with an empty species name. A name without a species is
+# now stored with the species name 'sp.' if it is linked to a genus or subgenus, or to no
+# taxon, and 'indet.' if it is linked to a taxon above the genus level. This routine gives
+# the existing records the species name they would have been given. Records whose genus
+# is informal, or which have no genus name at all, are left alone; the latter are listed.
+# A record whose subspecies name is 'indet' and which has no species name gets the species
+# name 'indet.' and an empty subspecies name.
+
+sub UpdateEmptySpecies {
+
+    say "\nUpdating occurrence and reidentification records with an empty species name...\n";
+    
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms,
+				     table => 'OCCURRENCE_DATA',
+				     allows => ['FIXUP_MODE'] } );
+    
+    my (@occurrence_nos, @reid_nos, %count);
+    
+    foreach my $table ( 'OCCURRENCE_DATA', 'REID_DATA' )
+    {
+	my $key = $table eq 'OCCURRENCE_DATA' ? 'occurrence_no' : 'reid_no';
+	
+	my $rows = DBHashQuery($pbdb, <<~END_SQL);
+	    SELECT $key, genus_name, genus_reso, subspecies_name, taxon_no
+	    FROM $TABLE{$table}
+	    WHERE (species_name = '' or species_name is null) and
+	      coalesce(genus_reso, '') <> 'informal'
+	    ORDER BY $key
+	    END_SQL
+	
+	foreach my $row ( @$rows )
+	{
+	    my $record_no = $row->{$key};
+	    
+	    # A record with no genus name has no name at all, so it is left alone.
+	    
+	    unless ( defined $row->{genus_name} && $row->{genus_name} ne '' )
+	    {
+		say "    Skipped $key $record_no, which has no genus name.";
+		$count{$table}{skipped}++;
+		next;
+	    }
+	    
+	    my $update = { $key => $record_no };
+	    
+	    # A subspecies name of 'indet' was put in the wrong field. Any other subspecies
+	    # name without a species is left for someone to look at.
+	    
+	    if ( defined $row->{subspecies_name} && $row->{subspecies_name} ne '' )
+	    {
+		if ( $row->{subspecies_name} =~ /^indet[.]?$/ )
+		{
+		    $update->{species_name} = 'indet.';
+		    $update->{subspecies_name} = '';
+		}
+		
+		else
+		{
+		    say "    Skipped $key $record_no, which has the subspecies name " .
+			"'$row->{subspecies_name}' and no species name.";
+		    $count{$table}{skipped}++;
+		    next;
+		}
+	    }
+	    
+	    else
+	    {
+		$update->{species_name} = defaultSpeciesName($pbdb, $row->{taxon_no});
+	    }
+	    
+	    $edt->update_record($table, $update);
+	    
+	    $count{$table}{$update->{species_name}}++;
+	    
+	    if ( $table eq 'OCCURRENCE_DATA' )
+	    {
+		push @occurrence_nos, $record_no;
+	    }
+	    
+	    else
+	    {
+		push @reid_nos, $record_no;
+	    }
+	}
+	
+	my $label = $table eq 'OCCURRENCE_DATA' ? 'occurrence' : 'reidentification';
+	
+	say sprintf("    Generated %d $label update records with 'sp.', %d with 'indet.'.",
+		    $count{$table}{'sp.'} || 0, $count{$table}{'indet.'} || 0);
+	say sprintf("    Skipped %d ${label}s.", $count{$table}{skipped})
+	    if $count{$table}{skipped};
+    }
+    
+    $DB::single = 1;
+    
+    if ( FinishUpdate($edt) )
+    {
+	say "Updating occurrence matrix...";
+	
+	updateOccurrenceMatrix($pbdb, \@occurrence_nos) if @occurrence_nos;
+	updateOccurrenceMatrixReids($pbdb, \@reid_nos) if @reid_nos;
+	
+	say "Done.";
+    }
+}
+
+
+# DeleteUnnamedOccs ( )
+#
+# [Added by Claude under the guidance of Michael McClennen.] A few old occurrences have
+# nothing in any of the name fields and are not linked to any taxon, so they hold no
+# identification at all. Some of them are not even in a collection. This routine deletes
+# them, except for any that have reidentifications or specimens, which are listed instead.
+
+sub DeleteUnnamedOccs {
+
+    say "\nDeleting occurrence records with nothing in any name field...\n";
+    
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms,
+				     table => 'OCCURRENCE_DATA',
+				     allows => ['FIXUP_MODE'] } );
+    
+    my $rows = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT oc.occurrence_no, oc.collection_no, oc.reference_no,
+	  exists (SELECT 1 FROM $TABLE{REID_DATA} as re
+		  WHERE re.occurrence_no = oc.occurrence_no) as has_reid,
+	  exists (SELECT 1 FROM $TABLE{SPECIMEN_DATA} as sp
+		  WHERE sp.occurrence_no = oc.occurrence_no) as has_spec
+	FROM $TABLE{OCCURRENCE_DATA} as oc
+	WHERE coalesce(oc.genus_name, '') = '' and coalesce(oc.subgenus_name, '') = '' and
+	  coalesce(oc.species_name, '') = '' and coalesce(oc.subspecies_name, '') = '' and
+	  coalesce(oc.taxon_no, 0) = 0
+	ORDER BY oc.occurrence_no
+	END_SQL
+    
+    my (@occurrence_nos, %collection_nos, $skip_count);
+    
+    foreach my $row ( @$rows )
+    {
+	my $occurrence_no = $row->{occurrence_no};
+	
+	if ( $row->{has_reid} || $row->{has_spec} )
+	{
+	    say "    Skipped occurrence_no $occurrence_no, which has " .
+		($row->{has_reid} ? "reidentifications" : "specimens") . ".";
+	    $skip_count++;
+	    next;
+	}
+	
+	say "    Deleting occurrence_no $occurrence_no (collection_no $row->{collection_no}, " .
+	    "reference_no $row->{reference_no})" if $opt_verbose;
+	
+	$edt->delete_record('OCCURRENCE_DATA', $occurrence_no);
+	
+	push @occurrence_nos, $occurrence_no;
+	$collection_nos{$row->{collection_no}} = 1 if $row->{collection_no};
+    }
+    
+    say "    Generated " . scalar(@occurrence_nos) . " delete records.";
+    say "    Skipped $skip_count occurrences." if $skip_count;
+    
+    $DB::single = 1;
+    
+    if ( FinishUpdate($edt) )
+    {
+	say "Updating occurrence matrix and occurrence counts...";
+	
+	deleteFromOccurrenceMatrix($pbdb, \@occurrence_nos) if @occurrence_nos;
+	updateOccurrenceCounts($pbdb, [ sort { $a <=> $b } keys %collection_nos ])
+	    if %collection_nos;
+	
+	say "Done.";
+    }
+}
+
+
+# DeleteOrphanReids ( )
+#
+# [Added by Claude under the guidance of Michael McClennen.] A few reidentifications
+# belong to occurrences that were deleted without them. They cannot be shown with any
+# occurrence, but the occurrence matrix is built from them, so it has rows for occurrences
+# that do not exist. This routine deletes them and their rows in the occurrence matrix.
+
+sub DeleteOrphanReids {
+
+    say "\nDeleting reidentification records whose occurrence does not exist...\n";
+    
+    my $edt = PBDBEdit->new($pbdb, { permission => $perms,
+				     table => 'REID_DATA',
+				     allows => ['FIXUP_MODE'] } );
+    
+    my $rows = DBHashQuery($pbdb, <<~END_SQL);
+	SELECT re.reid_no, re.occurrence_no, re.collection_no
+	FROM $TABLE{REID_DATA} as re left join $TABLE{OCCURRENCE_DATA} as oc
+	  using (occurrence_no)
+	WHERE oc.occurrence_no is null
+	ORDER BY re.reid_no
+	END_SQL
+    
+    my @reid_nos;
+    
+    foreach my $row ( @$rows )
+    {
+	say "    Deleting reid_no $row->{reid_no} (occurrence_no $row->{occurrence_no}, " .
+	    "collection_no $row->{collection_no})" if $opt_verbose;
+	
+	$edt->delete_record('REID_DATA', $row->{reid_no});
+	
+	push @reid_nos, $row->{reid_no};
+    }
+    
+    say "    Generated " . scalar(@reid_nos) . " delete records.";
+    
+    $DB::single = 1;
+    
+    if ( FinishUpdate($edt) )
+    {
+	say "Updating occurrence matrix...";
+	
+	deleteReidsFromOccurrenceMatrix($pbdb, \@reid_nos) if @reid_nos;
+	
+	say "Done.";
+    }
+}
+
 
 
 sub FinishUpdate {

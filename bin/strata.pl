@@ -53,7 +53,12 @@ loadConfig($opt_config);
 
 my $dbconf = configData('Database');
 
-if ( $ENV{PWD} !~ qr{^/var/paleomacro/pbapi} )
+# [Changed by Claude under the guidance of Michael McClennen: whether this script is
+# running in the pbapi container is decided by the file /.dockerenv, which Docker creates
+# in every container. It was decided by $ENV{PWD}, which is set only by a shell, so the
+# test failed when the script was run by 'docker exec' or 'pbdb exec'.]
+
+if ( ! -e '/.dockerenv' )
 {
     $dbconf->{host} = '127.0.0.1';
 }
