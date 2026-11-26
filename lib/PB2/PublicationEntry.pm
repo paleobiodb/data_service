@@ -84,11 +84,22 @@ sub initialize {
 	"in the database.",
 	{ allow => '1.2:pubs:entry' });
     
+    # [Added by Claude under the guidance of Michael McClennen: the records to delete may
+    # be given in the request body, with this ruleset, if no identifiers are given in the
+    # URL. The identifier in the delete ruleset is optional for that reason.]
+    
+    $ds->define_ruleset('1.2:pubs:delete_body' =>
+	{ param => 'pub_id', valid => VALID_IDENTIFIER('PUB'), alias => 'pub_no' },
+	    "The identifier of a record to be deleted.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "You may provide a label for each record, which will be included with any",
+	    "errors or warnings generated from it.");
+    
     $ds->define_ruleset('1.2:pubs:delete' =>
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'pub_id', valid => VALID_IDENTIFIER('PUB'), list => ',', alias => 'pub_no' },
+	{ optional => 'pub_id', valid => VALID_IDENTIFIER('PUB'), list => ',', alias => 'pub_no' },
 	    "The identifier(s) of the official publication record(s) to delete.",
 	{ optional => 'allow', valid => '1.2:pubs:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
@@ -236,9 +247,18 @@ sub delete_publications {
     
     my $dbh = $request->get_connection;
     
-    # Get the publications to delete from the URL paramters. This operation takes no body.
+    # Get the publications to delete from the URL parameters. [Changed by Claude under the
+    # guidance of Michael McClennen: if there are none, the records to delete are read
+    # from the request body.]
     
     my (@id_list) = $request->clean_param_list('pub_id');
+    
+    unless ( @id_list )
+    {
+	@id_list = $request->parse_body_records({ }, '1.2:pubs:delete_body');
+	
+	die $request->exception(400, "Bad request") if $request->errors;
+    }
     
     # Check for any allowances.
     

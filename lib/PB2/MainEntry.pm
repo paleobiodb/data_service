@@ -297,7 +297,10 @@ sub initialize {
 			allow_method => 'GET,PUT,POST',
 			tag => 'entry',
 			doc_template => 'entry_operation.tt',
-			body_ruleset => '1.2:eduresources:addupdate_body',
+			# [Changed by Claude under the guidance of
+			# Michael McClennen: the ruleset is named
+			# '1.2:eduresources:bodyparams'.]
+			body_ruleset => '1.2:eduresources:bodyparams',
 			role => 'PB2::ResourceEntry',
 			method => 'update_resources',
 			arg => 'add',
@@ -314,10 +317,15 @@ sub initialize {
 		      list => 'entry/eduresources',
 		      place => 1 });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the records must be in
+    # the request body. The URL accepts only the parameters of the operation itself.]
+    
     $ds2->extended_doc({ path => 'eduresources/addupdate' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. Any records which specify an eduresource identifier",
+	"Provide the records in the request body in JSON format (with method",
+	"C<B<PUT>> or C<B<POST>>). You may specify multiple records. With method",
+	"C<B<GET>>, only the parameters C<B<id>> and C<B<status>> may be given, in",
+	"the URL, which allows an administrator to change the status of a record. Any",
+	"records which specify an eduresource identifier",
 	"will update the attributes of that record if you have permission to do so.",
 	"Otherwise, a new record will be created, owned by you.",
 	">By default, this operation returns the new or updated record(s).");
@@ -344,10 +352,15 @@ sub initialize {
 		      list => 'entry/eduresources',
 		      place => 1 });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the records must be in
+    # the request body. The URL accepts only the parameters of the operation itself.]
+    
     $ds2->extended_doc({ path => 'eduresources/update' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. All records must specify an eduresource identifier,",
+	"Provide the records in the request body in JSON format (with method",
+	"C<B<PUT>> or C<B<POST>>). You may specify multiple records. With method",
+	"C<B<GET>>, only the parameters C<B<id>> and C<B<status>> may be given, in",
+	"the URL, which allows an administrator to change the status of a record. All",
+	"records must specify an eduresource identifier,",
 	"and will update the attributes of the record if you have permission to do so.",
 	">By default, this operation returns the updated record(s).");
     
@@ -413,10 +426,13 @@ sub initialize {
 		      list => 'entry/pubs',
 		      place => 1 });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the records must be in
+    # the request body. The URL accepts only the parameters of the operation itself.]
+    
     $ds2->extended_doc({ path => 'pubs/addupdate' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. Any records which specify a publication identifier",
+	"Provide the records in the request body in JSON format (with method",
+	"C<B<PUT>> or C<B<POST>>). You may specify multiple records. Any records which",
+	"specify a publication identifier",
 	"will update the attributes of that record if you have permission to do so.",
 	"Otherwise, a new record will be created, owned by you.",
 	">By default, this operation returns the new or updated record(s).");
@@ -476,10 +492,13 @@ sub initialize {
 		      list => 'entry/archives',
 		      place => 1 });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the records must be in
+    # the request body. The URL accepts only the parameters of the operation itself.]
+    
     $ds2->extended_doc({ path => 'archives/addupdate' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. Any records which specify a data archive record",
+	"Provide the records in the request body in JSON format (with method",
+	"C<B<PUT>> or C<B<POST>>). You may specify multiple records. Any records which",
+	"specify a data archive record",
 	"will update the attributes of that record if you have permission to do so.",
 	"Otherwise, a new record will be created, owned by you.",
 	">By default, this operation returns the new or updated record(s).");
@@ -625,10 +644,13 @@ sub initialize {
 		      list => 'entry/specs',
 		      place => 2 });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the records must be in
+    # the request body. The URL accepts only the parameters of the operation itself.]
+    
     $ds2->extended_doc({ path => 'specs/addupdate_measurements' },
-	"You may provide the necessary parameters in the URL (with method C<B<GET>>)",
-	"or in the request body in JSON format (with method C<B<PUT>>). With the latter,",
-	"you may specify multiple records. Any records which specify an eduresource identifier",
+	"Provide the records in the request body in JSON format (with method",
+	"C<B<PUT>> or C<B<POST>>). You may specify multiple records. Any records which",
+	"specify a measurement identifier",
 	"will update the attributes of that record if you have permission to do so.",
 	"Otherwise, a new record will be created, owned by you.",
 	">By default, this operation returns the new or updated record(s).");

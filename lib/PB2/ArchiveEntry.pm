@@ -90,11 +90,23 @@ sub initialize {
 	"in the database.",
 	{ allow => '1.2:archives:entry' });
     
+    # [Added by Claude under the guidance of Michael McClennen: the records to delete may
+    # be given in the request body, with this ruleset, if no identifiers are given in the
+    # URL. The identifier in the delete ruleset is optional for that reason.]
+    
+    $ds->define_ruleset('1.2:archives:delete_body' =>
+	{ param => 'archive_id', valid => VALID_IDENTIFIER('DAR'),
+	  alias => ['archive_no', 'id', 'oid'] },
+	    "The identifier of a record to be deleted.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "You may provide a label for each record, which will be included with any",
+	    "errors or warnings generated from it.");
+    
     $ds->define_ruleset('1.2:archives:delete' =>
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'archive_id', valid => VALID_IDENTIFIER('DAR'), list => ',',
+	{ optional => 'archive_id', valid => VALID_IDENTIFIER('DAR'), list => ',',
 	  alias => ['archive_no', 'id', 'oid'] },
 	    "The identifier(s) of the data archive record(s) to delete.",
 	{ optional => 'allow', valid => '1.2:archives:allowances', list => ',' },
@@ -240,9 +252,18 @@ sub delete_archives {
     
     my $dbh = $request->get_connection;
     
-    # Get the archive identifiers to delete from the URL paramters. This operation takes no body.
+    # Get the archives to delete from the URL parameters. [Changed by Claude under the
+    # guidance of Michael McClennen: if there are none, the records to delete are read
+    # from the request body.]
     
     my (@id_list) = $request->clean_param_list('archive_id');
+    
+    unless ( @id_list )
+    {
+	@id_list = $request->parse_body_records({ }, '1.2:archives:delete_body');
+	
+	die $request->exception(400, "Bad request") if $request->errors;
+    }
     
     # Check for any allowances.
     

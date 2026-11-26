@@ -114,11 +114,22 @@ sub initialize {
 	    "An image to be associated with this record, encoded into base64. The",
 	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
     
+    # [Added by Claude under the guidance of Michael McClennen: the records to delete may
+    # be given in the request body, with this ruleset, if no identifiers are given in the
+    # URL. The identifier in the delete ruleset is optional for that reason.]
+    
+    $ds->define_ruleset('1.2:eduresources:delete_body' =>
+	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
+	    "The identifier of a record to be deleted.",
+	{ optional => '_label', valid => ANY_VALUE },
+	    "You may provide a label for each record, which will be included with any",
+	    "errors or warnings generated from it.");
+    
     $ds->define_ruleset('1.2:eduresources:delete' =>
 	">>The following parameter may be given either in the URL or in",
 	"the request body. Either way, you may specify more than one value,",
 	"as a comma-separated list.",
-	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), list => ',', alias => 'id' },
+	{ optional => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), list => ',', alias => 'id' },
 	    "The identifier(s) of the resource record(s) to delete.",
 	{ optional => 'allow', valid => '1.2:eduresources:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
@@ -176,7 +187,21 @@ sub update_resources {
 	# [Changed by Claude under the guidance of Michael McClennen: is_video may be
 	# undefined.]
 	$r->{is_video} = 0 if defined $r->{is_video} && $r->{is_video} eq '';
-	$edt->insert_update_record('RESOURCE_QUEUE', $r);
+	
+	# [Changed by Claude under the guidance of Michael McClennen: the operation
+	# eduresources/update only updates existing records, so a record without an
+	# identifier gets an error instead of being inserted. This depended on the CREATE
+	# allowance, which EditTransaction no longer checks.]
+	
+	if ( $arg && $arg eq 'update' )
+	{
+	    $edt->update_record('RESOURCE_QUEUE', $r);
+	}
+	
+	else
+	{
+	    $edt->insert_update_record('RESOURCE_QUEUE', $r);
+	}
     }
     
     # If no errors have been detected so far, execute the queued actions inside a database
@@ -270,9 +295,18 @@ sub delete_resources {
 
     my $dbh = $request->get_connection;
 
-    # Get the resources to delete from the URL paramters. This operation takes no body.
-
+    # Get the resources to delete from the URL parameters. [Changed by Claude under the
+    # guidance of Michael McClennen: if there are none, the records to delete are read
+    # from the request body.]
+    
     my (@id_list) = $request->clean_param_list('eduresource_id');
+    
+    unless ( @id_list )
+    {
+	@id_list = $request->parse_body_records({ }, '1.2:eduresources:delete_body');
+	
+	die $request->exception(400, "Bad request") if $request->errors;
+    }
     
     # Check for any allowances.
     
@@ -317,12 +351,19 @@ sub delete_resources {
     
     # Then return one result record for each deleted database record.
     
+    # [Changed by Claude under the guidance of Michael McClennen: each result includes the
+    # label of the record, if one was given in the request body.]
+    
     my @results;
+    my $labels = $edt->key_labels('RESOURCE_QUEUE') || { };
     
     foreach my $record_id ( $edt->deleted_keys )
     {
 	push @results, { eduresource_no => generate_identifier('EDR', $record_id),
 			 status => 'deleted' };
+	
+	$results[-1]{_label} = $labels->{$record_id}
+	    if $labels->{$record_id} && $labels->{$record_id} !~ /^[#]/;
     }
     
     $request->{main_result} = \@results;

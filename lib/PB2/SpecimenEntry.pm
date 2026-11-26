@@ -268,19 +268,29 @@ sub update_specimens {
     
     # Now go through the records and handle each one in turn. This will check every record and
     # queue them up for insertion and/or updating.
-
+    # 
+    # [Changed by Claude under the guidance of Michael McClennen: the operation
+    # specs/update only updates existing records, so a record without an identifier gets
+    # an error instead of being inserted. This depended on the CREATE allowance, which
+    # EditTransaction no longer checks. A record with an '_operation' is still handled by
+    # process_record.]
+    
+    my $method = ($arg && $arg eq 'add') ? 'process_record' : 'update_record';
+    
     foreach my $r (@records)
     {
+	my $record_method = $r->{_operation} ? 'process_record' : $method;
+	
 	if ( exists $r->{measurement_type} || exists $r->{measurement_no} || exists $r->{measurement_id} )
 	{
-	    $edt->process_record('MEASUREMENT_DATA', $r);
+	    $edt->$record_method('MEASUREMENT_DATA', $r);
 	}
 	
 	elsif ( exists $r->{specimen_code} || exists $r->{specimen_no} || exists $r->{specimen_id} ||
 		exists $r->{taxon_id} || exists $r->{taxon_name} || exists $r->{occurrence_id} ||
 	        exists $r->{collection_id} )
 	{
-	    $edt->process_record('SPECIMEN_DATA', $r);
+	    $edt->$record_method('SPECIMEN_DATA', $r);
 	}
 
 	# [Changed by Claude under the guidance of Michael McClennen: a record that is
@@ -599,14 +609,21 @@ sub update_measurements {
 
     # Otherwise, we're good to go.
 
+    # [Changed by Claude under the guidance of Michael McClennen: the records are returned
+    # with list_result. They were fetched, but the result was discarded, so nothing was
+    # returned. The default for 'return' is 'updated', as documented; it was 'specimen'.
+    # With 'none', nothing is returned. The labels are those of the measurement table.]
+    
     else
     {
-	my $return_what = $request->clean_param('return') || 'specimen';
+	my $return_what = $request->clean_param('return') || 'updated';
 	my $id_string = '';
+	
+	return if $return_what eq 'none';
 	
 	$id_string = join(',', $edt->inserted_keys, $edt->updated_keys);
 	
-	if ( $return_what eq 'specimen' )
+	if ( $return_what eq 'specimen' && $id_string )
 	{
 	    my $sql = "SELECT distinct specimen_no FROM $TABLE{MEASUREMENT_DATA}
 		WHERE measurement_no in ($id_string)";
@@ -618,7 +635,12 @@ sub update_measurements {
 	    $id_string = ref $result eq 'ARRAY' ? join(',', @$result) : '';
 	}
 	
-	$request->list_updated_measurements($dbh, $return_what, $id_string, $edt->key_labels) if $id_string;
+	my $labels = $edt->key_labels('MEASUREMENT_DATA');
+	
+	my @results = $request->list_updated_measurements($dbh, $return_what, $id_string,
+							  $labels) if $id_string;
+	
+	$request->list_result(\@results);
     }
 }
 
@@ -677,17 +699,17 @@ sub list_updated_measurements {
     
     return () unless ref $results eq 'ARRAY' && @$results;
     
-    if ( ref $label_ref eq 'HASH' )
+    # [Changed by Claude under the guidance of Michael McClennen: the output of each
+    # record is selected whether or not there are any labels.]
+    
+    foreach my $r ( @$results )
     {
-	foreach my $r ( @$results )
+	if ( ref $label_ref eq 'HASH' && (my $keyval = $r->{measurement_no}) )
 	{
-	    if ( my $keyval = $r->{measurement_no} )
-	    {
-		$r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
-	    }
-
-	    $request->select_record_output($r, '1.2:measure:basic');
+	    $r->{_label} = $label_ref->{$keyval} if $label_ref->{$keyval};
 	}
+	
+	$request->select_record_output($r, '1.2:measure:basic');
     }
     
     return @$results;
