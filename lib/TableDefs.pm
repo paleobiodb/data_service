@@ -132,13 +132,9 @@ our $REIDS = "reidentifications";
 # $SPECIMENS, identical to the one above.]
 our $MEASUREMENTS = "measurements";
 
-set_table_property($COLLECTIONS, PRIMARY_KEY => 'collection_no');
-set_table_property($AUTHORITIES, PRIMARY_KEY => 'taxon_no');
-set_table_property($OPINIONS, PRIMARY_KEY => 'opinion_no');
-set_table_property($REFERENCES, PRIMARY_KEY => 'reference_no');
-set_table_property($OCCURRENCES, PRIMARY_KEY => 'occurrence_no');
-set_table_property($REIDS, PRIMARY_KEY => 'reid_no');
-set_table_property($SPECIMENS, PRIMARY_KEY => 'specimen_no');
+# [Removed by Claude under the guidance of Michael McClennen: seven calls that set
+# PRIMARY_KEY on the real names of these tables, such as 'collections'. Properties are
+# looked up by table specifier, such as 'COLLECTION_DATA', so nothing ever read them.]
 
 
 # Authentication and permission tables
@@ -283,11 +279,12 @@ sub debug_line {
 our (%TABLE_PROPERTIES, %COLUMN_PROPERTIES);
 
 
-# Now define routines for getting and setting table properties. We ignore any database prefix on
-# the table name, because we want the properties to be the same regardless of whether they are in
-# the main database, the test database, or some other database we have subsequently defined. We
-# are operating under the assumption that two tables with the same name in different databases are
-# meant to be alternatives to each other, i.e. a main table and a test table.
+# Now define routines for getting and setting table properties. The properties are stored
+# under the table specifier, such as 'COLLECTION_DATA', not the table name, so that they
+# are the same whether the specifier refers to a table in the main database, the test
+# database, or some other database. [Changed by Claude under the guidance of Michael
+# McClennen: this comment said that a database prefix on the table name was ignored, but
+# the properties are not stored under table names.]
 
 
 our (%TABLE, %TABLE_GROUP, %TABLE_NAME_MAP);
@@ -451,7 +448,10 @@ sub disable_test_mode {
 	restore_table_name($t);
     }
     
-    debug_line("TEST MODE: enable '$group_name'\n", $debug) if $debug;
+    # [Changed by Claude under the guidance of Michael McClennen: the message says
+    # 'disable'. It said 'enable', copied from enable_test_mode.]
+    
+    debug_line("TEST MODE: disable '$group_name'\n", $debug) if $debug;
         
     return 2;
 }
@@ -579,14 +579,13 @@ sub set_column_property {
     
     croak "Invalid column property '$property'" unless $COLUMN_PROP_NAME{$property};
     
+    # [Changed by Claude under the guidance of Michael McClennen: removed a check of the
+    # property VALIDATOR, which is not a column property, so the croak above rejected it
+    # first.]
+    
     if ( ref $value )
     {
-	if ( $property eq 'VALIDATOR' )
-	{	
-	    croak "value must be either a code ref or a string" unless ref $value eq 'CODE';
-	}
-	
-	elsif ( $property eq 'VALUE_SEPARATOR' )
+	if ( $property eq 'VALUE_SEPARATOR' )
 	{
 	    croak "value must be a regexp" unless ref $value eq 'Regexp';
 	}
@@ -631,6 +630,14 @@ sub get_column_properties {
 	if ( my $column_ref = $COLUMN_PROPERTIES{$table_specifier}{$column_name} )
 	{
 	    return map { $_ => copy_property_value($column_ref->{$_}) } keys $column_ref->%*;
+	}
+	
+	# [Added by Claude under the guidance of Michael McClennen: a column without
+	# properties has none. The result of the test above, undef, was returned.]
+	
+	else
+	{
+	    return ();
 	}
     }
     
