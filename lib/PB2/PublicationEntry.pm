@@ -151,7 +151,10 @@ sub update_publications {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
@@ -274,7 +277,10 @@ sub delete_publications {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");

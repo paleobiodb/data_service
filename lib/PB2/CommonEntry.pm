@@ -117,16 +117,11 @@ sub parse_main_params {
     my $allowances = { };
     my $main_params = { };
     
-    # If we have not already extracted the list of parameters corresponding to the named ruleset,
-    # do that now.
+    # If we have not already extracted the list of parameters corresponding to the named
+    # ruleset, do that now. [Changed by Claude under the guidance of Michael McClennen: this
+    # is done by ruleset_param_names.]
     
-    if ( $url_ruleset && ! defined $RULESET_HAS_PARAM{$url_ruleset} )
-    {
-	foreach my $p ( $request->{ds}->list_ruleset_params($url_ruleset) )
-	{
-	    $RULESET_HAS_PARAM{$url_ruleset}{$p} = 1 if $p;
-	}
-    }
+    $request->ruleset_param_names($url_ruleset) if $url_ruleset;
 
     # Determine which parameters (if any) should be used as defaults for the
     # body records.
@@ -173,16 +168,46 @@ sub parse_main_params {
 }
 
 
+# ruleset_param_names ( url_ruleset )
+# 
+# [Added by Claude under the guidance of Michael McClennen.] Return the names of the
+# parameters in the named ruleset, which can be passed to 'parse_main_params' as the
+# default parameters so that any of them given in the URL apply to every record. The
+# names are looked up once for each ruleset.
+
+sub ruleset_param_names {
+    
+    my ($request, $url_ruleset) = @_;
+    
+    unless ( defined $RULESET_HAS_PARAM{$url_ruleset} )
+    {
+	$RULESET_HAS_PARAM{$url_ruleset} = { };
+	
+	foreach my $p ( $request->{ds}->list_ruleset_params($url_ruleset) )
+	{
+	    $RULESET_HAS_PARAM{$url_ruleset}{$p} = 1 if $p;
+	}
+    }
+    
+    return keys $RULESET_HAS_PARAM{$url_ruleset}->%*;
+}
+
+
 # get_main_params ( allowances_ref, url_ruleset )
 # 
 # This is a wrapper around 'parse_main_params' that can be used by older code
-# which has not yet been updated.
+# which has not yet been updated. [Changed by Claude under the guidance of Michael
+# McClennen: every parameter of the URL ruleset is a default parameter, as it was before
+# 'parse_main_params' took a list of them. Without that list, all of the URL parameters
+# except 'allow' were ignored.]
 
 sub get_main_params {
     
     my ($request, $allowances_ref, $url_ruleset) = @_;
     
-    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset);
+    my @defaults = $url_ruleset ? $request->ruleset_param_names($url_ruleset) : ();
+    
+    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, \@defaults);
     
     foreach my $k ( keys %$allowances )
     {

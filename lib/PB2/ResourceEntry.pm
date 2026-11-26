@@ -173,7 +173,9 @@ sub update_resources {
     
     foreach my $r (@records)
     {
-	$r->{is_video} = 0 if $r->{is_video} eq '';
+	# [Changed by Claude under the guidance of Michael McClennen: is_video may be
+	# undefined.]
+	$r->{is_video} = 0 if defined $r->{is_video} && $r->{is_video} eq '';
 	$edt->insert_update_record('RESOURCE_QUEUE', $r);
     }
     
@@ -187,7 +189,10 @@ sub update_resources {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
@@ -301,7 +306,10 @@ sub delete_resources {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");

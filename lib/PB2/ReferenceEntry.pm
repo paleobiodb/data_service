@@ -181,7 +181,13 @@ sub addupdate_refs {
     
     my $perms = $request->require_authentication('REFERENCE_DATA');
     
-    my ($allowances, $main_params) = $request->parse_main_params('1.2:refs:specifier');
+    # [Changed by Claude under the guidance of Michael McClennen: every parameter of the
+    # ruleset is a default parameter. Without them, all of the URL parameters except
+    # 'allow' were ignored.]
+    
+    my ($allowances, $main_params) =
+	$request->parse_main_params('1.2:refs:specifier',
+				    [ $request->ruleset_param_names('1.2:refs:specifier') ]);
     
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.

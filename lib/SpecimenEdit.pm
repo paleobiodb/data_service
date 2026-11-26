@@ -192,6 +192,24 @@ sub validate_specimen {
 	    $edt->add_condition($action, 'E_PARAM', 'occurrence_id',
 				"you may not specify both 'collection_id' and 'occurrence_id' in the same record")
 		if $record->{collection_id};
+
+	    # The occurrence must exist, as validate_collection requires of the collection.
+	    # [Added by Claude under the guidance of Michael McClennen: a specimen could be
+	    # linked to an occurrence that does not exist.]
+
+	    my $occurrence_no = "$record->{occurrence_id}" =~ /^\d+$/ ?
+		$record->{occurrence_id} + 0 : undef;
+
+	    if ( ! $occurrence_no )
+	    {
+		$edt->add_condition($action, 'E_RANGE', 'occurrence_id',
+				    "value does not specify a valid record");
+	    }
+
+	    elsif ( ! $edt->check_key('OCCURRENCE_DATA', 'occurrence_no', $occurrence_no) )
+	    {
+		$edt->add_condition($action, 'E_KEY_NOT_FOUND', 'occurrence_id', $occurrence_no);
+	    }
 	}
 	
 	# If we have a collection_id and a taxon_name, then we are okay as long as 'UNKNOWN_TAXON' is

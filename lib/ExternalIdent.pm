@@ -162,10 +162,13 @@ sub valid_identifier {
     }
 
     # If this request is marked as a 'data entry' request, then accept label references as well.
+    # [Changed by Claude under the guidance of Michael McClennen: a label reference starts with
+    # '&', which is what EditTransaction recognizes. It started with '@', which EditTransaction
+    # rejected.]
 
     if ( ref $context eq 'HASH' && $context->{request}{is_data_entry} )
     {
-	if ( $value =~ qr{ ^ [@] (.*) }xs )
+	if ( $value =~ qr{ ^ [&] (.+) }xs )
 	{
 	    return { value => $value };
 	}

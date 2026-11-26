@@ -155,7 +155,10 @@ sub update_archives {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
@@ -278,7 +281,10 @@ sub delete_archives {
     
     $request->collect_edt_warnings($edt);
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
     	die $request->exception(400, "Bad request");
@@ -456,7 +462,10 @@ sub open_archive {
     
     # We are going to ignore warnings, but we need to abort if an error occurs.
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
 	$request->PB2::CommonEntry::collect_edt_errors($edt);
 	die $request->exception(400, "Bad request");
@@ -480,7 +489,10 @@ sub open_archive {
 	
 	# Make one more check in case an error occurs on commit (it shouldn't).
 	
-	if ( $edt->errors )
+	# [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+	# which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+	
+	if ( $edt->fatals )
 	{
 	    close $outfh;
 	    $request->PB2::CommonEntry::collect_edt_errors($edt);

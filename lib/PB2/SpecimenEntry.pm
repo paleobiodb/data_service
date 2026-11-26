@@ -246,9 +246,14 @@ sub update_specimens {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params,
-						   ['1.2:specs:measurement_entry', 'measurement_id', 'measurement_type'],
-						   ['1.2:specs:basic_entry', 'specimen_id', 'DEFAULT']);
+    # [Changed by Claude under the guidance of Michael McClennen: parse_body_records,
+    # which replaced unpack_input_records. A record with any of the measurement keys is
+    # validated as a measurement, and any other record as a specimen.]
+    
+    my (@records) = $request->parse_body_records($main_params,
+			['MEASUREMENT_DATA', '1.2:specs:measurement_entry',
+			 'measurement_id', 'measurement_no', 'measurement_type'],
+			'1.2:specs:basic_entry');
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     
@@ -278,9 +283,15 @@ sub update_specimens {
 	    $edt->process_record('SPECIMEN_DATA', $r);
 	}
 
+	# [Changed by Claude under the guidance of Michael McClennen: a record that is
+	# neither a specimen nor a measurement is skipped with an error, as bad_record did
+	# before it was removed. An error found by the ruleset is kept.]
+	
 	else
 	{
-	    $edt->bad_record('SPECIMEN_DATA', $r);
+	    $r->{_errwarn} ||= ['E_BAD_RECORD', "could not determine whether this " .
+				"record is a specimen or a measurement"];
+	    $edt->skip_record('SPECIMEN_DATA', $r);
 	}
     }
     
@@ -299,7 +310,10 @@ sub update_specimens {
     # nonetheless, these should be reported. In this case, the transaction will have automatically
     # been rolled back.
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
 	
@@ -432,7 +446,10 @@ sub delete_specimens {
     
     else
     {
-	@records = $request->unpack_input_records($main_params, '1.2:specs:addupdate_body', 'specimen_id');
+	# [Changed by Claude under the guidance of Michael McClennen: parse_body_records,
+	# which replaced unpack_input_records.]
+	
+	@records = $request->parse_body_records($main_params, '1.2:specs:addupdate_body');
     }
 
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
@@ -468,7 +485,10 @@ sub delete_specimens {
     # nonetheless, these should be reported. In this case, the transaction will have automatically
     # been rolled back.
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
 	
@@ -519,7 +539,11 @@ sub update_measurements {
     # Then decode the body, and extract input records from it. If an error occured, return an
     # HTTP 400 result. For now, we will look for the global parameters under the key 'all'.
     
-    my (@records) = $request->unpack_input_records($main_params, '1.2:specs:addupdate_measurements_body', 'measurement_id');
+    # [Changed by Claude under the guidance of Michael McClennen: parse_body_records,
+    # which replaced unpack_input_records.]
+    
+    my (@records) = $request->parse_body_records($main_params,
+						 '1.2:specs:addupdate_measurements_body');
     
     # If any errors were found in the parameters, stop now and return an HTTP 400 response.
     
@@ -555,7 +579,10 @@ sub update_measurements {
     # nonetheless, these should be reported. In this case, the transaction will have automatically
     # been rolled back.
     
-    if ( $edt->errors )
+    # [Changed by Claude under the guidance of Michael McClennen: fatals, not errors,
+    # which also counts errors demoted by PROCEED, NOT_FOUND, or NOT_PERMITTED.]
+    
+    if ( $edt->fatals )
     {
     	$request->collect_edt_errors($edt);
 	
