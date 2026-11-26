@@ -233,7 +233,10 @@ my (%RECORD_BLESS) = ( taxa => 'PBDB::Taxon',
 my $VALID_TAXON_ID = qr{ ^ (?: $IDP{TXN} | $IDP{VAR} )? ( [0-9]+ ) $ }xsi;
 my $VALID_OPINION_ID = qr{ ^ (?: $IDP{OPN} )? ( [0-9]+ ) $ }xsi;
 my $VALID_REF_ID = qr{ ^ (?: $IDP{REF} )? ( [0-9]+ ) $ }xsi;
-my $VALID_PERSON_ID = qr{ ^ (?: $IDP{PER} )? ( [0-9]+ ) $ }xsi;
+# [Removed by Claude under the guidance of Michael McClennen: $VALID_PERSON_ID, which
+# nothing used. It was built from $IDP{PER}, which does not exist; the type of person
+# identifiers is PRS.]
+
 my $NUMERIC_ID = qr{ ^ -? \d+ $ }xs;
 
 # Type codes for opinions and references
@@ -1165,7 +1168,10 @@ sub find_common_taxa {
     
     my $min;
     my $max = 0;
-    my $common_index;
+    
+    # [Removed by Claude under the guidance of Michael McClennen: a second declaration of
+    # $common_index, which is declared at the top of this function.]
+    
     
     foreach my $t (@$ancestry)
     {
@@ -5671,7 +5677,10 @@ sub add_ancestry {
 # Define sets of fields.  Each of the following identifiers can be used to
 # select fields to be returned.
 
-our (%FIELD_LIST) = ( ID => ['t.orig_no'],
+# [Changed by Claude under the guidance of Michael McClennen: 'our' removed, because
+# %FIELD_LIST is declared at the top of this file.]
+
+%FIELD_LIST = ( ID => ['t.orig_no'],
 		      SIMPLE => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
 				 't.rank as taxon_rank', 't.lft', 't.rgt', 't.status', 't.immpar_no', 
 				 't.senpar_no', 't.accepted_no'],
@@ -5802,7 +5811,10 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      image_no => ['v.image_no'],
 		    );
 
-our (%FIELD_TABLES) = ( DATA => ['v', 'vt'],
+# [Changed by Claude under the guidance of Michael McClennen: 'our' removed, because
+# %FIELD_TABLES is declared at the top of this file.]
+
+%FIELD_TABLES = ( DATA => ['v', 'vt'],
 			AUTH_DATA => ['v', 'vt', 'n', 'nn'],
 			AUTH_DISC => ['dp'],
 			REFTAXA_DATA => ['v', 'vt', 'n', 'nn'],
