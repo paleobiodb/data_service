@@ -1461,6 +1461,16 @@ subtest 'intervals' => sub {
     
     is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
 	     "collection_no = $c1"), "$camp,0", "and was removed" );
+    
+    # A null minimum removes it as well, as the Collections application clears a field with
+    # null. [Added by Claude under the guidance of Michael McClennen]
+    
+    @conds = coll_conditions('update', collection_id => $c2, min_interval => undef);
+    
+    ok( ! (grep { /^E_/ } @conds), "the minimum was updated to null" );
+    
+    is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
+	     "collection_no = $c2"), "$camp,0", "and was removed" );
 };
 
 

@@ -1,0 +1,14 @@
+{
+  "name": "pbdb-e2e",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
+    "install-browser": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium"
+  },
+  "license": "ISC",
+  "description": "Browser tests of the PBDB web applications",
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  },
+  "private": true
+}

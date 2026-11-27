@@ -560,6 +560,53 @@ subtest 'sandboxes' => sub {
 };
 
 
+# The intervals may be given by their aliases 'early_interval' and 'late_interval', as the
+# Collections application does. The late interval may be cleared with null or the empty
+# string, and clearing the early interval is reported as an error. [Added by Claude under
+# the guidance of Michael McClennen]
+
+subtest 'clearing the intervals' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    my $no = new_collection(undef, max_interval => 'Campanian');
+    
+    ok( $no, "added a collection" ) || return;
+    
+    my ($camp, $maas) = map { $ET->dbh->selectrow_array("SELECT interval_no FROM
+		$TABLE{INTERVAL_DATA} WHERE interval_name = '$_'") } qw(Campanian Maastrichtian);
+    
+    foreach my $clear ( [ 'null', undef ], [ 'the empty string', '' ] )
+    {
+	my ($label, $value) = @$clear;
+	
+	$T->send_records("/colls/update.json", "set the late interval",
+			 json => [ { collection_id => "col:$no", late_interval => 'Maastrichtian' } ]);
+	
+	is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
+		 "collection_no = $no"), "$camp,$maas", "the late interval was set" );
+	
+	$T->send_records("/colls/update.json", "clear the late interval with $label",
+			 json => [ { collection_id => "col:$no", late_interval => $value } ]);
+	
+	is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
+		 "collection_no = $no"), "$camp,0", "it was cleared with $label" );
+    }
+    
+    foreach my $clear ( [ 'null', undef ], [ 'the empty string', '' ] )
+    {
+	my ($label, $value) = @$clear;
+	
+	my ($m) = $T->send_data_nocheck("/colls/update.json", "clear the early interval with $label",
+					json => [ { collection_id => "col:$no",
+						    early_interval => $value } ]);
+	
+	$T->ok_response_code($m, '400', "clearing the early interval with $label gets 400");
+	$T->ok_error_like($m, qr{E_REQUIRED.*max_interval}, "and E_REQUIRED");
+    }
+};
+
+
 # Only the owner of a collection may delete it, and deleting it deletes its occurrences.
 # Collections can be deleted in the URL and in a request body.
 

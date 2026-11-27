@@ -14,7 +14,7 @@ use strict;
 
 use feature 'unicode_strings';
 
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 use lib qw(lib ../lib t);
 
@@ -215,4 +215,21 @@ subtest 'long preferences' => sub {
     $T->fetch_records("/prefs/set.json?field=long_value&value=$long", "set a long preference");
     
     like( stored(), qr{long_value=$long}, "the long preference was stored whole" );
+};
+
+
+# A preference given a null value in a request body is deleted, as one given the empty
+# string is. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'delete with null' => sub {
+    
+    $T->set_cookie("session_id", $SESSION);
+    
+    my (@r) = $T->send_records("/prefs/set.json", "delete a preference with null",
+			       json => [ { field => 'long_value', value => undef } ]);
+    
+    my %s = settings(@r);
+    
+    is_deeply( $s{long_value}, [ '', 'deleted' ], "the preference was reported as deleted" );
+    unlike( stored(), qr{long_value}, "and was removed" );
 };

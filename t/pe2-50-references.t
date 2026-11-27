@@ -14,7 +14,7 @@ use strict;
 
 use feature 'unicode_strings';
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 
 use lib qw(lib ../lib t);
 
@@ -207,6 +207,42 @@ subtest 'update' => sub {
     $T->ok_response_code($m3, '400', "updating a reference that does not exist gets 400");
 };
 
+
+
+# A field given by its own name or by an alias may be cleared with null or the empty string.
+# [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'clearing fields' => sub {
+    
+    my ($no) = $ET->dbh->selectrow_array("
+		SELECT reference_no FROM $TABLE{REFERENCE_DATA} WHERE reftitle = '$ARTICLE{reftitle}'");
+    
+    ok( $no, "found the reference to update" ) || return;
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    foreach my $clear ( [ 'null', undef ], [ 'the empty string', '' ] )
+    {
+	my ($label, $value) = @$clear;
+	
+	$T->send_records("/refs/addupdate.json", "set the doi and volume",
+			 json => [ { reference_id => "ref:$no", doi => '10.1000/test',
+				     pub_vol => '12' } ]);
+	
+	my ($doi, $vol) = $ET->dbh->selectrow_array("SELECT doi, pubvol
+		FROM $TABLE{REFERENCE_DATA} WHERE reference_no = $no");
+	
+	is( "$doi / $vol", "10.1000/test / 12", "the doi and volume were set" );
+	
+	$T->send_records("/refs/addupdate.json", "clear them with $label",
+			 json => [ { reference_id => "ref:$no", doi => $value, pub_vol => $value } ]);
+	
+	($doi, $vol) = $ET->dbh->selectrow_array("SELECT ifnull(doi, ''), ifnull(pubvol, '')
+		FROM $TABLE{REFERENCE_DATA} WHERE reference_no = $no");
+	
+	is( "$doi / $vol", " / ", "both were cleared with $label, by name and by alias" );
+    }
+};
 
 # A title or author name with bad capitalization gets the caution C_CAPITAL, which the
 # allowance CAPITAL lets through.
