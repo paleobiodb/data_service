@@ -898,31 +898,65 @@ sub validate_coll_action {
 	    $min_ma = $old_min_ma unless $action->field_specified('min_ma');
 	}
 	
-	unless ( $direct_ma && $direct_ma ne '' )
+	# [Changed by Claude under the guidance of Michael McClennen: the error, unit, and
+	# method columns of an age that is not given are given the directive 'ignore', so
+	# that they are left out and a W_DISCARDED warning is added for any value given.
+	# They were passed to ignore_field, which applies only to fields that are not
+	# columns, so their values were stored. An age that an update clears has its
+	# error, unit, and method cleared as well, by clear_age_fields.]
+	
+	if ( $operation eq 'update' && $action->field_specified('direct_ma') &&
+	     ! ( defined $direct_ma && $direct_ma ne '' ) )
 	{
-	    $action->ignore_field('direct_ma_error');
-	    $action->ignore_field('direct_ma_unit');
-	    $action->ignore_field('direct_ma_method');
+	    $edt->clear_age_fields($action, 'direct');
 	    $direct_ma_error = undef;
 	    $direct_ma_unit = undef;
 	    $direct_ma_method = undef;
 	}
 	
-	unless ( $max_ma && $max_ma ne '' )
+	elsif ( ! ( $direct_ma && $direct_ma ne '' ) )
 	{
-	    $action->ignore_field('max_ma_error');
-	    $action->ignore_field('max_ma_unit');
-	    $action->ignore_field('max_ma_method');
+	    $action->handle_column('direct_ma_error', 'ignore');
+	    $action->handle_column('direct_ma_unit', 'ignore');
+	    $action->handle_column('direct_ma_method', 'ignore');
+	    $direct_ma_error = undef;
+	    $direct_ma_unit = undef;
+	    $direct_ma_method = undef;
+	}
+	
+	if ( $operation eq 'update' && $action->field_specified('max_ma') &&
+	     ! ( defined $max_ma && $max_ma ne '' ) )
+	{
+	    $edt->clear_age_fields($action, 'max');
 	    $max_ma_error = undef;
 	    $max_ma_unit = undef;
 	    $max_ma_method = undef;
 	}
 	
-	unless ( $min_ma && $min_ma ne '' )
+	elsif ( ! ( $max_ma && $max_ma ne '' ) )
 	{
-	    $action->ignore_field('min_ma_error');
-	    $action->ignore_field('min_ma_unit');
-	    $action->ignore_field('min_ma_method');
+	    $action->handle_column('max_ma_error', 'ignore');
+	    $action->handle_column('max_ma_unit', 'ignore');
+	    $action->handle_column('max_ma_method', 'ignore');
+	    $max_ma_error = undef;
+	    $max_ma_unit = undef;
+	    $max_ma_method = undef;
+	}
+	
+	if ( $operation eq 'update' && $action->field_specified('min_ma') &&
+	     ! ( defined $min_ma && $min_ma ne '' ) )
+	{
+	    $edt->clear_age_fields($action, 'min');
+	    $min_ma_error = undef;
+	    $min_ma_unit = undef;
+	    $min_ma_method = undef;
+	}
+	
+	elsif ( ! ( $min_ma && $min_ma ne '' ) )
+	{
+	    $action->handle_column('min_ma_error', 'ignore');
+	    $action->handle_column('min_ma_unit', 'ignore');
+	    $action->handle_column('min_ma_method', 'ignore');
 	    $min_ma_error = undef;
 	    $min_ma_unit = undef;
 	    $min_ma_method = undef;
@@ -1030,6 +1064,29 @@ sub validate_coll_action {
 	{
 	    $edt->add_condition('E_REQUIRED', 'assembl_comps');
 	}
+    }
+}
+
+
+# clear_age_fields ( action, which )
+#
+# Clear the error, unit, and method of the age specified by $which, which must be
+# 'direct', 'max', or 'min'. This is called when an update clears that age. A non-empty
+# value given for one of these fields is discarded, with a W_DISCARDED warning. [Added by
+# Claude under the guidance of Michael McClennen]
+
+sub clear_age_fields {
+    
+    my ($edt, $action, $which) = @_;
+    
+    foreach my $field ( "${which}_ma_error", "${which}_ma_unit", "${which}_ma_method" )
+    {
+	my $value = $action->record_value($field);
+	
+	$edt->add_condition('W_DISCARDED', $field)
+	    if defined $value && $value ne '';
+	
+	$action->set_record_value($field, undef);
     }
 }
 

@@ -433,25 +433,9 @@ sub addupdate_colls {
     
     foreach my $r (@records)
     {
-	# If the field '_delete' was specified with a true value, delete the record.
-	
-	if ( $r->{_delete} )
-	{
-	    # if ( exists $r->{reid_id} )
-	    # {
-	    # 	$edt->delete_record('REID_DATA', $r);
-	    # }
-
-	    # elsif ( exists $r->{occurrence_id} )
-	    # {
-	    # 	$edt->delete_record('OCCURRENCE_DATA', $r);
-	    # }
-	    
-	    # else
-	    # {
-		$edt->delete_record('COLLECTION_DATA', $r);
-	    # }
-	}
+	# [Removed by Claude under the guidance of Michael McClennen: a record with a true
+	# value for '_delete' is no longer deleted. Nothing used this, the body ruleset did not
+	# accept '_delete', and collections are deleted with 'colls/delete'.]
 	
 	# # Otherwise, if 'reid_id' was specified then insert or update this
 	# # record in the REID_DATA table.
@@ -469,10 +453,11 @@ sub addupdate_colls {
 	#     $edt->insert_update_record('OCCURRENCE_DATA', $r);
 	# }
 	
-	# Otherwise, if this operation was called as 'colls/add' then insert
-	# this record in the COLLECTION_DATA table.
+	# If this operation was called as 'colls/add' then insert this record in the
+	# COLLECTION_DATA table. [Changed by Claude under the guidance of Michael McClennen:
+	# this is now the first case.]
 	
-	elsif ( $operation eq 'insert' )
+	if ( $operation eq 'insert' )
 	{
 	    $edt->insert_record('COLLECTION_DATA', $r);
 	}
