@@ -565,6 +565,31 @@ sub has_condition {
 }
 
 
+# field_has_error ( field_name )
+# 
+# Return true if this action has an error condition, or an error that was demoted to a
+# warning, whose first parameter is the specified field name. Validation uses this to skip
+# the column checks for a field whose value a client module has already reported, so that
+# the same problem is not reported twice. Cautions and warnings do not count. [Added by
+# Claude under the guidance of Michael McClennen]
+
+sub field_has_error {
+    
+    my ($action, $field_name) = @_;
+    
+    return '' unless defined $field_name && $field_name ne '' &&
+	ref $action->{conditions} eq 'ARRAY';
+    
+    foreach my $c ( $action->{conditions}->@* )
+    {
+	return 1 if ref $c eq 'ARRAY' && $c->[1] =~ /^[ED]_/ &&
+	    defined $c->[2] && $c->[2] eq $field_name;
+    }
+    
+    return '';
+}
+
+
 # pin_errors ( )
 # 
 # After this method is called, subsequent errors added to this action will be fatal even if this

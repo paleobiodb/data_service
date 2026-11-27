@@ -185,6 +185,16 @@ sub validate_against_schema {
 	
 	# Otherwise, the column has no assigned value.
 	
+	# If a client module has already reported an error for the value of this field,
+	# skip the checks below, which would report the same problem a second time. The
+	# action cannot be executed while it has an error, so the value need not be
+	# stored. [Added by Claude under the guidance of Michael McClennen]
+	
+	if ( defined $fieldname && $action->field_has_error($fieldname) )
+	{
+	    next COLUMN;
+	}
+	
 	# Determine the stored value for this column
 	# ------------------------------------------
 	
