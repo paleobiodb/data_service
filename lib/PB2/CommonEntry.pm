@@ -234,7 +234,15 @@ sub parse_body_records {
     # processing, and have already been cleaned by parse_main_params. So there is no need to
     # process them further. However, we do need to throw an error if they are empty.
     
-    if ( Dancer::request->method eq 'GET' )
+    # [Changed by Claude under the guidance of Michael McClennen: a DELETE request without
+    # a body is handled in the same way, so that the records to delete may be given in the
+    # URL. Such a request was rejected because its body was empty.]
+    
+    my $method = Dancer::request->method;
+    my $body_text = Dancer::request->body;
+    my $no_body = ! (defined $body_text && $body_text ne '');
+    
+    if ( $method eq 'GET' || $method eq 'DELETE' && $no_body )
     {
 	if ( $main_params->%* )
 	{
@@ -243,7 +251,8 @@ sub parse_body_records {
 
 	else
 	{
-	    die $request->exception(400, "E_PARAM: Method is 'GET' and no data parameters were recognized");
+	    die $request->exception(400, "E_PARAM: Method is '$method' and no data " .
+				    "parameters were recognized");
 	}
     }
     

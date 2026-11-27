@@ -87,7 +87,10 @@ sub initialize {
 			title => 'Check occurrence names before submission',
 			place => 21,
 			usage => ["/occs/checknames.json?name=Dascillus%20shandongianus"],
-			allow_method => 'GET,POST',
+			# [Changed by Claude under the guidance of
+			# Michael McClennen: PUT is accepted, as by
+			# every operation that takes body records.]
+			allow_method => 'GET,PUT,POST',
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::CollectionEntry',
 			method => 'check_taxonomic_names',
@@ -215,7 +218,11 @@ sub initialize {
 			title => 'Delete existing collections',
 			place => 20,
 			usage => ["/colls/delete.json?id=1234"],
-			allow_method => 'GET,POST',
+			# [Changed by Claude under the guidance of
+			# Michael McClennen: PUT is accepted, as by
+			# every operation that takes body records,
+			# and DELETE, as by the other deletes.]
+			allow_method => 'GET,PUT,POST,DELETE',
 			tag => 'entry',
 			doc_template => 'operation.tt',
 			role => 'PB2::CollectionEntry',
@@ -610,7 +617,10 @@ sub initialize {
     $ds2->define_node({ path => 'specs/delete',
 			title => 'Delete specimen records',
 			place => 0,
-			allow_method => 'GET,PUT,POST',
+			# [Changed by Claude under the guidance of
+			# Michael McClennen: DELETE is accepted, as
+			# by the other delete operations.]
+			allow_method => 'GET,PUT,POST,DELETE',
 			tag => 'entry',
 			doc_template => 'entry_operation.tt',
 			role => 'PB2::SpecimenEntry',

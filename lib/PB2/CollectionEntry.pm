@@ -83,11 +83,17 @@ sub initialize {
 	    "the identifier of an existing record. That record will be updated.",
 	{ allow => '1.2:common:entry_fields' });
     
+    # [Changed by Claude under the guidance of Michael McClennen: the identifier is
+    # optional, so that the collections to delete may be given in the request body
+    # instead. They were read from the body, but a request without an identifier in the
+    # URL was rejected.]
+    
     $ds->define_ruleset('1.2:colls:delete' =>
-	{ param => 'collection_id', valid => VALID_IDENTIFIER('COL'), list => ',',
+	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'), list => ',',
 	  alias => ['collection_no', 'id', 'coll_id', 'oid'] },
 	    "The identifier(s) of the record(s) to be deleted. You may specify",
-	    "multiple identifiers as a comma-separated list.",
+	    "multiple identifiers as a comma-separated list. If none are given, the",
+	    "records to be deleted are read from the request body.",
 	{ optional => 'allow', valid => '1.2:colls:allowances', list => ',' },
 	    "Allow the operation to proceed with certain conditions or properties.",
 	{ allow => '1.2:special_params' },
@@ -581,10 +587,16 @@ sub list_updated_colls {
     
     my $calc = $request->sql_count_clause;
     
+    # [Changed by Claude under the guidance of Michael McClennen: the tables are given by
+    # $TABLE{COLLECTION_MATRIX} and $TABLE{COLLECTION_DATA}. They were given as
+    # 'coll_matrix' and 'collections', so that in test mode the response came from the
+    # real tables.]
+    
     $request->{main_sql} = "
 	SELECT $calc $fields,
 	    if(cc.authorizer_no = '$enterer_no' or cc.enterer_no = '$enterer_no', 1, '') as is_owner
-	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+	FROM $TABLE{COLLECTION_MATRIX} as c
+		JOIN $TABLE{COLLECTION_DATA} as cc using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no";
@@ -620,7 +632,11 @@ sub update_occs {
     
     my $perms = $request->require_authentication('COLLECTION_DATA');
     
-    my ($allowances, $main_params) = $request->parse_main_params('1.2:occs:addupdate',
+    # [Changed by Claude under the guidance of Michael McClennen: the ruleset is
+    # '1.2:occs:update', the one for this operation. '1.2:occs:addupdate' does not exist,
+    # so a collection_id given in the URL was ignored.]
+    
+    my ($allowances, $main_params) = $request->parse_main_params('1.2:occs:update',
 								 'collection_id');
     
     # Then decode the body, and extract input records from it. If an error occured, return an
