@@ -1471,3 +1471,12 @@ F8u0nx5KIxk1oVLYBDUDATlmZlPLsA2gVcMHRwIGbCmgNpsotV77psA2Bw1wsyl7FwTwWujQpmpb
 s3OINuMhF7oiaP8Kc4O2bwBrt/Z6GJOgiu72CzCbp8o0uI2LA1wBgVwxXhSLpXKLOmnruPX6bUHw
 VQIHANOXuaHrA9OhEl33uaKLuj7QJ0FAr6krups0g4LrurNLu7Vru7eLu7mru7MUAgA7";
 }
+
+
+# Switch the test tables back to the real ones when this file is done, so that later
+# test files are not affected. [Added by Claude under the guidance of Michael
+# McClennen]
+
+END {
+    $E->release_module_tables($T) if $E && $T;
+}

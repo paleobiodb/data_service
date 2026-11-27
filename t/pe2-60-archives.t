@@ -365,3 +365,11 @@ subtest 'cleanup' => sub {
     
     $ET->ok_record_count(0, 'ARCHIVE_DATA', '*', "the test archive table is empty");
 };
+
+
+# Switch the test tables back to the real ones when this file is done, so that later
+# test files are not affected.
+
+END {
+    $ET->release_module_tables($T) if $ET && $T;
+}

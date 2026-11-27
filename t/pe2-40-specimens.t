@@ -1177,6 +1177,20 @@ subtest 'delete permissions and lists' => sub {
     $ET->ok_record_count(0, 'SPECIMEN_MATRIX', "specimen_no in ($nos)",
 			 "and their matrix rows");
     
+    # The DELETE method is accepted as well.
+    
+    my ($r3) = $T->send_records("/specs/addupdate.json", "add a specimen to delete",
+				json => [ { specimen_code => 'TEST DEL 3', taxon_id => $TID_2,
+					    reference_id => 'ref:5041' } ]);
+    
+    my $no3 = id_no($r3 && $r3->{oid});
+    
+    $T->server_request('delete', "/specs/delete.json?specimen_id=spm:$no3",
+		       "delete with method DELETE");
+    
+    $ET->ok_record_count(0, 'SPECIMEN_DATA', "specimen_no = $no3",
+			 "the specimen was deleted with method DELETE");
+    
     my ($m3) = $T->fetch_nocheck("/specs/delete.json?specimen_id=spm:99999999",
 				 "delete a specimen that does not exist");
     
@@ -1221,3 +1235,12 @@ subtest 'identification' => sub {
     $ET->ok_record_count(0, 'SPECIMEN_DATA', "specimen_id in ('TEST NO IDENT', 'TEST UNKNOWN NAME')",
 			 "neither was stored");
 };
+
+
+# Switch the test tables back to the real ones when this file is done, so that later
+# test files are not affected. [Added by Claude under the guidance of Michael
+# McClennen]
+
+END {
+    $ET->release_module_tables($T) if $ET && $T;
+}

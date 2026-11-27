@@ -9,7 +9,7 @@ package PBDBTester;
 
 use parent 'EditTester';
 
-use TableDefs qw(%TABLE enable_test_mode);
+use TableDefs qw(%TABLE enable_test_mode disable_test_mode);
 use CoreFunction qw(configData);
 use Test::More;
 use Carp qw(croak);
@@ -1018,7 +1018,36 @@ sub select_module_tables {
 	    unless $test_db && $TABLE{$table} =~ /^$test_db[.]/;
     }
     
+    $T->{selected_groups} = [ @groups ];
+    
     return @groups;
+}
+
+
+# release_module_tables ( tester )
+# 
+# [Added by Claude under the guidance of Michael McClennen.] Switch the table groups enabled
+# by select_module_tables back to the real database, on the server and in this process. The
+# server keeps a group enabled until it is disabled, so a test file that left its groups
+# enabled would change what later test files see. The requests are made directly, so that
+# they add no test results; a failure is reported as a diagnostic.
+
+sub release_module_tables {
+    
+    my ($T, $tester) = @_;
+    
+    foreach my $group ( @{$T->{selected_groups} || [ ]} )
+    {
+	my $url = $tester->make_url("/testmode/$group/disable");
+	my $response = $tester->{ua}->get($url);
+	
+	diag("could not disable the test tables for '$group' on the server")
+	    unless $response && $response->is_success;
+	
+	disable_test_mode($group);
+    }
+    
+    $T->{selected_groups} = [ ];
 }
 
 
