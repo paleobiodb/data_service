@@ -19,7 +19,7 @@ use strict;
 use utf8;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 14;
+use Test::More tests => 15;
 
 use Unicode::Normalize;
 
@@ -476,4 +476,83 @@ subtest 'counts' => sub {
     ReferenceMatch::clear_counts();
     
     ok( ! %ReferenceMatch::COUNT, "clear_counts clears them" );
+};
+
+
+# Cases of the similarity functions not covered above: words run together in either title,
+# with or without a misspelling; titles with a suffix; author names swapped between the two
+# fields or crossed between the two records; alternate titles and publication titles; first
+# authors given in the other order; and author lists of name records. [Added by Claude under
+# the guidance of Michael McClennen]
+
+subtest 'more similarity cases' => sub {
+    
+    my $t = 'The fossil dinosaurs of Montana';
+    my $squashed = 'The fossil dino saurs of Montana';
+    
+    is( list(ReferenceMatch::title_similarity($t, $squashed)), '100 | 0',
+	"words run together in the first title" );
+    is( list(ReferenceMatch::title_similarity($squashed, $t)), '100 | 0',
+	"words run together in the second title" );
+    is( list(ReferenceMatch::title_similarity('The fossil dinosuars of Montana', $squashed)),
+	'97 | 3', "words run together, with a misspelling" );
+    is( list(ReferenceMatch::title_similarity($squashed, 'The fossil dinosuars of Montana')),
+	'97 | 3', "the same the other way round" );
+    is( list(ReferenceMatch::title_similarity('The fossil dinoxxxxx of Montana', $squashed)),
+	'0 | 100', "words that do not match when run together" );
+    
+    is( list(ReferenceMatch::title_similarity('Dinosaurs of Montana',
+					      'Dinosaurs of Montana and Wyoming and Idaho')),
+	'50 | 0', "a short title, and a suffix longer than half of it" );
+    is( list(ReferenceMatch::title_similarity(
+		 'The fossil dinosaurs of the Hell Creek Formation',
+		 'The fossil dinosaurs of the Hell Creek Formation of eastern Montana')),
+	'100 | 0', "a long title with a short suffix" );
+    
+    is( list(author_similarity('Smith', 'A.', 'A.', 'Smith')), '100 | 0',
+	"fields swapped in the second name" );
+    is( list(author_similarity('Zhang', 'W.', 'Wei', 'Zhang')), '100 | 0',
+	"names crossed, with the full last name as the other first name" );
+    is( list(author_similarity('Zhang', 'W. Q.', 'Wei-Qiang', 'Z.')), '80 | 0',
+	"names crossed, with matching second initials" );
+    is( list(author_similarity('Wei-Qiang', 'Z.', 'Zhang', 'W. Q.')), '80 | 0',
+	"the same the other way round" );
+    is( list(author_similarity('Zhang', 'W.', 'Wu', 'Z.')), '50 | 0',
+	"names crossed, with only first initials" );
+    
+    eval { ReferenceMatch::authname_similarity('Smith', [ 'Smith', 'A.' ]) };
+    like( $@, qr{invalid value for name_a}, "authname_similarity needs a list for name_a" );
+    
+    eval { ReferenceMatch::authname_similarity([ 'Smith', 'A.' ], 'Smith') };
+    like( $@, qr{invalid value for name_b}, "and for name_b" );
+    
+    my $s = ref_similarity(pbdb(reftitle => 'Los dinosaurios de Montana [The dinosaurs of Montana]'),
+			   pbdb());
+    
+    is( $s->{title_s}, 100, "an alternate title in brackets matches" );
+    
+    my $cr = { title => [ 'The dinosaurs of Montana' ],
+	       'container-title' => [ 'Revista de Paleontologia', 'Journal of Paleontology' ],
+	       author => [ { family => 'Smith', given => 'A. B.' },
+			   { family => 'Jones', given => 'C.' } ],
+	       issued => { 'date-parts' => [ [ 1999 ] ] }, volume => 12, page => '100-120' };
+    
+    is( ref_similarity($cr, pbdb())->{pub_s}, 100, "an alternate publication title matches" );
+    is( ref_match($cr, pbdb())->{pub_s}, 100, "in ref_match as well" );
+    
+    $s = ref_similarity(pbdb(author1last => 'Jones', author1init => 'C.',
+			     author2last => 'Smith', author2init => 'A. B.'), pbdb());
+    
+    is( $s->{auth1_s}, 80, "first authors in the other order are 80% similar" );
+    
+    is( authors({ authors => [ { lastname => 'Smith', firstname => 'J.' },
+			       { lastname => 'Jones', firstname => 'B.' } ] }),
+	'Smith | J. || Jones | B.', "an author list of name records" );
+    
+    is( list((ReferenceMatch::get_authorname({ authors => [ { lastname => 'Smith',
+							       firstname => 'J.' } ] }, 1))[0..1]),
+	'Smith | J.', "the first author of such a list" );
+    
+    is( list(ReferenceMatch::split_authorlist('Smith, J., Jones, B., and Black')),
+	'Smith, J. | Jones, B. | Black', "a last name without initials at the end of a list" );
 };

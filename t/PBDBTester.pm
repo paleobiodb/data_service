@@ -9,7 +9,7 @@ package PBDBTester;
 
 use parent 'EditTester';
 
-use TableDefs qw(%TABLE enable_test_mode disable_test_mode);
+use TableDefs qw(%TABLE enable_test_mode disable_test_mode original_table_name);
 use CoreFunction qw(configData);
 use Test::More;
 use Carp qw(croak);
@@ -59,6 +59,45 @@ sub new {
     return bless $instance;
 }
 
+# _create_test_table_like ( dbh, table_specifier, keep )
+# 
+# [Added by Claude under the guidance of Michael McClennen.] Create the test table for the
+# specified table like the real one, so that it has the same columns and keys. If $keep is
+# true and the test table already has the same columns and keys as the real one, it is
+# left as it is, with its contents. Otherwise it is created anew, and is empty.
+
+sub _create_test_table_like {
+    
+    my ($dbh, $specifier, $keep) = @_;
+    
+    my $real = original_table_name($TABLE{$specifier});
+    $real = "pbdb.$real" unless $real =~ /[.]/;
+    
+    croak "the test table for $specifier is the real table"
+	if $real eq $TABLE{$specifier};
+    
+    # The test table is kept only if its columns and its keys are the same as those of the
+    # real table.
+    
+    if ( $keep )
+    {
+	my $layout = sub {
+	    my $cols = eval { $dbh->selectall_arrayref("SHOW COLUMNS FROM $_[0]") };
+	    my $keys = eval { $dbh->selectall_arrayref("SHOW INDEX FROM $_[0]") };
+	    return '' unless ref $cols eq 'ARRAY' && ref $keys eq 'ARRAY';
+	    return join(',', map { "$_->[0] $_->[1] $_->[2]" } @$cols) . ' / ' .
+		join(',', map { "$_->[2] $_->[1] $_->[3] $_->[4]" } @$keys);
+	};
+	
+	my $test_layout = $layout->($TABLE{$specifier});
+	
+	return if $test_layout && $test_layout eq $layout->($real);
+    }
+    
+    $dbh->do("CREATE OR REPLACE TABLE $TABLE{$specifier} LIKE $real");
+}
+
+
 
 # establish_session_data ( )
 #
@@ -99,21 +138,12 @@ sub establish_session_data {
     
     eval {
 	
-	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{SESSION_DATA} (
-	  `session_id` varchar(80) NOT NULL,
-	  `user_id` char(36) NOT NULL,
-	  `authorizer` varchar(64) NOT NULL DEFAULT '',
-	  `enterer` varchar(64) NOT NULL DEFAULT '',
-	  `role` varchar(20) DEFAULT NULL,
-	  `reference_no` int(11) DEFAULT NULL,
-	  `queue` varchar(255) DEFAULT NULL,
-	  `record_date` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-	  `created_date` timestamp NOT NULL DEFAULT current_timestamp(),
-	  `expire_days` int NOT NULL default 1,
-	  `superuser` tinyint(1) DEFAULT 0,
-	  `authorizer_no` int(10) NOT NULL DEFAULT 0,
-	  `enterer_no` int(10) NOT NULL DEFAULT 0,
-	  PRIMARY KEY (`session_id`))");
+	# [Changed by Claude under the guidance of Michael McClennen: this test table is
+	# created like the real one by _create_test_table_like, so that its columns match.
+	# It was created from a definition of its own, which had drifted from the real
+	# table.]
+	
+	_create_test_table_like($dbh, 'SESSION_DATA');
 	
 	$dbh->do("DELETE FROM $TABLE{SESSION_DATA}");
 
@@ -128,34 +158,13 @@ sub establish_session_data {
 		('SESSION-SUPERUSER','USERID-SUPERUSER','39999','39999','authorizer',30000,1),
 		('SESSION-WITH-ADMIN','USERID-WITH-ADMIN','39999','39991','enterer',30000,0)");
 	
-	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{PERSON_DATA} (
-	  `person_no` int(10) unsigned NOT NULL AUTO_INCREMENT,
-	  `name` varchar(64) NOT NULL DEFAULT '',
-	  `reversed_name` varchar(64) NOT NULL DEFAULT '',
-	  `first_name` varchar(30) NOT NULL DEFAULT '',
-	  `middle` varchar(10) DEFAULT NULL,
-	  `last_name` varchar(30) NOT NULL DEFAULT '',
-	  `country` varchar(80) DEFAULT NULL,
-	  `institution` varchar(80) DEFAULT NULL,
-	  `email` varchar(255) DEFAULT NULL,
-	  `homepage` varchar(255) DEFAULT NULL,
-	  `photo` varchar(255) DEFAULT NULL,
-	  `is_authorizer` tinyint(1) NOT NULL DEFAULT 0,
-	  `role` set('authorizer','enterer','officer','student','technician') DEFAULT NULL,
-	  `active` tinyint(1) NOT NULL DEFAULT 1,
-	  `heir_no` int(10) unsigned NOT NULL DEFAULT 0,
-	  `research_group` varchar(64) DEFAULT NULL,
-	  `preferences` varchar(64) DEFAULT NULL,
-	  `last_download` varchar(64) DEFAULT NULL,
-	  `created` datetime DEFAULT NULL,
-	  `modified` datetime DEFAULT NULL,
-	  `last_action` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-	  `last_entry` datetime DEFAULT NULL,
-	  `hours` int(4) unsigned DEFAULT NULL,
-	  `hours_ever` int(6) unsigned DEFAULT NULL,
-	  `hours_authorized` int(6) unsigned DEFAULT NULL,
-	  `superuser` tinyint(1) DEFAULT 0,
-	  PRIMARY KEY (`person_no`))");
+	# [Changed by Claude under the guidance of Michael McClennen: this test table is
+	# created like the real one by _create_test_table_like, so that its columns match.
+	# It was created from a definition of its own, in which 'preferences' was
+	# varchar(64) instead of longtext, so that longer preferences were cut off in the
+	# tests.]
+	
+	_create_test_table_like($dbh, 'PERSON_DATA');
 
 	$dbh->do("DELETE FROM $TABLE{PERSON_DATA} WHERE institution = 'Test'");
 
@@ -168,58 +177,45 @@ sub establish_session_data {
 			(39994,'C. Enterer','Enterer, C.','Test'),
 			(39991,'A. Admin','Admin, A.','Test')");
 
-	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{WING_USERS} (
-	  `id` char(36) COLLATE utf8_unicode_ci NOT NULL,
-	  `date_created` datetime NOT NULL DEFAULT current_timestamp,
-	  `date_updated` datetime NOT NULL DEFAULT current_timestamp,
-	  `admin` tinyint(4) NOT NULL DEFAULT 0,
-	  `real_name` varchar(255) COLLATE utf8_unicode_ci DEFAULT '',
-	  `password_type` varchar(10) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'bcrypt',
-	  `password_salt` char(16) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'abcdefghijklmnop',
-	  `username` varchar(30) COLLATE utf8_unicode_ci NOT NULL,
-	  `email` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
-	  `password` char(50) COLLATE utf8_unicode_ci DEFAULT NULL,
-	  `use_as_display_name` varchar(10) COLLATE utf8_unicode_ci DEFAULT 'username',
-	  `developer` tinyint(4) NOT NULL DEFAULT 0,
-	  `last_login` datetime DEFAULT NULL,
-	  `country` char(2) COLLATE utf8_unicode_ci NOT NULL default '',
-	  `person_no` int(11) DEFAULT NULL,
-	  `middle_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
-	  `role` enum('guest','authorizer','enterer','student') COLLATE utf8_unicode_ci NOT NULL,
-	  `institution` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-	  `last_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-	  `first_name` varchar(80) COLLATE utf8_unicode_ci NOT NULL,
-	  `authorizer_no` int(11) DEFAULT NULL,
-	  `orcid` varchar(19) COLLATE utf8_unicode_ci NOT NULL default '',
-	  `contributor_status` enum('active','disabled','deceased') 
-		COLLATE utf8_unicode_ci NOT NULL default 'active',
-	  `last_pwchange` datetime DEFAULT NULL,
-	  PRIMARY KEY (`id`),
-	  UNIQUE KEY `users_username` (`username`),
-	  KEY `idx_search` (`real_name`,`username`,`email`),
-	  KEY `idx_country` (`country`),
-	  KEY `idx_last_name` (`last_name`),
-	  KEY `users_email` (`email`),
-	  KEY `idx_person_no` (`person_no`))");
+	# [Changed by Claude under the guidance of Michael McClennen: this test table is
+	# created like the real one by _create_test_table_like, so that its columns match.
+	# It was created from a definition of its own, which had drifted from the real
+	# table.]
+	
+	_create_test_table_like($dbh, 'WING_USERS');
 	
 	$dbh->do("DELETE FROM $TABLE{WING_USERS}");
 	
-	$dbh->do("INSERT INTO $TABLE{WING_USERS} (id, person_no, username, role,
-						  real_name, first_name, last_name, institution)
-    VALUES  ('USERID-SUPERUSER','39999','sua','authorizer','A. Superuser','A.','Superuser','Test'),
-	    ('USERID-AUTHORIZER','39998','aua','authorizer','A. Authorizer','A.','Authorizer','Test'),
-	    ('USERID-ENTERER','39997','ena','enterer','A. Enterer','A.','Enterer','Test'),
-	    ('USERID-STUDENT','39996','sta','student','A. Student','A.','Student','Test'),
-	    ('USERID-OTHER','39995','enb','enterer','B. Enterer','B.','Enterer','Test'),
-	    ('USERID-UNAUTH','39994','enc','enterer','C. Enterer','C.','Enterer','Test'),
-	    ('USERID-WITH-ADMIN','39991','adm','enterer','A. Admin','A.','Admin','Test'),
-	    ('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test')");
+	# [Changed by Claude under the guidance of Michael McClennen: the columns that
+	# have no default in the real table are given values.]
 	
-	$dbh->do("CREATE TABLE IF NOT EXISTS $TABLE{TABLE_PERMS} (
-	  `person_no` int(10) unsigned NOT NULL,
-	  `table_name` varchar(80) NOT NULL,
-	  `permission` set('none','view','post','modify','delete','insert_key','admin') NOT NULL,
-	  UNIQUE KEY `person_no` (`person_no`,`table_name`))");
+	$dbh->do("INSERT INTO $TABLE{WING_USERS} (id, person_no, username, role,
+				real_name, first_name, last_name, institution,
+				date_created, date_updated, last_login, country,
+				middle_name, orcid, contributor_status)
+    VALUES  ('USERID-SUPERUSER','39999','sua','authorizer','A. Superuser','A.','Superuser','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-AUTHORIZER','39998','aua','authorizer','A. Authorizer','A.','Authorizer','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-ENTERER','39997','ena','enterer','A. Enterer','A.','Enterer','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-STUDENT','39996','sta','student','A. Student','A.','Student','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-OTHER','39995','enb','enterer','B. Enterer','B.','Enterer','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-UNAUTH','39994','enc','enterer','C. Enterer','C.','Enterer','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-WITH-ADMIN','39991','adm','enterer','A. Admin','A.','Admin','Test',
+		 NOW(),NOW(),NOW(),'','','','active'),
+	    ('USERID-GUEST','0','gua','guest','A. Guest','A.','Guest','Test',
+		 NOW(),NOW(),NOW(),'','','','active')");
+	
+	# [Changed by Claude under the guidance of Michael McClennen: this test table is
+	# created like the real one by _create_test_table_like, so that its columns match.
+	# It was created from a definition of its own, which had drifted from the real
+	# table.]
+	
+	_create_test_table_like($dbh, 'TABLE_PERMS', 'keep');
 	
 	# $dbh->do("INSERT INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
 	# 	VALUES ('39991', 'RESOURCE_QUEUE', 'admin')");
@@ -258,7 +254,15 @@ sub set_specific_permission {
     $table_name =~ s/^\w+[.]//;
     $person_no = $perm->{enterer_no};
     
-    my $sql = "REPLACE INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
+    # [Changed by Claude under the guidance of Michael McClennen: the existing permission
+    # is deleted and the new one inserted. The real table, which the test table is created
+    # like, has no unique key on person_no and table_name, so REPLACE would add a second
+    # row.]
+    
+    $T->dbh->do("DELETE FROM $TABLE{TABLE_PERMS}
+		 WHERE person_no = '$person_no' and table_name = '$table_name'");
+    
+    my $sql = "INSERT INTO $TABLE{TABLE_PERMS} (person_no, table_name, permission)
 		 VALUES ('$person_no', '$table_name', '$value')";
     
     $T->debug_line($sql);
