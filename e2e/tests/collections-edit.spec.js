@@ -71,11 +71,12 @@ test('change the collection name', async ({ appPage: page }) => {
 
 	await expect(page.locator('#details_tab')).toHaveClass(/tab-active/);
 	expect(page.dialogs).toEqual([]);
+	expect(await page.alerts(), 'alerts').toEqual([]);
 	expect(page.pageErrors).toEqual([]);
 
 	// And the change is stored.
 
-	const row = testdb('row', 'COLLECTION_DATA', idNo(COLL_ID), 'collection_name');
+	const row = testdb('row', 'colls', 'COLLECTION_DATA', idNo(COLL_ID), 'collection_name');
 
 	expect(row.collection_name).toBe('Browser test collection, renamed');
 });

@@ -8,14 +8,38 @@
 // session cookie of a test session. The page is opened with 'debug=api', which sends its
 // API requests to /dtest1.2/, the test API server, where that session exists. Any request
 // that would change data through the real API (/data1.2/) is blocked and fails the test.
+//
+// Some pages require a login to Classic, which redirects a guest to the login page. For
+// these, the browser is given the cookie 'pbdb_webapp_test' with the value of the setting
+// WEBAPP_TEST_COOKIE in Classic's pbdb.conf, which lets the page load without a login. That
+// setting is made only on a development machine.
 
 const base = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 
 const CONTAINER = process.env.PBAPI_CONTAINER || 'paleobiodb-pbapi-1';
 const PBAPI_DIR = process.env.PBAPI_DIR || '/var/paleomacro/pbapi';
 
+const CLASSIC_CONF = process.env.PBDB_CLASSIC_CONF || '/var/paleobiodb/frontend/classic/pbdb.conf';
+
 const WRITE_OPS = /\/(add|update|addupdate|delete|set|checknames)\b[^/]*$/;
+
+
+// Return the value of WEBAPP_TEST_COOKIE from Classic's configuration, or null.
+
+function webappTestCookie () {
+
+	try {
+		const conf = fs.readFileSync(CLASSIC_CONF, 'utf8');
+		const m = /^\s*WEBAPP_TEST_COOKIE\s*=\s*(\S+)/m.exec(conf);
+		return m ? m[1] : null;
+	}
+
+	catch (e) {
+		return null;
+	}
+}
 
 
 // Run a command of e2e/testdb.pl in the pbapi container, and return its result.
@@ -49,8 +73,8 @@ const test = base.test.extend({
 	session: [ 'SESSION-ENTERER', { option: true } ],
 
 	// A page with the login settings rewritten. 'apiRequests' lists every request made to
-	// the API, and 'dialogs' every alert or confirmation the page showed, which are
-	// accepted.
+	// the API, 'dialogs' every dialog the page showed, which are accepted, and 'alerts()'
+	// returns the alerts it showed.
 
 	appPage: async ({ page, context, session, baseURL }, use) => {
 
@@ -59,7 +83,14 @@ const test = base.test.extend({
 		await context.addCookies([ { name: 'session_id', value: session, domain: host,
 									 path: '/' } ]);
 
-		await page.route(/\/app\/[\w-]+(\?[^#]*)?$/, async route => {
+		const testCookie = webappTestCookie();
+
+		if ( testCookie ) {
+			await context.addCookies([ { name: 'pbdb_webapp_test', value: testCookie,
+										 domain: host, path: '/' } ]);
+		}
+
+		await page.route(/\/app\/[\w-]+(\/[\w.-]+)?(\?[^#]*)?$/, async route => {
 			if ( route.request().resourceType() != 'document' ) return route.continue();
 			const response = await route.fetch();
 			let body = await response.text();
@@ -96,6 +127,12 @@ const test = base.test.extend({
 		page.apiRequests = apiRequests;
 		page.dialogs = dialogs;
 		page.pageErrors = errors;
+
+		// The pages served by Classic include wing.js, which replaces window.alert with a
+		// PNotify notice. An alert therefore does not appear in 'dialogs', and this returns
+		// the text of every notice shown instead. A confirmation is still a dialog.
+
+		page.alerts = () => page.locator('.ui-pnotify-text').allInnerTexts();
 
 		await use(page);
 

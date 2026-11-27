@@ -438,7 +438,7 @@ function checkBody (sent, expected, label) {
 
 async function checkStored (page, collNo, which) {
 
-	const row = testdb('row', 'COLLECTION_DATA', collNo, [ ...COLUMNS ].join(','));
+	const row = testdb('row', 'colls', 'COLLECTION_DATA', collNo, [ ...COLUMNS ].join(','));
 
 	const expected = {}, stored = {};
 
@@ -567,6 +567,7 @@ test('add a collection with every field', async ({ appPage: page }) => {
 	expect(response.status(), JSON.stringify(body.errors || body.warnings)).toBe(200);
 	expect(body.warnings || [], 'warnings in the response').toEqual([]);
 	expect(page.pageErrors, 'errors in the page').toEqual([]);
+	expect(await page.alerts(), 'alerts').toEqual([]);
 
 	COLL_ID = body.records[0].collection_no;
 
@@ -601,6 +602,7 @@ async function updateAll (page, which, prev) {
 	expect(response.status(), JSON.stringify(body.errors || body.warnings)).toBe(200);
 	expect(body.warnings || [], 'warnings in the response').toEqual([]);
 	expect(page.pageErrors, 'errors in the page').toEqual([]);
+	expect(await page.alerts(), 'alerts').toEqual([]);
 
 	await checkStored(page, idNo(COLL_ID), which);
 
@@ -665,7 +667,7 @@ test('change the coordinates to decimal degrees', async ({ appPage: page }) => {
 	expect(response.status(), JSON.stringify(body.errors || body.warnings)).toBe(200);
 	expect(body.warnings || [], 'warnings in the response').toEqual([]);
 
-	const row = testdb('row', 'COLLECTION_DATA', idNo(COLL_ID),
+	const row = testdb('row', 'colls', 'COLLECTION_DATA', idNo(COLL_ID),
 					   'latmin,latsec,latdec,lngmin,lngsec,lngdec');
 
 	expect(row, `the stored coordinates, after sending ${request.postData()}`).toEqual({

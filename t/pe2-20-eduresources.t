@@ -11,7 +11,7 @@ use strict;
 use feature 'unicode_strings';
 use feature 'fc';
 
-use Test::More tests => 17;
+use Test::More tests => 18;
 
 # use CoreFunction qw(loadConfig configData);
 
@@ -982,6 +982,38 @@ subtest 'update nonexistent' => sub {
     $T->ok_response_code($m2, '400', "updating a record with no identifier gets 400");
     
     $E->ok_record_count(0, 'RESOURCE_QUEUE', "title = 'No Identifier'", "nothing was stored");
+};
+
+
+# The status of each resource is reported by eduresources/list and eduresources/single, and
+# not only by the data entry operations, as the resource manager sorts the resources into
+# its lists by status. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'status in list and single' => sub {
+
+    select_subtest || return;
+
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+
+    my ($r1) = $T->send_records("/eduresources/addupdate.json", "add a pending resource",
+				json => [ { title => 'Status pending', url => 'https://example.org/p',
+					    author => 'A. Tester', status => 'pending' } ]);
+
+    my ($r2) = $T->send_records("/eduresources/addupdate.json", "add an active resource",
+				json => [ { title => 'Status active', url => 'https://example.org/a',
+					    author => 'A. Tester', status => 'active' } ]);
+
+    ok( $r1 && $r2, "added the resources" ) || return;
+
+    my %status = map { $_->{oid} => $_->{sta} }
+	$T->fetch_records("/eduresources/list.json?all_records", "list all resources");
+
+    is( $status{$r1->{oid}}, 'pending', "list reports the pending status" );
+    is( $status{$r2->{oid}}, 'active', "list reports the active status" );
+
+    my ($s1) = $T->fetch_records("/eduresources/single.json?id=$r1->{oid}", "fetch one resource");
+
+    is( $s1 && $s1->{sta}, 'pending', "single reports the status" );
 };
 
 
