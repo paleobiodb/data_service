@@ -83,7 +83,12 @@ sub initialize {
 	{ output => '_label', com_name => 'rlb', if_tag => 'entry' },
 	    "For data entry operations, this field will report the record",
 	    "label value, if any, that was submitted with each record.",
-	{ output => 'status', com_name => 'sta', if_tag => 'entry' },
+	# [Changed by Claude under the guidance of Michael McClennen: the status is reported
+	# in every response, not only for data entry operations. It is the status of the
+	# resource itself, which the resource manager uses to sort the resources into its
+	# lists, and not the status of a data entry operation.]
+
+	{ output => 'status', com_name => 'sta' },
 	    "The status will be one of the following codes:",
 	    $ds->document_set('1.2:eduresources:status'),
 	{ output => 'submitted_by', com_name => 'sub' },
