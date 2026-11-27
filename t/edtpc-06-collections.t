@@ -17,7 +17,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 14;
+use Test::More tests => 19;
 
 use File::Temp qw(tempdir);
 
@@ -956,6 +956,322 @@ subtest 'delete collection' => sub {
 
 
 # Clean up the authority records, so that no type locality points to a test collection.
+
+# [Added by Claude under the guidance of Michael McClennen: the following five subtests.]
+
+# The minutes and seconds of the coordinates must be between 0 and 59, and the ages and the
+# altitude must be numbers of the proper form.
+
+subtest 'collection field checks' => sub {
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('COLLECTION_DATA', { %COLL, latmin => 30, latsec => 75,
+					     lngdec => undef, lngmin => 75, lngsec => 75 });
+    
+    ok_failed_commit("a collection with bad minutes and seconds was rejected");
+    
+    my @conds = $edt->conditions;
+    
+    foreach my $field ( qw(latsec lngmin lngsec) )
+    {
+	is( scalar(grep { /E_BAD_VALUE.*'$field'.*0-59/ } @conds), 1, "the bad '$field' was reported" );
+    }
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('COLLECTION_DATA', { %COLL, max_ma => 'abc', max_ma_error => '123456789',
+					     min_ma => '1234567890', min_ma_error => 'x',
+					     altitude_value => 'high' });
+    
+    ok_failed_commit("a collection with bad ages and altitude was rejected");
+    
+    @conds = $edt->conditions;
+    
+    # Each is reported once. The column checks of EditTransaction would report some of them
+    # again, but they skip a field that already has an error.
+    
+    foreach my $f ( [ E_FORMAT => 'max_ma' ], [ E_WIDTH => 'max_ma_error' ],
+		    [ E_WIDTH => 'min_ma' ], [ E_FORMAT => 'min_ma_error' ],
+		    [ E_FORMAT => 'altitude_value' ] )
+    {
+	my ($code, $field) = @$f;
+	
+	is( scalar(grep { /'$field'/ } @conds), 1, "the bad '$field' was reported once" );
+	is( scalar(grep { /^$code.*'$field'/ } @conds), 1, "with $code" );
+    }
+};
+
+
+# The coordinates are computed from degrees, minutes, and seconds, or from degrees and
+# decimal digits. The precision is that of the most precise value given.
+
+subtest 'coordinates' => sub {
+    
+    my $c1 = new_collection(latmin => 30, latsec => 36, lngdec => undef, lngmin => 15, lngsec => 18);
+    
+    ok( $c1, "a collection with minutes and seconds was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), round(lng, 4), latlng_precision', "collection_no = $c1"),
+	"45.5100,-100.2550,seconds", "the coordinates were computed from the seconds" );
+    
+    my $c2 = new_collection(latmin => undef, latdec => '123', lngdec => '45');
+    
+    ok( $c2, "a collection with decimal digits was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), round(lng, 4), latlng_precision', "collection_no = $c2"),
+	"45.1230,-100.4500,3", "the precision is the larger number of digits" );
+    
+    my $c3 = new_collection(latmin => undef, lngdec => undef);
+    
+    ok( $c3, "a collection with whole degrees was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), round(lng, 4), latlng_precision', "collection_no = $c3"),
+	"45.0000,-100.0000,degrees", "the precision is 'degrees'" );
+};
+
+
+# The fields 'fossilsfrom1' and 'fossilsfrom2' are stored as 'Y' or empty. A collection that
+# is replaced keeps its creation date as the release date if it is public.
+
+subtest 'geology and replace' => sub {
+    
+    my $coll = new_collection(fossilsfrom1 => 1, fossilsfrom2 => 0);
+    
+    ok( $coll, "a collection was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', "fossilsfrom1, fossilsfrom2", "collection_no = $coll"), "Y,NULL",
+	"the fossilsfrom fields were stored as 'Y' and empty" );
+    
+    sql_command("UPDATE <<COLLECTION_DATA>> SET created = '2001-02-03 04:05:06'
+		WHERE collection_no = $coll");
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER'));
+    
+    $edt->replace_record('COLLECTION_DATA', { %COLL, collection_id => $coll,
+					      collection_name => 'Replaced collection' });
+    
+    ok_commit("the collection was replaced");
+    
+    is( rows('COLLECTION_DATA', "collection_name, release_date", "collection_no = $coll"),
+	"Replaced collection,2001-02-03 04:05:06",
+	"the release date of the public collection is its creation date" );
+};
+
+
+# The abundance unit is ignored without a value, two plant organs are stored in separate
+# fields and more are refused, a badly formed name is refused, and a taxon_id given with a
+# validation hash that matches the name is accepted as it is.
+
+subtest 'occurrence fields and validation' => sub {
+    
+    my $coll = new_collection();
+    
+    ok( $coll, "a collection was inserted" ) || return;
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { _label => 'a', collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus rex',
+					     abund_unit => 'specimens', plant_organ => 'leaf, wood' });
+    
+    ok_commit("an occurrence with an abundance unit and two plant organs was inserted") || return;
+    
+    ok_has_condition(qr/W_DISCARDED.*abund_unit/, "the unit without a value was discarded");
+    
+    my ($occ) = $edt->inserted_keys;
+    
+    is( rows('OCCURRENCE_DATA', "coalesce(abund_unit, ''), plant_organ, plant_organ2",
+	     "occurrence_no = $occ"), ",leaf,wood",
+	"the unit without a value was ignored, and the organs were stored separately" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $occ, plant_organ => 'root' });
+    
+    ok_commit("the plant organ was updated");
+    
+    is( rows('OCCURRENCE_DATA', "plant_organ, coalesce(plant_organ2, 'NONE')", "occurrence_no = $occ"),
+	"root,NONE", "one organ clears the second field" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $occ,
+					     plant_organ => 'leaf, wood, root' });
+    
+    ok_failed_commit("three plant organs were refused");
+    
+    ok_has_one_condition(qr/E_BAD_VALUE.*'plant_organ'.*two/, "the error was reported once");
+    
+    # An empty plant organ clears both fields.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $occ, plant_organ => 'leaf, wood' });
+    
+    ok_commit("two plant organs were stored again");
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $occ, plant_organ => '' });
+    
+    ok_commit("the plant organ was updated with an empty value");
+    
+    is( rows('OCCURRENCE_DATA', "coalesce(plant_organ, 'NONE'), coalesce(plant_organ2, 'NONE')",
+	     "occurrence_no = $occ"), "NONE,NONE", "both plant organ fields were cleared" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus cf.' });
+    
+    ok_failed_commit("a badly formed name was refused");
+    
+    ok_has_one_condition(qr/E_FORMAT.*'identified_name'/, "the error was reported");
+    
+    # A taxon_id with a validation hash computed from the name and that taxon_id is used as
+    # it is. Without the hash, the name is matched instead.
+    
+    my $hash = OccurrenceBase::hashIdentification("Tyrannosaurus||rex|", $GENUS_NO);
+    
+    my $coll2 = new_collection();
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll2, reference_id => 5,
+					     identified_name => 'Tyrannosaurus rex',
+					     taxon_id => $GENUS_NO, validation => $hash });
+    
+    ok_commit("an occurrence with taxon_id and validation was inserted");
+    
+    is( rows('OCCURRENCE_DATA', "species_reso, taxon_no", "collection_no = $coll2"),
+	"NULL,$GENUS_NO", "the validated taxon_id was kept" );
+    
+    # A taxon_id with a validation hash that does not match must match the name itself.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll2, reference_id => 6,
+					     identified_name => 'Tyrannosaurus aff. rex',
+					     taxon_id => $GENUS_NO, validation => 'wrong' });
+    
+    ok_failed_commit("a taxon_id that does not match the name was refused");
+    
+    ok_has_one_condition(qr/E_BAD_VALUE.*'taxon_id'.*does not match/, "the error was reported");
+    
+    # An update that gives only a taxon_id is checked against the stored name.
+    
+    my ($first) = sql_fetchrow("SELECT occurrence_no FROM <<OCCURRENCE_DATA>>
+		WHERE collection_no = $coll2 and species_reso is null");
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $first => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $first, taxon_id => $SPECIES_NO });
+    
+    ok_commit("an occurrence was updated with only a taxon_id");
+    
+    is( rows('OCCURRENCE_DATA', "taxon_no", "occurrence_no = $first"), $SPECIES_NO,
+	"the taxon_id that matches the stored name was stored" );
+};
+
+
+# Type localities are also set for new genera, subgenera, and subspecies, and are removed
+# when the occurrence that set them is renamed or deleted. The taxa for the subgenus and
+# subspecies are copied from the real table.
+
+subtest 'type localities at other ranks' => sub {
+    
+    my $real_auth = original_table_name($TABLE{AUTHORITY_DATA});
+    
+    sql_command("INSERT IGNORE INTO <<AUTHORITY_DATA>> SELECT * FROM $real_auth
+		WHERE taxon_no in (59111, 59110, 10760, 5291, 110926)");
+    
+    sql_command("UPDATE <<AUTHORITY_DATA>> SET type_locality = null
+		WHERE taxon_no in ($GENUS_NO, $SPECIES_NO, 59111, 5291)");
+    
+    my $coll = new_collection();
+    
+    ok( $coll, "a collection was inserted" ) || return;
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'n. gen. Tyrannosaurus n. sp. rex' });
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Ancilla staminea n. ssp. punctulifera' });
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+		identified_name => 'Cystiphylloides n. subgen. (Cladionophyllum) n. sp. testus' });
+    
+    ok_commit("occurrences of a new genus, subspecies, and subgenus were inserted") || return;
+    
+    my ($gen_occ, $ssp_occ, $sg_occ) = $edt->inserted_keys;
+    
+    is( rows('AUTHORITY_DATA', 'taxon_no, coalesce(type_locality, 0)',
+	     "taxon_no in ($GENUS_NO, $SPECIES_NO, 59111, 5291)"),
+	"5291,$coll; $GENUS_NO,$coll; $SPECIES_NO,$coll; 59111,$coll",
+	"the type locality was set for the genus, species, subspecies, and subgenus" );
+    
+    # Renaming the first occurrence removes its type localities, and deleting the others
+    # removes theirs.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $gen_occ => 1, $ssp_occ => 1, $sg_occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $gen_occ,
+					     identified_name => 'Tyrannosaurus rex' });
+    $edt->delete_record('OCCURRENCE_DATA', { occurrence_id => $ssp_occ });
+    $edt->delete_record('OCCURRENCE_DATA', { occurrence_id => $sg_occ });
+    
+    ok_commit("one occurrence was renamed and two were deleted");
+    
+    is( rows('AUTHORITY_DATA', 'taxon_no, coalesce(type_locality, 0)',
+	     "taxon_no in ($GENUS_NO, $SPECIES_NO, 59111, 5291)"),
+	"5291,0; $GENUS_NO,0; $SPECIES_NO,0; 59111,0", "the type localities were removed" );
+    
+    # An update that gives only '_set_locality' makes this collection the type locality of
+    # the occurrence's new taxon, replacing one that was already set.
+    
+    my $other = new_collection();
+    
+    sql_command("UPDATE <<AUTHORITY_DATA>> SET type_locality = $other WHERE taxon_no = $SPECIES_NO");
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus n. sp. rex' });
+    
+    ok_commit("an occurrence of a new species was inserted") || return;
+    
+    my ($sp_occ) = $edt->inserted_keys;
+    
+    is( rows('AUTHORITY_DATA', 'type_locality', "taxon_no = $SPECIES_NO"), $other,
+	"the existing type locality was kept" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $sp_occ => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $sp_occ, _set_locality => 1 });
+    
+    ok_commit("the occurrence was updated with only '_set_locality'");
+    
+    is( rows('AUTHORITY_DATA', 'type_locality', "taxon_no = $SPECIES_NO"), $coll,
+	"the type locality was replaced" );
+    
+    sql_command("DELETE FROM <<AUTHORITY_DATA>> WHERE taxon_no in (59111, 59110, 10760, 5291, 110926)");
+};
+
 
 subtest 'cleanup' => sub {
     
