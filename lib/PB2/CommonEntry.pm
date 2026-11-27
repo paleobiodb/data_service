@@ -960,19 +960,36 @@ sub generate_sandbox {
     
     my ($ds_operation, $ruleset_name, $extra_params, $allowances, $multiplicity, @allow_list);
     
-    if ( ref $config eq 'HASH' )
+    croak "You must provide a hashref to configure the sandbox"
+	unless ref $config eq 'HASH';
+    
+    $ds_operation = $config->{operation} || croak "You must specify an operation";
+    
+    # If the operation is 'unknown', generate a page saying that no sandbox is available.
+    # [Changed by Claude under the guidance of Michael McClennen: this is done before the
+    # ruleset and the operation are checked. It was done after, so the page could never
+    # be generated: a call with the operation 'unknown' and no ruleset croaked instead.]
+    
+    if ( $ds_operation eq 'unknown' )
     {
-	$ds_operation = $config->{operation} || croak "You must specify an operation";
-	$ruleset_name = $config->{ruleset} || croak "You must specify a ruleset";
-	$extra_params = $config->{extra_params} || '';
-	$allowances = $config->{allowances} || '';
-	$multiplicity = $config->{multiplicity} || 1;
+	my $output = "<html><head><title>No sandbox is available</title>\n";
+	$output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
+	$output .= "</head>\n";
+	$output .= "<body>\n";
+	
+	$output .= "<div id=\"main_body\" class=\"sbmain\">\n";
+	$output .= "<h1>No sandbox is available</h1>\n";
+	$output .= "</div>\n";
+	$output .= "</body></html>\n";
+
+	$request->data_result($output);
+	return;
     }
     
-    else
-    {
-	croak "You must provide a hashref to configure the sandbox";
-    }
+    $ruleset_name = $config->{ruleset} || croak "You must specify a ruleset";
+    $extra_params = $config->{extra_params} || '';
+    $allowances = $config->{allowances} || '';
+    $multiplicity = $config->{multiplicity} || 1;
     
     unless ( $request->ds->node_defined($ds_operation) )
     {
@@ -1000,22 +1017,6 @@ sub generate_sandbox {
 	$ds_params .= "&$extra_params";
     }
 
-    if ( $ds_operation eq 'unknown' )
-    {
-	my $output = "<html><head><title>No sandbox is available</title>\n";
-	$output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
-	$output .= "</head>\n";
-	$output .= "<body>\n";
-	
-	$output .= "<div id=\"main_body\" class=\"sbmain\">\n";
-	$output .= "<h1>No sandbox is available</h1>\n";
-	$output .= "</div>\n";
-	$output .= "</body></html>\n";
-
-	$request->data_result($output);
-	return;
-    }
-    
     my $output = "<html><head><title>Sandbox for $ds_operation</title>\n";
     $output .= "    <link rel=\"stylesheet\" href=\"/data1.2/css/sandbox.css\">\n";
     $output .= "</head>\n";
