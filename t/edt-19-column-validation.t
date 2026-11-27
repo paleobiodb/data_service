@@ -20,7 +20,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 15;
+use Test::More tests => 16;
 
 use TableDefs qw(%TABLE);
 
@@ -102,23 +102,23 @@ subtest 'alternate names' => sub {
     is( cvalue('string_val'), "'x'", "value given under alternate name stored with ALTERNATE_ONLY" );
     
     ETBasicTest->alter_column_property('EDT_TYPES', string_val => ALTERNATE_ONLY => 0);
-
+    
     # If a required column with an alternate name is not given, the condition names the
     # alternate name, which is the field the record should have had. [Added by Claude under
     # the guidance of Michael McClennen]
-
+    
     ETBasicTest->alter_column_property('EDT_TYPES', string_val => REQUIRED => 1);
-
+    
     vtest('insert', 'EDT_TYPES', { name => 'a6' });
-
+    
     ok_has_one_condition('E_REQUIRED', qr/Field 'alt_val'/,
 			 "a missing required column is reported under its alternate name");
-
+    
     vtest('insert', 'EDT_TYPES', { name => 'a7', string_val => '' });
-
+    
     ok_has_one_condition('E_REQUIRED', qr/Field 'string_val'/,
 			 "an empty value is reported under the field name that was given");
-
+    
     ETBasicTest->alter_column_property('EDT_TYPES', string_val => REQUIRED => 0);
 };
 
@@ -789,3 +789,73 @@ sub stored_row {
     
     return $dbh->selectrow_hashref("SELECT * FROM $TABLE{EDT_TYPES} WHERE name = ?", undef, $name);
 }
+
+
+# If a client module reports an error for a field in validate_action, the column checks do
+# not report the same field again. An error demoted by PROCEED counts as well, and a warning
+# does not. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'one error for each field' => sub {
+    
+    clear_table('EDT_TEST');
+    
+    my $condition;
+    
+    local *ETBasicTest::validate_action = sub {
+	my ($edt, $action) = @_;
+	$edt->add_condition($action, @$condition) if $condition;
+    };
+    
+    # Without an error from the client module, the column check reports the bad value.
+    
+    my $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'one', signed_val => 'abc' });
+    
+    ok_has_one_condition('E_FORMAT', "the column check reported the bad value");
+    
+    # With one, only the client module's error is reported.
+    
+    $condition = [ 'E_FORMAT', 'signed_val', 'reported by the client module' ];
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'two', signed_val => 'abc' });
+    
+    ok_has_one_condition(qr/E_FORMAT.*'signed_val'.*client module/,
+			 "only the client module's error was reported");
+    
+    ok_failed_commit("the action was not executed");
+    
+    $edt = ok_new_edt('PROCEED');
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'three', signed_val => 'abc' });
+    
+    # Demoted errors are reported with their E_ codes.
+    
+    ok_has_one_condition(qr/E_FORMAT.*client module/, "a demoted error counts as well");
+    
+    ok_no_record('EDT_TEST', "string_req = 'three'", "the action was not executed");
+    
+    # A warning from the client module does not stop the column check.
+    
+    $condition = [ 'W_DISCARDED', 'signed_val' ];
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'four', signed_val => 'abc' });
+    
+    ok_has_condition('W_DISCARDED', "the warning was reported");
+    ok_has_condition('E_FORMAT', "and so was the bad value");
+    
+    # An error for another field does not stop the check of this one.
+    
+    $condition = [ 'E_FORMAT', 'string_val', 'reported by the client module' ];
+    
+    $edt = ok_new_edt;
+    
+    $edt->insert_record('EDT_TEST', { string_req => 'five', signed_val => 'abc' });
+    
+    ok_has_condition(qr/E_FORMAT.*'string_val'/, "the error for the other field was reported");
+    ok_has_condition(qr/E_FORMAT.*'signed_val'/, "and the bad value was checked");
+};
