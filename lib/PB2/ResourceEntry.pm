@@ -53,11 +53,16 @@ sub initialize {
     
     # Rulesets for entering and updating data.
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:eduresources:urlparams' =>
-	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
+	{ param => 'eduresource_id', allow_empty => 1, valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "The identifier of the educational resource record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<id>>.",
-	{ optional => 'status', valid => '1.2:eduresources:status' },
+	{ optional => 'status', allow_empty => 1, valid => '1.2:eduresources:status' },
 	    "This parameter should only be given if the logged-in user has administrator",
 	    "privileges on the educational resources table. It allows the resource to be",
 	    "activated or inactivated, controlling whether or not it appears on the",
@@ -92,6 +97,11 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special>  with this request");
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:eduresources:bodyparams' =>
 	">>You may include one or more records in the body of the request, in JSON form.",
 	"The body must be either a single JSON object, or an array of objects. The fields",
@@ -99,18 +109,18 @@ sub initialize {
 	"the value must match the corresponding column in the C<B<$TABLE{RESOURCE_QUEUE}>> table",
 	"in the database.",
 	{ allow => '1.2:eduresources:urlparams' },
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "This parameter is only necessary in body records, and then only if",
 	    "more than one record is included in a given request. This allows",
 	    "you to associate any returned error messages with the records that",
 	    "generated them. You may provide any non-empty value.",
-	{ optional => 'tags', valid => ANY_VALUE },
+	{ optional => 'tags', allow_empty => 1, valid => ANY_VALUE },
 	    "The value of this parameter should be a list of tag names, identifying",
 	    "the tags/headings with which this resource should be associated. You",
 	    "can specify this as either a comma-separated list in a string, or as a",
 	    "JSON list of strings. Alternatively, you can use the integer identifiers",
 	    "corresponding to the tags.",
-	{ optional => 'image_data', valid => ANY_VALUE },
+	{ optional => 'image_data', allow_empty => 1, valid => ANY_VALUE },
 	    "An image to be associated with this record, encoded into base64. The",
 	    "data may begin with the HTML prefix C<data:image/[type]; base64,>.");
     
@@ -118,10 +128,15 @@ sub initialize {
     # be given in the request body, with this ruleset, if no identifiers are given in the
     # URL. The identifier in the delete ruleset is optional for that reason.]
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:eduresources:delete_body' =>
-	{ param => 'eduresource_id', valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
+	{ param => 'eduresource_id', allow_empty => 1, valid => VALID_IDENTIFIER('EDR'), alias => 'id' },
 	    "The identifier of a record to be deleted.",
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "You may provide a label for each record, which will be included with any",
 	    "errors or warnings generated from it.");
     

@@ -80,6 +80,11 @@ sub initialize {
 
     # $ds->define_ruleset('1.2:refs:author_entry');
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:refs:addupdate_body' =>
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
@@ -87,62 +92,67 @@ sub initialize {
 	"the value must match the corresponding column from the C<B<$TABLE{REFERENCE_DATA}>> table",
 	"in the database. Any columns that do not accept a null value must be included in every new",
 	"record.",
-	{ optional => 'reference_id', valid => VALID_IDENTIFIER('REF'),
+	{ optional => 'reference_id', allow_empty => 1, valid => VALID_IDENTIFIER('REF'),
 	  alias => ['reference_no', 'id', 'ref_id', 'oid'] },
 	    "If this field is empty, a record will be inserted into the database",
 	    "and a new identifier will be returned. If it is non-empty, it must match",
 	    "the identifier of an existing record. That record will be updated.",
 	{ allow => '1.2:common:entry_fields' },
-	{ optional => 'publication_type', alias => ['ref_type'] },
+	{ optional => 'publication_type', allow_empty => 1, alias => ['ref_type'] },
 	    "Type of work that this reference represents. The value must be one of the following:",
 	    $ds->document_set('1.2:refs:pubtype'),
-	{ optional => 'pubyr' },
+	{ optional => 'pubyr', allow_empty => 1 },
 	    "Year of publication",
-	{ optional => 'authors', multiple => 1, note => 'textarea,json' },
+	{ optional => 'authors', allow_empty => 1, multiple => 1, note => 'textarea,json' },
 	    "The author(s) of the work, in the proper order, separated by semicolons.",
 	    "Each author name can be specified as 'first last' or as 'last, first'.",
 	    "If the body of the request is in JSON format, the authors can be provided",
 	    "as a list of strings or a list of objects with fields 'firstname' and 'lastname'.",
-	{ optional => 'reftitle', alias => 'ref_title', note => 'textarea' },
+	{ optional => 'reftitle', allow_empty => 1, alias => 'ref_title', note => 'textarea' },
 	    "Title of the work",
-	{ optional => 'pubvol', alias => 'pub_vol' },
+	{ optional => 'pubvol', allow_empty => 1, alias => 'pub_vol' },
 	    "Volume in which the work appears",
-	{ optional => 'pubno', alias => 'pub_no', },
+	{ optional => 'pubno', allow_empty => 1, alias => 'pub_no', },
 	    "Issue in which the work appears",
-	{ optional => 'pages' },
+	{ optional => 'pages', allow_empty => 1 },
 	    "Page range for the work",
-	{ optional => 'language' },
+	{ optional => 'language', allow_empty => 1 },
 	    "The language of the work",
-	{ optional => 'doi' },
+	{ optional => 'doi', allow_empty => 1 },
 	    "One or more DOIs associated with the work, separated by whitespace.",
-	{ optional => 'pubtitle', alias => 'pub_title', note => 'textarea' },
+	{ optional => 'pubtitle', allow_empty => 1, alias => 'pub_title', note => 'textarea' },
 	    "Title of the publication in which the work appears (journal, book, series, etc.)",
-	{ optional => 'publisher' },
+	{ optional => 'publisher', allow_empty => 1 },
 	    "The publisher of the work or of the publication in which it appears",
-	{ optional => 'pubcity', alias => 'pub_city' },
+	{ optional => 'pubcity', allow_empty => 1, alias => 'pub_city' },
 	    "The city where published",
-	{ optional => 'editors', multiple => 1, note => 'textarea,json' },
+	{ optional => 'editors', allow_empty => 1, multiple => 1, note => 'textarea,json' },
 	    "The editor(s) of the book, compendium, or other publication. These must",
 	    "be given in proper order, separated by semicolons. Each editor name can be",
 	    "specified as 'first last' or as 'last, first'.",
 	    "If the body of the request is in JSON format, the editors can be provided",
 	    "as a list of strings or a list of objects with fields 'firstname' and 'lastname'.",
-	{ optional => 'isbn' },
+	{ optional => 'isbn', allow_empty => 1 },
 	    "One or more ISBNs associated with the work, separated by whitespace.",
-	{ optional => 'project_name' },
+	{ optional => 'project_name', allow_empty => 1 },
 	    "The name of the project for which this reference was entered",
-	{ optional => 'comments', note => 'textarea' },
+	{ optional => 'comments', allow_empty => 1, note => 'textarea' },
 	    "Commands and/or remarks about this bibliographic reference");
     
     # [Added by Claude under the guidance of Michael McClennen: the records to delete may
     # be given in the request body, with this ruleset, if no identifiers are given in the
     # URL. The identifier in the delete ruleset is optional for that reason.]
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:refs:delete_body' =>
-	{ param => 'reference_id', valid => VALID_IDENTIFIER('REF'),
+	{ param => 'reference_id', allow_empty => 1, valid => VALID_IDENTIFIER('REF'),
 	  alias => ['ref_id', 'reference_no', 'id', 'oid'] },
 	    "The identifier of a record to be deleted.",
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "You may provide a label for each record, which will be included with any",
 	    "errors or warnings generated from it.");
     

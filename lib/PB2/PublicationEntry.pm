@@ -56,20 +56,25 @@ sub initialize {
     
     # Rulesets for entering and updating data.
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:pubs:entry' =>
-	{ param => '_label', valid => ANY_VALUE },
+	{ param => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "This parameter is only necessary in body records, and then only if",
 	    "more than one record is included in a given request. This allows",
 	    "you to associate any returned error messages with the records that",
 	    "generated them. You may provide any non-empty value.",
-	{ optional => '_operation', valid => ANY_VALUE },
+	{ optional => '_operation', allow_empty => 1, valid => ANY_VALUE },
 	    "You may provide a value for this attribute in any record",
 	    "submitted to this data service. This specifies the operation.",
 	    "to be performed using this record, overriding the automatic",
 	    "determination. The main use of this field is with the value 'delete',",
 	    "which causes this record to be deleted from the database.",
 	{ ignore => 'password' },
-	{ param => 'pub_no', valid => VALID_IDENTIFIER('PUB'), alias => ['pub_id' ,'oid' ] },
+	{ param => 'pub_no', allow_empty => 1, valid => VALID_IDENTIFIER('PUB'), alias => ['pub_id' ,'oid' ] },
 	    "The identifier of the official publication record to be updated. If it is",
 	    "empty, a new record will be created. You can also use the alias B<C<pub_id>>.");
     
@@ -91,10 +96,15 @@ sub initialize {
     # be given in the request body, with this ruleset, if no identifiers are given in the
     # URL. The identifier in the delete ruleset is optional for that reason.]
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:pubs:delete_body' =>
-	{ param => 'pub_id', valid => VALID_IDENTIFIER('PUB'), alias => 'pub_no' },
+	{ param => 'pub_id', allow_empty => 1, valid => VALID_IDENTIFIER('PUB'), alias => 'pub_no' },
 	    "The identifier of a record to be deleted.",
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "You may provide a label for each record, which will be included with any",
 	    "errors or warnings generated from it.");
     

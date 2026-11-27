@@ -843,9 +843,13 @@ sub validate_coll_action {
 				"unknown interval '$min_interval'");
 	}
 	
-	# If the value is the empty string, set it to null.
-	
-	elsif ( defined $min_interval && $min_interval eq '' )
+	# If the value is the empty string or null, set it to null.
+
+	# [Changed by Claude under the guidance of Michael McClennen: a null value clears the
+	# interval as well. Only the empty string did, so a body that cleared 'min_interval'
+	# with null, as the Collections application does, left the old interval.]
+
+	else
 	{
 	    $action->set_record_value('min_interval_no', undef);
 	}

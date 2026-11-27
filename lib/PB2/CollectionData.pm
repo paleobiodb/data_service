@@ -1973,10 +1973,15 @@ sub get_coll {
     my ($join_list) = $request->generateJoinList('c', $request->tables_hash);
     
     # Generate the main query.
-    
+
+    # [Changed by Claude under the guidance of Michael McClennen: the tables are named with
+    # %TABLE, so that test mode applies to them. They were named directly, so a collection
+    # in the test tables could not be found.]
+
     $request->{main_sql} = "
 	SELECT $fields, if($access_filter, 1, 0) as access_ok
-	FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc using (collection_no)
+	FROM $TABLE{COLLECTION_MATRIX} as c STRAIGHT_JOIN $TABLE{COLLECTION_DATA} as cc
+		using (collection_no)
 		$join_list
         WHERE c.collection_no = $id
 	GROUP BY c.collection_no";

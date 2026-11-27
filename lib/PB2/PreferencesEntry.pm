@@ -60,13 +60,18 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	    "^You can also use any of the L<special parameters|node:special> with this request");
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:prefs:set_body' => 
 	">>If the method is PUT or POST, the  body of this request must be either a single JSON",
 	"object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
-	{ param => 'field', valid => ANY_VALUE },
+	{ param => 'field', allow_empty => 1, valid => ANY_VALUE },
 	    "The name of a preference to set, or a field whose default value we are setting.",
-	{ param => 'value', valid => ANY_VALUE },
+	{ param => 'value', allow_empty => 1, valid => ANY_VALUE },
 	    "The preference value or default field value to set.");
 }
 

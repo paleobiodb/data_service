@@ -61,8 +61,13 @@ sub initialize {
 	    "the one included in this record, delete that record. All other",
 	    "attributes of this record are ignored.");
 
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:common:entry_fields',
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "If you provide a non-empty value for this parameter, that value",
 	    "can be used in association with auxiliary references, i.e. occurrences",
 	    "to collections. Otherwise, a label will be generated according to the following",
@@ -406,29 +411,13 @@ sub parse_body_records {
 	if ( $rs_name && $rs_name ne 'NO_MATCH' )
 	{
 	    my $result = $request->validate_params($rs_name, $r);
-	    
-	    # HTTP::Validate (at the time this code was written) does not properly handle
-	    # parameters with empty values. So fill in any parameters that were given with
-	    # empty values.
-	    
-	    my $raw = $result->raw;
-	    
-	    foreach my $k ( keys %$raw )
-	    {
-		if ( defined $raw->{$k} && $raw->{$k} eq '' && ! defined $result->{clean}{$k} )
-		{
-		    $result->{clean}{$k} = '';
-		    push @{$result->{clean_list}}, $k;
-		}
-		
-		elsif ( ref $raw->{$k} eq 'ARRAY' && scalar($raw->{$k}->@*) == 0 &&
-			! defined $result->{clean}{$k} )
-		{
-		    $result->{clean}{$k} = [];
-		    push @{$result->{clean_list}}, $k;
-		}
-	    }
-	    
+
+	    # [Removed by Claude under the guidance of Michael McClennen: the code that filled
+	    # in parameters given with empty values. Every rule in a body ruleset now has the
+	    # attribute 'allow_empty', so the validator keeps empty values itself. The code
+	    # filled them in under the name they were given by, so an empty value given by an
+	    # alias was rejected as an unknown field, and it ignored null values.]
+
 	    # Generate a record with the cleaned parameter values. If any errors or warnings were
 	    # generated, add them to the record.
 	    

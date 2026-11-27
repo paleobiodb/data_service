@@ -69,6 +69,11 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	    "^You can also use any of the L<special parameters|node:special> with this request");
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:colls:addupdate_body' =>
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
@@ -76,7 +81,7 @@ sub initialize {
 	"the value must match the corresponding column from the C<B<$TABLE{COLLECTION_DATA}>> table",
 	"in the database. Any columns that are required must be given a nonempty value in every new",
 	"record, and may not be set to empty or null in an update.",
-	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	{ optional => 'collection_id', allow_empty => 1, valid => VALID_IDENTIFIER('COL'),
 	  alias => ['collection_no', 'id', 'coll_id', 'oid'] },
 	    "If this field is empty, a record will be inserted into the database",
 	    "and a new identifier will be returned. If it is non-empty, it must match",
@@ -166,22 +171,32 @@ sub initialize {
 			    before => 'research_group', alias => 'release_spec' },
 	});
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     add_to_ruleset($ds, '1.2:colls:addupdate_body',
-	{ optional => 'reference_add', valid => VALID_IDENTIFIER('REF'), list => ',',
+	{ optional => 'reference_add', allow_empty => 1, valid => VALID_IDENTIFIER('REF'), list => ',',
 	  before => 'country', },
 	    "One or more reference identifiers to add as secondary references for this collection.",
 	    "You may specify more than one, as a comma-separated list.",
-	{ optional => 'reference_delete', valid => VALID_IDENTIFIER('REF'), list => ',',
+	{ optional => 'reference_delete', allow_empty => 1, valid => VALID_IDENTIFIER('REF'), list => ',',
 	  before => 'country', },
 	    "One or more reference identifiers to remove as secondary references for this collection.",
 	    "You may specify more than one, as a comma-separated list. A reference will B<not>",
 	    "be removed if it is the primary reference for this collection, or if it is the source",
 	    "for any occurrences or specimens associated with this collection.",
-	{ optional => 'max_interval', alias => 'early_interval',
+	# [Changed by Claude under the guidance of Michael McClennen: the two interval fields
+	# allow empty values, as the columns do, so that null or the empty string reaches
+	# CollectionEdit. The validator dropped them, so a null 'late_interval' was ignored and
+	# an empty one was rejected as an unknown field.]
+
+	{ optional => 'max_interval', alias => 'early_interval', allow_empty => 1,
 	  valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], before => 'zone_type' },
 	    "This parameter sets the value of C<max_interval_no> in the C<collections> table.",
 	    "It accepts an interval name or number, or an external identifier of type 'int'.",
-	{ optional => 'min_interval', alias => 'late_interval',
+	{ optional => 'min_interval', alias => 'late_interval', allow_empty => 1,
 	  valid => [VALID_IDENTIFIER('INT'), ANY_VALUE], before => 'zone_type' },
 	    "This parameter sets the value of C<min_interval_no> in the C<collections> table.",
 	    "It accepts an interval name or number, or an external identifier of type 'int'.",
@@ -199,47 +214,52 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	    "^You can also use any of the L<special parameters|node:special> with this request");
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:occs:addupdate_body' =>
 	">>The body of this request must be either a single JSON object, or an array of",
 	"JSON objects, or else a single record in C<application/x-www-form-urlencoded> format.",
 	"The following fields are allowed in each record.",
 	"Any columns that are B<required> must be given a nonempty value in every new",
 	"record, and may not be set to empty or null in an update.",
-	{ param => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	{ param => 'collection_id', allow_empty => 1, valid => VALID_IDENTIFIER('COL'),
 	  alias => ['collection_no', 'cid'] },
 	    "This field is required for a new occurrence, specifying the collection",
 	    "with which that occurrence will be associated. If specified for an existing",
 	    "occurrence, it must match that occurrence's collection.",
-	{ param => 'occurrence_id', valid => VALID_IDENTIFIER('OCC'),
+	{ param => 'occurrence_id', allow_empty => 1, valid => VALID_IDENTIFIER('OCC'),
 	  alias => ['occurrence_no', 'occ_id', 'oid'] },
 	    "This field B<must> be included when submitting occurrences. If its value is empty,",
 	    "an occurrence record will be inserted into the database",
 	    "and a new identifier will be returned. If it is non-empty, it must match",
 	    "the identifier of an existing record. That record will be updated.",
-	{ param => 'reid_id', valid => VALID_IDENTIFIER('REI'),
+	{ param => 'reid_id', allow_empty => 1, valid => VALID_IDENTIFIER('REI'),
 	  alias => ['reid_no', 'reid'] },
 	    "If this field occurs with an empty value, and if 'occurrence_id' is not",
 	    "empty, a reidentification record will be inserted into the database and a",
 	    "new identifier will be returned. If it is non-empty, it must match the",
 	    "identifier of an existing record. That record will be updated.",
 	{ allow => '1.2:common:entry_fields' },
-	{ optional => '_delete', valid => ANY_VALUE },
+	{ optional => '_delete', allow_empty => 1, valid => ANY_VALUE },
 	    "If this field is specified with a non-empty value, this occurrence or",
 	    "reidentification will be deleted.",
-	{ optional => '_set_locality', valid => ANY_VALUE },
+	{ optional => '_set_locality', allow_empty => 1, valid => ANY_VALUE },
 	    "If this field is specified with a non-empty value, and if the identified",
 	    "name of this occurrence contains 'n. sp.', etc. then the type locality",
 	    "of the matching taxon will be set to this collection even if it is",
 	    "currently set to a different one.",
-	{ optional => 'identified_name', valid => ANY_VALUE, alias => 'taxon_name' },
+	{ optional => 'identified_name', allow_empty => 1, valid => ANY_VALUE, alias => 'taxon_name' },
 	    "The taxonomic name identifying this occurrence, optionally with modifiers.",
 	    "This field is required.",
-	{ optional => 'taxon_id', valid => VALID_IDENTIFIER('TID'),
+	{ optional => 'taxon_id', allow_empty => 1, valid => VALID_IDENTIFIER('TID'),
 	  alias => ['taxon_no', 'identified_id', 'identified_no'] },
 	    "This field is optional, but if this identification has been checked using",
 	    "the C<B<occs/checknames>> operation then one of the returned",
 	    "C<B<matched_no>> values should be included.",
-	{ optional => 'validation', valid => ANY_VALUE },
+	{ optional => 'validation', allow_empty => 1, valid => ANY_VALUE },
 	    "If this identification has been checked using the C<B<occs/checknames>>",
 	    "operation, the validation code returned by that operation should be",
 	    "included here.");
@@ -343,13 +363,18 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	    "^You can use any of the L<special parameters|node:special> with this request");
     
+    # [Changed by Claude under the guidance of Michael McClennen: these rules allow empty
+    # values, so that the empty string or null in a request body reaches the data entry
+    # code under the field's own name. parse_body_records used to fill in empty values
+    # itself, under the name they were given by, and dropped null values.]
+    
     $ds->define_ruleset('1.2:occs:checknames_body' =>
-	{ param => 'name', valid => ANY_VALUE },
+	{ param => 'name', allow_empty => 1, valid => ANY_VALUE },
 	    "The name to be checked.",
-	{ optional => '_label', valid => ANY_VALUE },
+	{ optional => '_label', allow_empty => 1, valid => ANY_VALUE },
 	    "An optional label which will be associated with any return records matching",
 	    "this input record.",
-	{ optional => 'collection_id', valid => VALID_IDENTIFIER('COL'),
+	{ optional => 'collection_id', allow_empty => 1, valid => VALID_IDENTIFIER('COL'),
 	  alias => 'collection_no' },
 	    "If you are checking the name of an occurrence or reidentification, you may",
 	    "optionally specify the corresponding collection identifier. This allows",
