@@ -398,6 +398,168 @@ subtest 'checknames' => sub {
 };
 
 
+# The response to an update can be extended with optional output blocks, and is the same
+# for a superuser. A record in the body with '_delete' is rejected, as collections are
+# deleted with colls/delete, and so is a body record with a bad identifier. [Added by
+# Claude under the guidance of Michael McClennen]
+
+subtest 'collection responses' => sub {
+    
+    my $no1 = new_collection(undef, collection_name => 'Response test 1');
+    my $no2 = new_collection(undef, collection_name => 'Response test 2');
+    
+    ok( $no1 && $no2, "two collections were added" ) || return;
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    my ($r1) = $T->send_records("/colls/update.json?show=paleoloc,loc",
+				"update with paleocoordinates",
+				json => [ { collection_id => "col:$no1", collection_aka => 'aka 1' } ]);
+    
+    is( $r1 && $r1->{oid}, "col:$no1", "the collection was returned" );
+    ok( $r1 && exists $r1->{lat}, "with its coordinates" );
+    
+    $T->set_cookie("session_id", "SESSION-SUPERUSER");
+    
+    my ($r2) = $T->send_records("/colls/update.json", "update as the superuser",
+				json => [ { collection_id => "col:$no1", collection_aka => 'aka 2' } ]);
+    
+    is( $r2 && $r2->{oid}, "col:$no1", "the superuser may update another's collection" );
+    is( rows('COLLECTION_DATA', 'collection_aka', "collection_no = $no1"), 'aka 2',
+	"and the change was stored" );
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    my ($md) = $T->send_data_nocheck("/colls/update.json", "a record with '_delete'",
+				     json => [ { _label => 'd1', collection_id => "col:$no2",
+						 _delete => 1 } ]);
+    
+    $T->ok_response_code($md, '400', "a record with '_delete' gets 400");
+    $T->ok_error_like($md, qr{unknown parameter '_delete'}, "because '_delete' is not accepted");
+    
+    $ET->ok_record_count(1, 'COLLECTION_DATA', "collection_no = $no2",
+			 "and the collection was not deleted");
+    
+    my ($m3) = $T->send_data_nocheck("/colls/update.json", "a bad identifier in the body",
+				     json => [ { collection_id => "occ:$no1",
+						 collection_aka => 'aka 3' } ]);
+    
+    $T->ok_response_code($m3, '400', "a body record with a bad identifier gets 400");
+    is( rows('COLLECTION_DATA', 'collection_aka', "collection_no = $no1"), 'aka 2',
+	"and nothing was changed" );
+    
+    my ($m4) = $T->send_data_nocheck("/occs/update.json", "a bad identifier in an occurrence",
+				     json => [ { occurrence_id => "col:$no1",
+						 identified_name => 'Tyrannosaurus rex' } ]);
+    
+    $T->ok_response_code($m4, '400', "an occurrence record with a bad identifier gets 400");
+};
+
+
+# With show=all, the response to an occurrence update lists every occurrence in the
+# collection. With show=attr, the authors of the matched names are given. [Added by Claude
+# under the guidance of Michael McClennen]
+
+subtest 'occurrence responses' => sub {
+    
+    ok( $OCC_COLL, "found the occurrence collection" ) || return;
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    my $count = $ET->count_records('OCCURRENCE_DATA', "collection_no = $OCC_COLL");
+    
+    my (@r1) = $T->send_records("/occs/update.json?collection_id=col:$OCC_COLL&show=all",
+				"add an occurrence with show=all",
+				json => [ { _label => 'a1', occurrence_id => '', reference_id => 'ref:5',
+					    identified_name => 'Tyrannosaurus n. sp. imperator' } ]);
+    
+    my @occs = grep { ! $_->{eid} } @r1;
+    
+    cmp_ok( scalar(@occs), '==', $count + 1, "every occurrence in the collection was listed" );
+    ok( (grep { $_->{rlb} && $_->{rlb} eq 'a1' } @r1), "the new one with its label" );
+    
+    my ($added) = grep { $_->{rlb} && $_->{rlb} eq 'a1' } @r1;
+    
+    my (@r2) = $T->send_records("/occs/update.json?show=attr", "update with show=attr",
+				json => [ { occurrence_id => $added->{oid}, comments => 'attr test' } ]);
+    
+    is( $r2[0] && $r2[0]{oid}, $added->{oid}, "the occurrence was returned" );
+    like( $r2[0] && $r2[0]{natr}, qr{^Osborn \d{4}$}, "with the attribution of its name" );
+};
+
+
+# occs/checknames requires a name in a GET request, and refuses one in the URL of a POST
+# request. It reports informal names, names marked as new, the flags of trace and form
+# taxa, and the classification of taxa known only to the phylum. [Added by Claude under
+# the guidance of Michael McClennen]
+
+subtest 'checknames cases' => sub {
+    
+    $ET->fill_test_table('AUTHORITY_DATA', "taxon_no in (54, 83915)", 'test');
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    my ($m1) = $T->fetch_nocheck("/occs/checknames.json", "no name");
+    
+    $T->ok_response_code($m1, '400', "a GET request with no name gets 400");
+    $T->ok_error_like($m1, qr{you must specify a value for 'name'}, "with the reason");
+    
+    my ($m2) = $T->send_data_nocheck("/occs/checknames.json?name=Tyrannosaurus",
+				     "a name in the URL of a POST request",
+				     json => [ { name => 'Tyrannosaurus rex' } ],
+				     { http_method => 'post' });
+    
+    $T->ok_response_code($m2, '400', "a POST request with a name in the URL gets 400");
+    
+    my (@r) = $T->send_records("/occs/checknames.json", "check several kinds of name",
+			       json => [ { _label => 'informal', name => '<Foo> rex' },
+					 { _label => 'subgenus', name => 'Tyrannosaurus (<bar>) rex' },
+					 { _label => 'species', name => 'Tyrannosaurus <foo>' },
+					 { _label => 'new', name => 'Tyrannosaurus rex n. sp.' },
+					 { _label => 'trace', name => 'Skolithos' },
+					 { _label => 'phylum', name => 'Caryosphaera' },
+					 { name => 'Tyrannosaurus' } ]);
+    
+    my %r = map { $_->{rlb} => $_ } @r;
+    
+    is( $r{informal}{mid}, '0', "an informal genus is not matched" );
+    ok( $r{informal}{vld}, "but has a validation hash" );
+    is( $r{subgenus}{mid}, "txn:$SPECIES_NO", "an informal subgenus is left out of the match" );
+    is( $r{species}{mid}, "txn:$GENUS_NO", "an informal species is matched to its genus" );
+    is( $r{new}{mid}, "txn:$SPECIES_NO", "a name marked as new is matched exactly" );
+    is( $r{trace}{flg}, 'IF', "a trace and form taxon is flagged" );
+    is( $r{phylum}{cof}, 'Radiolaria', "a taxon known only to the phylum is classified by it" );
+    ok( $r{'#1'}, "a record without a label is labelled by its position" );
+    
+    my ($r4) = $T->fetch_records("/occs/checknames.json?name=tyrannosaurus%20rex&loose",
+				 "check a badly capitalized name with 'loose'");
+    
+    is( $r4 && $r4->{mid}, "txn:$SPECIES_NO", "it is accepted and matched" );
+    
+    my ($r3) = $T->fetch_records("/occs/checknames.json?name=Tyrannosaurus%20rex&vocab=pbdb",
+				 "check a name without external identifiers");
+    
+    is( $r3 && $r3->{matched_no}, $SPECIES_NO, "the taxon is given by number" );
+};
+
+
+# The sandbox pages for the collection and occurrence operations are generated. [Added by
+# Claude under the guidance of Michael McClennen]
+
+subtest 'sandboxes' => sub {
+    
+    $T->set_cookie("session_id", "SESSION-ENTERER");
+    
+    foreach my $op ( qw(colls/add colls/update occs/update occs/checknames) )
+    {
+	my ($m) = $T->fetch_nocheck("/${op}_sandbox.html", "the sandbox for $op");
+	
+	$T->ok_response_code($m, '200', "the sandbox for $op was generated");
+	like( $m->content, qr{<h1>Sandbox for '$op'</h1>}, "and names the operation" );
+    }
+};
+
+
 # Only the owner of a collection may delete it, and deleting it deletes its occurrences.
 # Collections can be deleted in the URL and in a request body.
 

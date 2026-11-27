@@ -17,7 +17,7 @@
 use strict;
 
 use lib 't', '../lib', 'lib';
-use Test::More tests => 19;
+use Test::More tests => 25;
 
 use File::Temp qw(tempdir);
 
@@ -1270,6 +1270,380 @@ subtest 'type localities at other ranks' => sub {
 	"the type locality was replaced" );
     
     sql_command("DELETE FROM <<AUTHORITY_DATA>> WHERE taxon_no in (59111, 59110, 10760, 5291, 110926)");
+};
+
+
+# Validate a collection inserted with the specified fields added to the standard ones, or
+# updated with the specified fields. Return the conditions. [Added by Claude under the
+# guidance of Michael McClennen]
+
+sub coll_conditions {
+    
+    my ($operation, %fields) = @_;
+    
+    my $edt = CollectionEdit->new($T->dbh, { permission => perm('ENTERER') });
+    
+    if ( $operation eq 'insert' )
+    {
+	$edt->insert_record('COLLECTION_DATA', { %COLL, %fields });
+    }
+    
+    else
+    {
+	$edt->update_record('COLLECTION_DATA', \%fields);
+    }
+    
+    $edt->commit;
+    
+    return $edt->conditions;
+}
+
+
+# A collection name must contain a letter. A collection that is not public may have a
+# release date of up to 3 years, given in months or years, and an update may change the
+# release date alone. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'collection name and release date' => sub {
+    
+    my @conds = coll_conditions('insert', collection_name => '1234');
+    
+    ok( (grep { /^E_FORMAT.*'collection_name'.*letter/ } @conds), "a name with no letter" );
+    
+    foreach my $c ( [ { access_level => 'the public', release_date => '1 year' },
+		      E_BAD_VALUE => 'release_date', "a public collection with a later release" ],
+		    [ { access_level => 'database members', release_date => '4 years' },
+		      E_BAD_VALUE => 'release_date', "a release date of more than 3 years" ],
+		    [ { access_level => 'database members', release_date => '40 months' },
+		      E_BAD_VALUE => 'release_date', "and of more than 36 months" ],
+		    [ { access_level => 'database members', release_date => 'soon' },
+		      E_BAD_VALUE => 'release_date', "a release date that is badly formed" ],
+		    [ { access_level => 'database members', release_date => undef },
+		      E_REQUIRED => 'release_date', "no release date" ],
+		    [ { access_level => '' }, E_REQUIRED => 'access_level', "no access level" ] )
+    {
+	my ($fields, $code, $field, $label) = @$c;
+	
+	@conds = coll_conditions('insert', %$fields);
+	
+	ok( (grep { /^$code.*'$field'/ } @conds), "$label is reported with $code" ) ||
+	    diag(join("\n", @conds));
+    }
+    
+    my $coll = new_collection(access_level => 'database members', release_date => '18 months');
+    
+    ok( $coll, "a collection to be released in 18 months was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', "timestampdiff(MONTH, created, release_date)",
+	     "collection_no = $coll"), 18, "its release date is 18 months after its creation" );
+    
+    @conds = coll_conditions('update', collection_id => $coll, release_date => '2 years');
+    
+    ok( ! (grep { /^E_/ } @conds), "its release date alone was updated" );
+    
+    is( rows('COLLECTION_DATA', "timestampdiff(MONTH, created, release_date)",
+	     "collection_no = $coll"), 24, "to 2 years after its creation" );
+};
+
+
+# Each coordinate field is checked for its form and range, and the minutes or seconds of a
+# coordinate may not be given with its decimal digits. [Added by Claude under the guidance
+# of Michael McClennen]
+
+subtest 'coordinate formats' => sub {
+    
+    foreach my $c ( [ { latdeg => 'ab' }, E_FORMAT => 'latdeg' ],
+		    [ { lngdeg => 'x' }, E_FORMAT => 'lngdeg' ],
+		    [ { lngdeg => 181 }, E_BAD_VALUE => 'lngdeg' ],
+		    [ { latdeg => undef }, E_REQUIRED => 'latdeg' ],
+		    [ { lngdeg => '' }, E_REQUIRED => 'lngdeg' ],
+		    [ { latmin => 'x' }, E_FORMAT => 'latmin' ],
+		    [ { latsec => 'y' }, E_FORMAT => 'latsec' ],
+		    [ { lngdec => undef, lngmin => 'x' }, E_FORMAT => 'lngmin' ],
+		    [ { lngdec => undef, lngsec => 'x' }, E_FORMAT => 'lngsec' ],
+		    [ { latmin => undef, latdec => '1a' }, E_FORMAT => 'latdec' ],
+		    [ { lngdec => 'b' }, E_FORMAT => 'lngdec' ],
+		    [ { latdir => 'up' }, E_BAD_VALUE => 'latdir' ],
+		    [ { lngdir => 'left' }, E_BAD_VALUE => 'lngdir' ],
+		    [ { latdir => '' }, E_REQUIRED => 'latdir' ],
+		    [ { lngdir => undef }, E_REQUIRED => 'lngdir' ],
+		    [ { latdec => '5' }, E_NOT_BOTH => 'latmin' ],
+		    [ { latmin => undef, latsec => 10, latdec => '5' }, E_NOT_BOTH => 'latsec' ],
+		    [ { lngmin => 10 }, E_NOT_BOTH => 'lngmin' ],
+		    [ { lngsec => 10 }, E_NOT_BOTH => 'lngsec' ] )
+    {
+	my ($fields, $code, $field) = @$c;
+	
+	my $values = join(', ', map { "$_ = " . ($fields->{$_} // 'undef') } sort keys %$fields);
+	
+	my @conds = coll_conditions('insert', %$fields);
+	
+	ok( (grep { /^$code.*'$field'/ } @conds), "$values gives $code for '$field'" ) ||
+	    diag(join("\n", @conds));
+    }
+};
+
+
+# Coordinates in the southern and eastern hemispheres are negative and positive. When an
+# update gives only some of the coordinate fields, the others are taken from the stored
+# record. [Added by Claude under the guidance of Michael McClennen]
+
+subtest 'coordinates in updates' => sub {
+    
+    my $c1 = new_collection(latdir => 'South', lngdir => 'East');
+    
+    ok( $c1, "a collection in the southern and eastern hemispheres was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), round(lng, 4)', "collection_no = $c1"),
+	"-45.5000,100.2500", "its latitude is negative and its longitude positive" );
+    
+    my @conds = coll_conditions('update', collection_id => $c1, latdir => 'North');
+    
+    ok( ! (grep { /^E_/ } @conds), "its latitude direction alone was updated" );
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), round(lng, 4)', "collection_no = $c1"),
+	"45.5000,100.2500", "and the coordinates were computed from the stored fields" );
+    
+    my $c2 = new_collection(latmin => undef, latdec => '5');
+    
+    ok( $c2, "a collection with decimal digits was inserted" ) || return;
+    
+    @conds = coll_conditions('update', collection_id => $c2, latmin => 15);
+    
+    ok( ! (grep { /^E_/ } @conds), "its latitude minutes alone were updated" );
+    
+    is( rows('COLLECTION_DATA', 'round(lat, 4), ifnull(latdec, 0), latlng_precision',
+	     "collection_no = $c2"), "45.2500,0,minutes",
+	"the latitude was computed from the new minutes, and the decimal digits removed" );
+};
+
+
+# The intervals must be known. A minimum interval older than the maximum is swapped with
+# it, one equal to the maximum is left out, and an empty one is removed. [Added by Claude
+# under the guidance of Michael McClennen]
+
+subtest 'intervals' => sub {
+    
+    my @conds = coll_conditions('insert', max_interval => 'Nosuchian');
+    
+    ok( (grep { /^E_BAD_VALUE.*'max_interval'.*unknown interval/ } @conds), "an unknown maximum" );
+    
+    @conds = coll_conditions('insert', max_interval => '');
+    
+    ok( (grep { /^E_REQUIRED.*'max_interval'/ } @conds), "an empty maximum" );
+    
+    @conds = coll_conditions('insert', min_interval => 'Nosuchian');
+    
+    ok( (grep { /^E_BAD_VALUE.*'min_interval'.*unknown interval/ } @conds), "an unknown minimum" );
+    
+    my ($maas, $camp) = map { $T->dbh->selectrow_array("SELECT interval_no FROM $TABLE{INTERVAL_DATA}
+		WHERE interval_name = '$_'") } qw(Maastrichtian Campanian);
+    
+    ok( $maas && $camp, "found the intervals" ) || return;
+    
+    my $c1 = new_collection(max_interval => 'Campanian', min_interval => 'Maastrichtian');
+    
+    is( rows('COLLECTION_DATA', 'max_interval_no, min_interval_no', "collection_no = $c1"),
+	"$camp,$maas", "intervals in the right order are stored as they are" );
+    
+    my $c2 = new_collection(max_interval => 'Maastrichtian', min_interval => 'Campanian');
+    
+    is( rows('COLLECTION_DATA', 'max_interval_no, min_interval_no', "collection_no = $c2"),
+	"$camp,$maas", "a minimum older than the maximum is swapped with it" );
+    
+    my $c3 = new_collection(max_interval => 'Maastrichtian', min_interval => 'Maastrichtian');
+    
+    is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
+	     "collection_no = $c3"), "$maas,0", "a minimum equal to the maximum is left out" );
+    
+    @conds = coll_conditions('update', collection_id => $c1, min_interval => '');
+    
+    ok( ! (grep { /^E_/ } @conds), "the minimum was updated to empty" );
+    
+    is( rows('COLLECTION_DATA', 'max_interval_no, ifnull(min_interval_no, 0)',
+	     "collection_no = $c1"), "$camp,0", "and was removed" );
+};
+
+
+# The direct age is checked like the maximum and minimum ages. The error, unit, and
+# method of an age are kept only with the age, or with an age already stored, and are
+# cleared when an update clears the age. Secondary
+# references may be added and removed one at a time. [Added by Claude under the guidance
+# of Michael McClennen]
+
+subtest 'ages and references' => sub {
+    
+    foreach my $c ( [ { direct_ma => 'abc' }, E_FORMAT => 'direct_ma' ],
+		    [ { direct_ma => '123456789' }, E_WIDTH => 'direct_ma' ],
+		    [ { direct_ma => 5, direct_ma_error => 'x' }, E_FORMAT => 'direct_ma_error' ],
+		    [ { direct_ma => 5, direct_ma_error => '123456789' },
+		      E_WIDTH => 'direct_ma_error' ] )
+    {
+	my ($fields, $code, $field) = @$c;
+	
+	my $values = join(', ', map { "$_ = $fields->{$_}" } sort keys %$fields);
+	
+	my @conds = coll_conditions('insert', %$fields);
+	
+	ok( (grep { /^$code.*'$field'/ } @conds), "$values gives $code for '$field'" ) ||
+	    diag(join("\n", @conds));
+    }
+    
+    my $c1 = new_collection(direct_ma => 66, direct_ma_error => 1, direct_ma_unit => 'Ma',
+			    max_ma => 70);
+    
+    ok( $c1, "a collection with ages was inserted" ) || return;
+    
+    is( rows('COLLECTION_DATA', 'direct_ma, direct_ma_error, direct_ma_unit',
+	     "collection_no = $c1"), "66,1,Ma", "the direct age was stored" );
+    
+    my @conds = coll_conditions('update', collection_id => $c1, max_ma_error => 3);
+    
+    ok( ! (grep { /^E_/ } @conds), "the error of the stored maximum age was updated" );
+    
+    is( rows('COLLECTION_DATA', 'max_ma, max_ma_error', "collection_no = $c1"), "70,3",
+	"and stored" );
+    
+    # An update that clears an age clears its error, unit, and method as well, and
+    # discards a value given for any of them.
+    
+    @conds = coll_conditions('update', collection_id => $c1, direct_ma => '');
+    
+    ok( ! (grep { /^[EW]_/ } @conds), "the direct age was cleared" );
+    
+    is( rows('COLLECTION_DATA', "coalesce(direct_ma, ''), ifnull(direct_ma_error, 'NULL'),
+		ifnull(direct_ma_unit, 'NULL')", "collection_no = $c1"), ",NULL,NULL",
+	"and so were its error and unit" );
+    
+    @conds = coll_conditions('update', collection_id => $c1, max_ma => '', max_ma_error => 4);
+    
+    ok( (grep { /^W_DISCARDED.*'max_ma_error'/ } @conds),
+	"an error given with an age that is cleared is discarded" ) || diag(join("\n", @conds));
+    
+    is( rows('COLLECTION_DATA', "coalesce(max_ma, ''), ifnull(max_ma_error, 'NULL')",
+	     "collection_no = $c1"), ",NULL", "and the maximum age and its error were cleared" );
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER'));
+    
+    $edt->insert_record('COLLECTION_DATA', { %COLL, min_ma_error => 2, min_ma_unit => 'Ma' });
+    
+    ok_commit("a collection with the error and unit of a minimum age but no age was inserted");
+    
+    my ($c2) = $edt->inserted_keys;
+    
+    is( rows('COLLECTION_DATA', 'ifnull(min_ma_error, 0), ifnull(min_ma_unit, 0)',
+	     "collection_no = $c2"), "0,0", "the error and unit were left out" );
+    
+    my @warnings = grep { /^W_DISCARDED/ } $edt->conditions;
+    
+    ok( (grep { /'min_ma_error'/ } @warnings) && (grep { /'min_ma_unit'/ } @warnings),
+	"with a W_DISCARDED warning for each" ) || diag(join("\n", $edt->conditions));
+    
+    ok( ! (grep { /'min_ma_method'/ } @warnings), "but not for the method, which was not given" );
+    
+    my $c3 = new_collection();
+    
+    @conds = coll_conditions('update', collection_id => $c3, reference_add => 6);
+    
+    is( rows('COLLECTION_REFS', 'reference_no', "collection_no = $c3"), "5; 6",
+	"a single reference was added" );
+    
+    @conds = coll_conditions('update', collection_id => $c3, reference_id => 6,
+			     reference_delete => 6);
+    
+    is( rows('COLLECTION_REFS', 'reference_no', "collection_no = $c3"), "5; 6",
+	"a new primary reference is not removed" );
+    
+    is( rows('COLLECTION_DATA', 'reference_no', "collection_no = $c3"), 6,
+	"and is the primary reference" );
+};
+
+
+# An occurrence with an informal genus is matched to no taxon. An informal subgenus or
+# species is left out of the match. Occurrences cannot be replaced, and an occurrence
+# record may not give a reid_id. The occurrences deleted together must all be in the same
+# collection. Clearing the abundance value clears its unit. [Added by Claude under the
+# guidance of Michael McClennen]
+
+subtest 'occurrence cases' => sub {
+    
+    my $coll = new_collection(collection_name => 'Occurrence cases');
+    my $coll2 = new_collection(collection_name => 'Occurrence cases 2');
+    
+    ok( $coll && $coll2, "two collections were inserted" ) || return;
+    
+    my $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => '<Foo> rex' });
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus (<bar>) rex' });
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     identified_name => 'Tyrannosaurus <foo>' });
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll2, reference_id => 5,
+					     identified_name => 'Tyrannosaurus rex' });
+    
+    ok_commit("the occurrences were inserted");
+    
+    my @keys = $edt->inserted_keys;
+    
+    is( rows('OCCURRENCE_DATA', 'genus_reso, subgenus_reso, species_reso, taxon_no',
+	     "collection_no = $coll"),
+	"NULL,NULL,informal,$GENUS_NO; NULL,informal,NULL,$SPECIES_NO; informal,NULL,NULL,0",
+	"an informal genus matched nothing, and an informal subgenus or species was left out" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->replace_record('OCCURRENCE_DATA', { occurrence_id => $keys[0], collection_id => $coll,
+					      reference_id => 5, identified_name => 'Tyrannosaurus' });
+    
+    ok_failed_commit("an occurrence cannot be replaced");
+    
+    ok( (grep { /^E_BAD_OPERATION/ } $edt->conditions), "with E_BAD_OPERATION" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->insert_record('OCCURRENCE_DATA', { collection_id => $coll, reference_id => 5,
+					     reid_id => '', identified_name => 'Tyrannosaurus' });
+    
+    ok( (grep { /^E_EXECUTE/ } $edt->conditions),
+	"an occurrence record may not give a reid_id" ) || diag(join("\n", $edt->conditions));
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->delete_record('OCCURRENCE_DATA', { occurrence_id => [ $keys[0], $keys[3] ] });
+    
+    ok_failed_commit("occurrences in two collections cannot be deleted together");
+    
+    ok( (grep { /^E_MULTI_COLLECTIONS/ } $edt->conditions), "with E_MULTI_COLLECTIONS" ) ||
+	diag(join("\n", $edt->conditions));
+    
+    is( rows('OCCURRENCE_DATA', 'count(*)', "occurrence_no in ($keys[0], $keys[3])"), 2,
+	"and neither was deleted" );
+    
+    # An update that clears the abundance value clears its unit as well.
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $keys[3] => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $keys[3], abund_value => 3,
+					     abund_unit => 'specimens' });
+    
+    ok_commit("an abundance was given");
+    
+    is( rows('OCCURRENCE_DATA', "abund_value, abund_unit", "occurrence_no = $keys[3]"),
+	"3,specimens", "and stored" );
+    
+    $edt = ok_new_edt(class => 'CollectionEdit', permission => perm('ENTERER', 'OCCURRENCE_DATA'));
+    
+    $edt->initialize_occs({ $keys[3] => 1 }, { });
+    
+    $edt->update_record('OCCURRENCE_DATA', { occurrence_id => $keys[3], abund_value => '' });
+    
+    ok_commit("the abundance value was cleared");
+    
+    is( rows('OCCURRENCE_DATA', "coalesce(abund_value, ''), coalesce(abund_unit, '')",
+	     "occurrence_no = $keys[3]"), ",", "and so was its unit" );
 };
 
 
