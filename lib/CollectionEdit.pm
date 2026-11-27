@@ -51,7 +51,10 @@ our (@CARP_NOT) = qw(EditTransaction);
 
 my ($DIGITS_RE) = qr/^\d+$/;
 my ($NUMBER_RE) = qr/^\d+[.]\d*$|^[.]\d+$|^\d+$/;
-my (%OCC_RESO, %OCC_RESO_RE);
+# [Commented out by Claude under the guidance of Michael McClennen: these were used only
+# by initialize_occ_resos, which is commented out below.]
+
+# my (%OCC_RESO, %OCC_RESO_RE);
 
 {
     # [Changed by Claude under the guidance of Michael McClennen: corrected the spelling of
@@ -1909,11 +1912,16 @@ sub validate_occ_action {
 	$action->set_record_value('abund_unit', undef);
     }
     
+    # [Changed by Claude under the guidance of Michael McClennen: the column is given the
+    # directive 'ignore', so that it is left out and a W_DISCARDED warning is added. It
+    # was passed to ignore_field, which applies only to fields that are not columns, so
+    # the unit was stored.]
+    
     elsif ( $abund_unit )
     {
 	unless ( $abund_value || $existing_value )
 	{
-	    $action->ignore_field('abund_unit');
+	    $action->handle_column('abund_unit', 'ignore');
 	}
     }
     
@@ -2874,43 +2882,47 @@ sub fetch_existing_names {
 # modifiers as the OCCURRENCE_DATA table. If you change one, you must also change the
 # other.
 
-sub initialize_occ_resos {
+# [Commented out by Claude under the guidance of Michael McClennen: this method was never
+# called, and %OCC_RESO and %OCC_RESO_RE, which it filled in, were never used. The
+# modifiers are checked by parseIdentifiedName in OccurrenceBase.pm.]
 
-    my ($class, $dbh) = @_;
-    
-    foreach my $field ( qw(genus subgenus species subspecies) )
-    {
-	# Fetch the column definition from the database.
-	
-	my ($name, $definition) = $dbh->selectrow_array("
-	SHOW COLUMNS FROM $TABLE{OCCURRENCE_DATA} like '${field}_reso'");
-	
-	# Extract the list of allowed modifiers. Skip the empty string, and also '"',
-	# and 'informal'.
-	
-	my @modifier_list = grep { $_ && $_ ne 'informal' && $_ ne '"' } $definition =~ /'(.*?)'/g;
-	
-	$OCC_RESO{$field}{$_} = 1 foreach @modifier_list;
-	
-	my $regex_source = join('|', @modifier_list);
-	$regex_source =~ s/([.?])/[$1]/g;
-
-	if ( $field eq 'subgenus' )
-	{
-	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+([(].*)};
-	}
-
-	elsif ( $field eq 'subspecies' )
-	{
-	    $regex_source =~ s/(var|forma|morph|mut)/$1\[.\]?/g;
-	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+(.*)};
-	}
-	
-	else
-	{
-	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+(.*)};
-	}
-    }
-}
+# sub initialize_occ_resos {
+# 
+#     my ($class, $dbh) = @_;
+# 
+#     foreach my $field ( qw(genus subgenus species subspecies) )
+#     {
+# 	# Fetch the column definition from the database.
+# 
+# 	my ($name, $definition) = $dbh->selectrow_array("
+# 	SHOW COLUMNS FROM $TABLE{OCCURRENCE_DATA} like '${field}_reso'");
+# 
+# 	# Extract the list of allowed modifiers. Skip the empty string, and also '"',
+# 	# and 'informal'.
+# 
+# 	my @modifier_list = grep { $_ && $_ ne 'informal' && $_ ne '"' } $definition =~ /'(.*?)'/g;
+# 
+# 	$OCC_RESO{$field}{$_} = 1 foreach @modifier_list;
+# 
+# 	my $regex_source = join('|', @modifier_list);
+# 	$regex_source =~ s/([.?])/[$1]/g;
+# 
+# 	if ( $field eq 'subgenus' )
+# 	{
+# 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+([(].*)};
+# 	}
+# 
+# 	elsif ( $field eq 'subspecies' )
+# 	{
+# 	    $regex_source =~ s/(var|forma|morph|mut)/$1\[.\]?/g;
+# 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+(.*)};
+# 	}
+# 
+# 	else
+# 	{
+# 	    $OCC_RESO_RE{$field} = qr{^\s*($regex_source)\s+(.*)};
+# 	}
+#     }
+# }
 
 1;
