@@ -107,7 +107,10 @@ sub set_preference {
 
     unless ( $person_no )
     {
-	return $request->exception(400, "Guest users cannot set preferences");
+	# [Changed by Claude under the guidance of Michael McClennen: the exception is
+	# thrown. It was returned, so that a guest got a 200 response.]
+
+	die $request->exception(400, "Guest users cannot set preferences");
     }
     
     my $qpers = $dbh->quote($person_no);
@@ -166,12 +169,16 @@ sub set_preference {
 	    
 	    if ( exists $new_prefs{$pref} )
 	    {
+		# [Changed by Claude under the guidance of Michael McClennen: the flag is
+		# reported as "$pref=yes", as a new flag is. It was reported as "$pref",
+		# which the output below skips.]
+
 		if ( defined $new_prefs{$pref} && $new_prefs{$pref} ne '' )
 		{
 		    push @new_list, $pref;
-		    push @set_list, $pref;
+		    push @set_list, "$pref=yes";
 		}
-		
+
 		# If $new_prefs{$pref} has an undefined or empty value, omit this
 		# preference from @new_list.
 
@@ -179,8 +186,12 @@ sub set_preference {
 		{
 		    push @set_list, "$pref=";
 		}
-		
-		delete $new_prefs{$1};
+
+		# [Changed by Claude under the guidance of Michael McClennen: the key is
+		# $pref. It was $1, left over from an earlier match, so a flag that was
+		# set again stayed in %new_prefs and was added a second time.]
+
+		delete $new_prefs{$pref};
 	    }
 	    
 	    # If no new value is set, retain the old value in @new_list.

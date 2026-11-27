@@ -110,8 +110,12 @@ sub complete_output_block {
 	# If this field has the 'IGNORE' attribute set, skip it as well. Check for an override
 	# entry as well.
 
+	# [Changed by Claude under the guidance of Michael McClennen: the last condition
+	# is joined with '||'. A semicolon ended the statement before it, so an override
+	# of 'IGNORE' was not applied.]
+	
 	next if $columninfo->{$field_name}{IGNORE} ||
-	    ref $override->{$field_name} && $override->{$field_name}{IGNORE};
+	    ref $override->{$field_name} && $override->{$field_name}{IGNORE} ||
 	    $override->{$field_name} && $override->{$field_name} eq 'IGNORE';
 	
 	# Now create a record to represent this field, along with a documentation string and
@@ -355,9 +359,16 @@ sub complete_ruleset {
 	
 	# Otherwise, use the type parameters.
 	
-	elsif ( $type eq 'char' )
+	# [Changed by Claude under the guidance of Michael McClennen: binary columns are
+	# documented here as well, as 'binary data'. Their type is 'binary', so they were
+	# reported as a data type that is not reported, and the check of 'data' never
+	# matched. The charset of a text column is reported if it is not utf8mb4. The
+	# check of 'text' never matched, because that parameter gives the size of the
+	# column.]
+	
+	elsif ( $type eq 'char' || $type eq 'binary' )
 	{
-	    my $which = ($type_params[0] && $type_params[0] eq 'data') ? 'binary data' : 'a string';
+	    my $which = $type eq 'binary' ? 'binary data' : 'a string';
 	    my $size = $type_params[1] // '?';
 	    
 	    if ( $size > 65535 )
@@ -370,7 +381,7 @@ sub complete_ruleset {
 		$doc_valid = "$which of maximum length $size";
 	    }
 	    
-	    if ( $type_params[0] && $type_params[0] eq 'text' )
+	    if ( $type eq 'char' )
 	    {
 		if ( $type_params[3] && $type_params[3] !~ /^utf8mb4/i )
 		{
@@ -407,7 +418,12 @@ sub complete_ruleset {
 	elsif ( $type eq 'floating' )
 	{
 	    my $prefix = $type_params[0] eq 'unsigned' ? 'an unsigned' : 'a';
-	    my $size = $type_params[2] eq 'double' ? 'double precision' : 'single precision';
+	    # [Changed by Claude under the guidance of Michael McClennen: the precision is
+	    # the second type parameter. It was taken from the third, so a double was
+	    # documented as single precision.]
+	    
+	    my $size = ($type_params[1] && $type_params[1] eq 'double') ?
+		'double precision' : 'single precision';
 	    $doc_valid = "$prefix decimal value that can be stored in $size floating point";
 	    # $rr->{valid} ||= DECI_VALUE;
 	}
@@ -427,7 +443,10 @@ sub complete_ruleset {
 	
 	elsif ( $type eq 'datetime' )
 	{
-	    $doc_valid = "a $type_params[0] in any format acceptable to MariaDB\n";
+	    # [Changed by Claude under the guidance of Michael McClennen: no newline at
+	    # the end, which came before the final period of the documentation.]
+	    
+	    $doc_valid = "a $type_params[0] in any format acceptable to MariaDB";
 	}
 	
 	else
@@ -447,9 +466,12 @@ sub complete_ruleset {
 	    {
 		my $typestring;
 
-		if ( $type eq 'char' )
+		# [Changed by Claude under the guidance of Michael McClennen: binary
+		# columns are 'binary data', as above.]
+		
+		if ( $type eq 'char' || $type eq 'binary' )
 		{
-		    $typestring = $type_params[0] eq 'data' ? 'binary data' : 'a string';
+		    $typestring = $type eq 'binary' ? 'binary data' : 'a string';
 		}
 		
 		elsif ( $type eq 'integer' )
@@ -492,7 +514,7 @@ sub complete_ruleset {
 	    {
 		my $size;
 		
-		if ( $type eq 'char' )
+		if ( $type eq 'char' || $type eq 'binary' )
 		{
 		    $size = $type_params[1];
 		}
@@ -539,7 +561,10 @@ sub complete_ruleset {
 	    {
 		my $charset = '?';
 		
-		if ( $type_params[0] && $type_params[0] eq 'text' )
+		# [Changed by Claude under the guidance of Michael McClennen: the charset
+		# of any text column is reported, as above.]
+		
+		if ( $type eq 'char' && $type_params[3] )
 		{
 		    if ( $type_params[3] =~ /latin1/ )
 		    {

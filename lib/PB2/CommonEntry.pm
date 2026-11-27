@@ -525,348 +525,353 @@ sub parse_body_records {
 # }
 
 
-sub addupdate_common {
+# [Commented out by Claude under the guidance of Michael McClennen: addupdate_common, and
+# validate_tabsel, which only it calls, are not used by any module. They are kept here so
+# that addupdate_common can be finished later, to the point where the *Entry.pm modules
+# can use it.]
 
-    my ($request, $config, @extra_flags) = @_;
-    
-    croak "addupdate_simple: first parameter must be a configuration hash"
-	unless ref $config eq 'HASH';
-    
-    my $ETclass = $config->{class} || 'EditTransaction';
-    my $main_table = $config->{main_table};
-    my $main_ruleset = $config->{main_ruleset};
-    my $url_ruleset = $config->{url_ruleset};
-    my $table_selector = $config->{table_selector};
-    my $record_cleaner = $config->{record_cleaner};
-    
-    croak "addupdate_common: configuration must include a valid internal table name under 'main_table'"
-	unless $main_table && $TABLE{$main_table};
-    
-    croak "addupdate_common: the value of 'class' must be either 'EditTransaction' or a subclass"
-	if $config->{class} && ! $config->{class}->isa('EditTransaction');
-    
-    croak "the value of 'record_cleaner' must be a code ref or a method name"
-	if $record_cleaner && ref $record_cleaner && ref $record_cleaner ne 'CODE';
-    
-    # If 'table_selector' is given, its value must match one of the accepted patterns.
-
-    my @table_list;
-    
-    if ( $table_selector )
-    {
-	if ( ref $table_selector eq 'HASH' && $table_selector->%* )
-	{
-	    push @table_list, $request->validate_tabsel($table_selector);
-	}
-	
-	elsif ( ref $table_selector eq 'ARRAY' && $table_selector->[0] )
-	{
-	    if ( ref $table_selector->[0] )
-	    {
-		push @table_list, $request->validate_tabsel($_) foreach $table_selector->@*;
-	    }
-
-	    else
-	    {
-		push @table_list, $request->validate_tabsel($table_selector);
-	    }
-	}
-	
-	elsif ( ref $table_selector eq 'CODE' )
-	{
-	    push @table_list, $table_selector;
-	}
-	
-	elsif ( $table_selector eq 'NO_MATCH' )
-	{
-	    push @table_list, ['NO_MATCH', 'NO_MATCH'];
-	}
-	
-	else
-	{
-	    my $val = ref $table_selector || $table_selector;
-	    croak "addupdate_common: the value of 'table_selector' is not valid ($val)";
-	}
-    }
-    
-    unless ( @table_list && $table_list[-1] eq 'NO_MATCH' )
-    {
-	croak "addupdate_common: you must specify a value for 'main_ruleset'" unless $main_ruleset;
-	push @table_list, $request->validate_tabsel([ $main_table, $main_ruleset ]);
-    }
-    
-    # If extra flags or allowances are given, make sure they are all valid.
-    
-    foreach my $flag ( @extra_flags )
-    {
-	croak "addupdate_common: unrecognized flag '$flag'"
-	    unless $ETclass->has_allowance($flag);
-    }
-    
-    # my @ruleset_patterns;
-    
-    # if ( ref $config->{entry_ruleset} eq 'ARRAY' && $config->{entry_ruleset}->@* )
-    # {
-    # 	my $rs_name = $config->{entry_ruleset}[0];
-    
-    # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-    
-    # 	push @ruleset_patterns, $config->{entry_ruleset};
-    # }
-    
-    # elsif ( $config->{entry_ruleset} )
-    # {
-    # 	my $rs_name = $config->{entry_ruleset};
-	
-    # 	croak "entry_ruleset must be a list or a scalar" if ref $config->{entry_ruleset};
-    # 	croak "you cannot specify 'entry_ruleset' and 'entry_list' together" if $config->{entry_list};
-    # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-	
-    # 	if ( $config->{entry_key} )
-    # 	{
-    # 	    push @ruleset_patterns, [ $rs_name, $config->{entry_key}, 'DEFAULT' ];
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    push @ruleset_patterns, $rs_name;
-    # 	}
-    # }
-    
-    # elsif ( $config->{entry_list} )
-    # {
-    # 	croak "entry_list must be a list of lists" unless ref $config->{entry_list} eq 'ARRAY' &&
-    # 	    $config->{entry_list}->@* && ref $config->{entry_list}[0] eq 'ARRAY' && $config->{entry_list}[0]->@*;
-	
-    # 	foreach my $list ( $config->{entry_list}->@* )
-    # 	{
-    # 	    my $rs_name = ref $list eq 'ARRAY' ? $list->[0] : $list;
-	    
-    # 	    croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
-	    
-    # 	    push @ruleset_patterns, $list;
-    # 	}
-    # }
-    
-    # else
-    # {
-    # 	croak "no ruleset specified";
-    # }
-    
-    # Authenticate the user who made this request, and check that they have write permission on
-    # the main table. 
-    
-    my $perms = $request->require_authentication($main_table);
-    
-    # Parse the URL parameters, and return a hash of allowances and another one with the rest of
-    # the parameter values. If $url_ruleset is empty, the second return value will be an empty
-    # hash. The url parameters will already have been validated against the ruleset before this
-    # method is called, and if they are invalid an error response will already have been returned.
-    
-    my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, @extra_flags);
-    
-    # Then decode the body, and extract input records from it. The variable @table_list specifies
-    # which ruleset to use for different kinds of records, if there is more than one kind
-    # accepted. Any attribute values specified in $main_params override those in the individual
-    # records. If any validation errors are found, they are attached to the individual records
-    # under the key _errors.
-    
-    my (@records) = $request->parse_body_records($main_params, @table_list);
-    
-    # The next step is to create an object of class EditTransaction or one of its subclasses, to
-    # carry out this request.
-    
-    # If any records have validation errors, we cannot complete the request unless the allowance
-    # PROCEED was given. In that case, create the EditTransaction object in validation mode. This
-    # will validate the rest of the records against the database and do nothing else. This allows
-    # us to return a comprehensive result showing which of the submitted records were valid and
-    # which were not. Otherwise, create a regular EditTransaction object which will complete the
-    # request if possible.
-    
-    my $invalid_records = any { $_->{_errors} } @records;
-    
-    if ( $invalid_records && ! $allowances->{PROCEED} )
-    {
-	$allowances->{VALIDATION_ONLY} = 1;
-    }
-    
-    my $edt = $ETclass->new($request, $perms, $main_table, $allowances);
-    
-    # Now iterate through the records. The @AUX_TABLES list will collect the names of all tables
-    # used other than the main one. We use three different loops, depending on which of the table
-    # selection options was specified. If a record cleaning routine was specified, it is called
-    # for each record. The purpose of such a routine is to modify record values prior to insertion
-    # or update. For example, the interface developer may wish to allow certain attributes to be
-    # specified in ways that don't match the database structure and must be converted first. It
-    # can also select the table to be used by altering _table.
-    
-    my (%TABLE_USED, @AUX_TABLES);
-    
-    foreach my $r ( @records )
-    {
-	# If a record cleaner routine was defined, call it.
-	
-	$request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
-	
-	# If the key _table has a nonempty value, process this record with this table. Otherwise,
-	# use the main table.
-	
-	my $selected_table = $r->{_table} || $main_table;
-	delete $r->{_table};
-	
-	if ( $selected_table ne $main_table && ! $TABLE_USED{$selected_table} )
-	{
-	    croak "addupdate_common: bad table '$selected_table'" unless $TABLE{$selected_table};
-	    push @AUX_TABLES, $selected_table;
-	    $TABLE_USED{$selected_table} = 1;
-	}
-	
-	$edt->process_record($selected_table, $r);
-    }
-    
-    # if ( $record_handler )
-    # {
-    # 	foreach my $r ( @records )
-    # 	{
-    # 	    $request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
-	    
-    # 	    my $table_name = $request->$record_handler($edt, $r, $main_table, $perms);
-
-    # 	    if ( $table_name )
-    # 	    {
-    # 		push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
-    # 		$TABLE_USED{$table_name}++;
-    # 	    }
-    # 	}
-    # }
-	# # Otherwise, if the record includes either _skip or _errors then call $edt->skip_record.
-	
-	# elsif ( $r->{_skip} || $r->{_errors} )
-	# {
-	#     $edt->skip_record($r);
-	# }
-    
-    # 
-    
-    # Attempt to commit the database transaction. If any errors have occurred and PROCEED was not
-    # specified, it is automatically rolled back instead.
-    
-    $edt->commit;
-    
-    # Handle any errors or warnings that may have been generated.
-    
-    $request->collect_edt_errors($edt);
-    $request->collect_edt_warnings($edt);
-    
-    if ( $edt->fatals )
-    {
-    	die $request->exception(400, "Bad request");
-    }
-    
-    # The final step is to generate a list of results for this operation to indicate which
-    # database records have been affected and how. We start with the list of records from the main
-    # table. Deleted records are listed first, in order by primary key, followed by all inserted
-    # or altered records in order by primary key. Auxiliary records that contain the main table's
-    # primary key as a foreign key are listed in the aux_records hash, under the primary key
-    # value. That allows the auxiliary records to be interleaved with the main table records, and
-    # for auxiliary records associated with the same main table record to be grouped together. Any
-    # records that don't contain any known key go on the other_records list.
-    
-    my %table_records;
-    
-    # The main key defaults to the primary key of the main table. This can be overridden in the
-    # configuration.
-    
-    my $main_key = $config->{main_key} || get_table_property($main_table, 'PRIMARY_KEY');
-    
-    # One or more additional keys can also be specified, which allows record chains of more than
-    # one link.
-    
-    my @aux_keys;
-    
-    if ( $config->{aux_keys} && ref $config->{aux_keys} eq 'ARRAY' )
-    {
-	@aux_keys = $config->{aux_keys}->@*;
-    }
-
-    elsif ( $config->{aux_keys} )
-    {
-	carp "addupdate_common: the value of 'aux_keys' must be an array of key names";
-    }
-    
-    # Now go through the tables that have been touched, starting with the main table, and grab the
-    # keys for each one.
-    
-    foreach my $tn ( $main_table, @AUX_TABLES )
-    {
-	my $key_label = $edt->key_labels($tn);
-	my $display_key = get_table_property($tn, 'PRIMARY_KEY') || 'oid';
-	
-	$table_records{$tn} = [ ];
-	
-	# If any records have been deleted, those are listed first by means of placeholder records.
-	
-	if ( my @deleted_keys = $edt->deleted_keys($tn) )
-	{
-	    foreach my $key_value ( sort { $a <=> $b} @deleted_keys )
-	    {
-		my $record = { $display_key => $key_value, status => 'deleted',
-			       _operation => 'delete', _label => $key_label->{$key_value} };
-
-		push $table_records{$tn}->@*, $record;
-	    }
-	}
-	
-	# $$$ EditTranasction needs to generate records corresponding to the input ones, conveying
-	# all the information necessary to produce a result: key, label, operation, action,
-	# result, etc. 
-    
-    # my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
-    
-    # $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
-    }
-
-}
-
-# $$$ add primary key if it can be determined from the table name
-
-sub validate_tabsel {
-
-    my ($request, $selector) = @_;
-
-    my ($table_name, $ruleset_name, $primary_key, @keylist);
-    
-    if ( ref $selector eq 'HASH' )
-    {
-	$table_name = $selector->{table} || '';
-	$ruleset_name = $selector->{ruleset} || '';
-	
-	if ( ref $selector->{keys} eq 'ARRAY' )
-	{
-	    @keylist = grep $selector->{keys}->@*;
-	}
-	
-	elsif ( ! ref $selector->{keys} )
-	{
-	    @keylist = grep split /,\s*/, $selector->{keys};
-	}
-
-	unshift @keylist, $selector->{primary_key} if $selector->{primary_key};
-    }
-    
-    elsif ( ref $selector eq 'ARRAY' )
-    {
-	($table_name, $ruleset_name, @keylist) = $selector->@*;
-    }
-    
-    croak "addupdate_common: table name '$table_name' invalid in 'table_selector'"
-	unless $table_name && $TABLE{$table_name};
-    
-    croak "addupdate_common: ruleset name '$ruleset_name' invalid in 'table_selector'"
-	unless $ruleset_name && $request->{ds}->has_ruleset($ruleset_name);
-
-    return [$table_name, $ruleset_name, @keylist];
-}
+# sub addupdate_common {
+# 
+#     my ($request, $config, @extra_flags) = @_;
+# 
+#     croak "addupdate_simple: first parameter must be a configuration hash"
+# 	unless ref $config eq 'HASH';
+# 
+#     my $ETclass = $config->{class} || 'EditTransaction';
+#     my $main_table = $config->{main_table};
+#     my $main_ruleset = $config->{main_ruleset};
+#     my $url_ruleset = $config->{url_ruleset};
+#     my $table_selector = $config->{table_selector};
+#     my $record_cleaner = $config->{record_cleaner};
+# 
+#     croak "addupdate_common: configuration must include a valid internal table name under 'main_table'"
+# 	unless $main_table && $TABLE{$main_table};
+# 
+#     croak "addupdate_common: the value of 'class' must be either 'EditTransaction' or a subclass"
+# 	if $config->{class} && ! $config->{class}->isa('EditTransaction');
+# 
+#     croak "the value of 'record_cleaner' must be a code ref or a method name"
+# 	if $record_cleaner && ref $record_cleaner && ref $record_cleaner ne 'CODE';
+# 
+#     # If 'table_selector' is given, its value must match one of the accepted patterns.
+# 
+#     my @table_list;
+# 
+#     if ( $table_selector )
+#     {
+# 	if ( ref $table_selector eq 'HASH' && $table_selector->%* )
+# 	{
+# 	    push @table_list, $request->validate_tabsel($table_selector);
+# 	}
+# 
+# 	elsif ( ref $table_selector eq 'ARRAY' && $table_selector->[0] )
+# 	{
+# 	    if ( ref $table_selector->[0] )
+# 	    {
+# 		push @table_list, $request->validate_tabsel($_) foreach $table_selector->@*;
+# 	    }
+# 
+# 	    else
+# 	    {
+# 		push @table_list, $request->validate_tabsel($table_selector);
+# 	    }
+# 	}
+# 
+# 	elsif ( ref $table_selector eq 'CODE' )
+# 	{
+# 	    push @table_list, $table_selector;
+# 	}
+# 
+# 	elsif ( $table_selector eq 'NO_MATCH' )
+# 	{
+# 	    push @table_list, ['NO_MATCH', 'NO_MATCH'];
+# 	}
+# 
+# 	else
+# 	{
+# 	    my $val = ref $table_selector || $table_selector;
+# 	    croak "addupdate_common: the value of 'table_selector' is not valid ($val)";
+# 	}
+#     }
+# 
+#     unless ( @table_list && $table_list[-1] eq 'NO_MATCH' )
+#     {
+# 	croak "addupdate_common: you must specify a value for 'main_ruleset'" unless $main_ruleset;
+# 	push @table_list, $request->validate_tabsel([ $main_table, $main_ruleset ]);
+#     }
+# 
+#     # If extra flags or allowances are given, make sure they are all valid.
+# 
+#     foreach my $flag ( @extra_flags )
+#     {
+# 	croak "addupdate_common: unrecognized flag '$flag'"
+# 	    unless $ETclass->has_allowance($flag);
+#     }
+# 
+#     # my @ruleset_patterns;
+# 
+#     # if ( ref $config->{entry_ruleset} eq 'ARRAY' && $config->{entry_ruleset}->@* )
+#     # {
+#     # 	my $rs_name = $config->{entry_ruleset}[0];
+# 
+#     # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+# 
+#     # 	push @ruleset_patterns, $config->{entry_ruleset};
+#     # }
+# 
+#     # elsif ( $config->{entry_ruleset} )
+#     # {
+#     # 	my $rs_name = $config->{entry_ruleset};
+# 
+#     # 	croak "entry_ruleset must be a list or a scalar" if ref $config->{entry_ruleset};
+#     # 	croak "you cannot specify 'entry_ruleset' and 'entry_list' together" if $config->{entry_list};
+#     # 	croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+# 
+#     # 	if ( $config->{entry_key} )
+#     # 	{
+#     # 	    push @ruleset_patterns, [ $rs_name, $config->{entry_key}, 'DEFAULT' ];
+#     # 	}
+# 
+#     # 	else
+#     # 	{
+#     # 	    push @ruleset_patterns, $rs_name;
+#     # 	}
+#     # }
+# 
+#     # elsif ( $config->{entry_list} )
+#     # {
+#     # 	croak "entry_list must be a list of lists" unless ref $config->{entry_list} eq 'ARRAY' &&
+#     # 	    $config->{entry_list}->@* && ref $config->{entry_list}[0] eq 'ARRAY' && $config->{entry_list}[0]->@*;
+# 
+#     # 	foreach my $list ( $config->{entry_list}->@* )
+#     # 	{
+#     # 	    my $rs_name = ref $list eq 'ARRAY' ? $list->[0] : $list;
+# 
+#     # 	    croak "unknown ruleset '$rs_name'" unless $request->{ds}->has_ruleset($rs_name);
+# 
+#     # 	    push @ruleset_patterns, $list;
+#     # 	}
+#     # }
+# 
+#     # else
+#     # {
+#     # 	croak "no ruleset specified";
+#     # }
+# 
+#     # Authenticate the user who made this request, and check that they have write permission on
+#     # the main table. 
+# 
+#     my $perms = $request->require_authentication($main_table);
+# 
+#     # Parse the URL parameters, and return a hash of allowances and another one with the rest of
+#     # the parameter values. If $url_ruleset is empty, the second return value will be an empty
+#     # hash. The url parameters will already have been validated against the ruleset before this
+#     # method is called, and if they are invalid an error response will already have been returned.
+# 
+#     my ($allowances, $main_params) = $request->parse_main_params($url_ruleset, @extra_flags);
+# 
+#     # Then decode the body, and extract input records from it. The variable @table_list specifies
+#     # which ruleset to use for different kinds of records, if there is more than one kind
+#     # accepted. Any attribute values specified in $main_params override those in the individual
+#     # records. If any validation errors are found, they are attached to the individual records
+#     # under the key _errors.
+# 
+#     my (@records) = $request->parse_body_records($main_params, @table_list);
+# 
+#     # The next step is to create an object of class EditTransaction or one of its subclasses, to
+#     # carry out this request.
+# 
+#     # If any records have validation errors, we cannot complete the request unless the allowance
+#     # PROCEED was given. In that case, create the EditTransaction object in validation mode. This
+#     # will validate the rest of the records against the database and do nothing else. This allows
+#     # us to return a comprehensive result showing which of the submitted records were valid and
+#     # which were not. Otherwise, create a regular EditTransaction object which will complete the
+#     # request if possible.
+# 
+#     my $invalid_records = any { $_->{_errors} } @records;
+# 
+#     if ( $invalid_records && ! $allowances->{PROCEED} )
+#     {
+# 	$allowances->{VALIDATION_ONLY} = 1;
+#     }
+# 
+#     my $edt = $ETclass->new($request, $perms, $main_table, $allowances);
+# 
+#     # Now iterate through the records. The @AUX_TABLES list will collect the names of all tables
+#     # used other than the main one. We use three different loops, depending on which of the table
+#     # selection options was specified. If a record cleaning routine was specified, it is called
+#     # for each record. The purpose of such a routine is to modify record values prior to insertion
+#     # or update. For example, the interface developer may wish to allow certain attributes to be
+#     # specified in ways that don't match the database structure and must be converted first. It
+#     # can also select the table to be used by altering _table.
+# 
+#     my (%TABLE_USED, @AUX_TABLES);
+# 
+#     foreach my $r ( @records )
+#     {
+# 	# If a record cleaner routine was defined, call it.
+# 
+# 	$request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
+# 
+# 	# If the key _table has a nonempty value, process this record with this table. Otherwise,
+# 	# use the main table.
+# 
+# 	my $selected_table = $r->{_table} || $main_table;
+# 	delete $r->{_table};
+# 
+# 	if ( $selected_table ne $main_table && ! $TABLE_USED{$selected_table} )
+# 	{
+# 	    croak "addupdate_common: bad table '$selected_table'" unless $TABLE{$selected_table};
+# 	    push @AUX_TABLES, $selected_table;
+# 	    $TABLE_USED{$selected_table} = 1;
+# 	}
+# 
+# 	$edt->process_record($selected_table, $r);
+#     }
+# 
+#     # if ( $record_handler )
+#     # {
+#     # 	foreach my $r ( @records )
+#     # 	{
+#     # 	    $request->$record_cleaner($edt, $r, $main_table, $perms) if $record_cleaner;
+# 
+#     # 	    my $table_name = $request->$record_handler($edt, $r, $main_table, $perms);
+# 
+#     # 	    if ( $table_name )
+#     # 	    {
+#     # 		push @AUX_TABLES, $table_name unless $TABLE_USED{$table_name} || $table_name eq $main_table;
+#     # 		$TABLE_USED{$table_name}++;
+#     # 	    }
+#     # 	}
+#     # }
+# 	# # Otherwise, if the record includes either _skip or _errors then call $edt->skip_record.
+# 
+# 	# elsif ( $r->{_skip} || $r->{_errors} )
+# 	# {
+# 	#     $edt->skip_record($r);
+# 	# }
+# 
+#     # 
+# 
+#     # Attempt to commit the database transaction. If any errors have occurred and PROCEED was not
+#     # specified, it is automatically rolled back instead.
+# 
+#     $edt->commit;
+# 
+#     # Handle any errors or warnings that may have been generated.
+# 
+#     $request->collect_edt_errors($edt);
+#     $request->collect_edt_warnings($edt);
+# 
+#     if ( $edt->fatals )
+#     {
+#     	die $request->exception(400, "Bad request");
+#     }
+# 
+#     # The final step is to generate a list of results for this operation to indicate which
+#     # database records have been affected and how. We start with the list of records from the main
+#     # table. Deleted records are listed first, in order by primary key, followed by all inserted
+#     # or altered records in order by primary key. Auxiliary records that contain the main table's
+#     # primary key as a foreign key are listed in the aux_records hash, under the primary key
+#     # value. That allows the auxiliary records to be interleaved with the main table records, and
+#     # for auxiliary records associated with the same main table record to be grouped together. Any
+#     # records that don't contain any known key go on the other_records list.
+# 
+#     my %table_records;
+# 
+#     # The main key defaults to the primary key of the main table. This can be overridden in the
+#     # configuration.
+# 
+#     my $main_key = $config->{main_key} || get_table_property($main_table, 'PRIMARY_KEY');
+# 
+#     # One or more additional keys can also be specified, which allows record chains of more than
+#     # one link.
+# 
+#     my @aux_keys;
+# 
+#     if ( $config->{aux_keys} && ref $config->{aux_keys} eq 'ARRAY' )
+#     {
+# 	@aux_keys = $config->{aux_keys}->@*;
+#     }
+# 
+#     elsif ( $config->{aux_keys} )
+#     {
+# 	carp "addupdate_common: the value of 'aux_keys' must be an array of key names";
+#     }
+# 
+#     # Now go through the tables that have been touched, starting with the main table, and grab the
+#     # keys for each one.
+# 
+#     foreach my $tn ( $main_table, @AUX_TABLES )
+#     {
+# 	my $key_label = $edt->key_labels($tn);
+# 	my $display_key = get_table_property($tn, 'PRIMARY_KEY') || 'oid';
+# 
+# 	$table_records{$tn} = [ ];
+# 
+# 	# If any records have been deleted, those are listed first by means of placeholder records.
+# 
+# 	if ( my @deleted_keys = $edt->deleted_keys($tn) )
+# 	{
+# 	    foreach my $key_value ( sort { $a <=> $b} @deleted_keys )
+# 	    {
+# 		my $record = { $display_key => $key_value, status => 'deleted',
+# 			       _operation => 'delete', _label => $key_label->{$key_value} };
+# 
+# 		push $table_records{$tn}->@*, $record;
+# 	    }
+# 	}
+# 
+# 	# $$$ EditTranasction needs to generate records corresponding to the input ones, conveying
+# 	# all the information necessary to produce a result: key, label, operation, action,
+# 	# result, etc. 
+# 
+#     # my @existing_keys = ($edt->inserted_keys, $edt->updated_keys, $edt->replaced_keys);
+# 
+#     # $request->list_updated_refs($dbh, \@existing_keys, $edt->key_labels) if @existing_keys;
+#     }
+# 
+# }
+# 
+# # $$$ add primary key if it can be determined from the table name
+# 
+# sub validate_tabsel {
+# 
+#     my ($request, $selector) = @_;
+# 
+#     my ($table_name, $ruleset_name, $primary_key, @keylist);
+# 
+#     if ( ref $selector eq 'HASH' )
+#     {
+# 	$table_name = $selector->{table} || '';
+# 	$ruleset_name = $selector->{ruleset} || '';
+# 
+# 	if ( ref $selector->{keys} eq 'ARRAY' )
+# 	{
+# 	    @keylist = grep $selector->{keys}->@*;
+# 	}
+# 
+# 	elsif ( ! ref $selector->{keys} )
+# 	{
+# 	    @keylist = grep split /,\s*/, $selector->{keys};
+# 	}
+# 
+# 	unshift @keylist, $selector->{primary_key} if $selector->{primary_key};
+#     }
+# 
+#     elsif ( ref $selector eq 'ARRAY' )
+#     {
+# 	($table_name, $ruleset_name, @keylist) = $selector->@*;
+#     }
+# 
+#     croak "addupdate_common: table name '$table_name' invalid in 'table_selector'"
+# 	unless $table_name && $TABLE{$table_name};
+# 
+#     croak "addupdate_common: ruleset name '$ruleset_name' invalid in 'table_selector'"
+# 	unless $ruleset_name && $request->{ds}->has_ruleset($ruleset_name);
+# 
+#     return [$table_name, $ruleset_name, @keylist];
+# }
 
 
 # sub debug_line {
